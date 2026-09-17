@@ -1,10 +1,13 @@
-"""Arabic Report Section Builders"""
+"""Arabic Report Section Builders - Complete 31 Sections"""
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     Paragraph, Spacer, Table, TableStyle, PageBreak, HRFlowable, KeepTogether,
 )
-from ar_config import PAGE_W, M, GOLD, BLUE, LIGHT, GRAY, WHITE, BLACK, BG_LIGHT, ar
+from ar_config import (
+    PAGE_W, M, GOLD, BLUE, LIGHT, GRAY, WHITE, BLACK, BG_LIGHT, ar,
+    register_fonts,
+)
 
 
 def hr(story, color=GOLD, w=2, space=8):
@@ -50,6 +53,8 @@ def make_table(story, s, headers, rows, widths):
     story.append(Spacer(1, 6))
 
 
+# ===================== Cover & TOC =====================
+
 def build_cover(story, s):
     story.append(Spacer(1, 60))
     story.append(HRFlowable(width="60%", thickness=3, color=GOLD, spaceAfter=12))
@@ -63,7 +68,6 @@ def build_cover(story, s):
     story.append(Spacer(1, 30))
     hr(story, GOLD, 1, 12)
 
-    # Stats boxes
     stats = [("95", "صفحة"), ("166", "API"), ("66", "نموذج"), ("51K+", "سطر كود")]
     box_data = [[Paragraph(f'<font size="20" color="#D4A843"><b>{n}</b></font><br/>'
                            f'<font size="9" color="#8B949E">{l}</font>', s['body_center'])
@@ -106,11 +110,31 @@ def build_toc(story, s):
         "11. تحليل SWOT",
         "12. الأداء والتحسين",
         "13. خارطة الطريق المستقبلية",
+        "14. تفصيل تطبيقات واجهة البرمجة API",
+        "15. تفصيل نماذج قاعدة البيانات",
+        "16. تفصيل المكونات React",
+        "17. تفصيل ملفات المكتبة والأدوات",
+        "18. تفصيل Hooks وإدارة الحالة",
+        "19. تفصيل Middleware وطبقة الأمان",
+        "20. تفصيل ملفات الإعدادات",
+        "21. نظام كشف النوايا بالعربية",
+        "22. نظام التدفق Stateless",
+        "23. نظام رفع الصور",
+        "24. نظام الإشعارات والتنبيهات",
+        "25. تدفق المصادقة الكامل",
+        "26. بنية نظام البث المباشر",
+        "27. تحليل جودة الكود",
+        "28. التكاملات الخارجية",
+        "29. خارطة الطريق التفصيلية",
+        "30. تحليل الأداء والتحسينات",
+        "31. إحصائيات تفصيلية للمنصة",
     ]
     for item in toc:
         story.append(Paragraph(ar(item), s['toc_item']))
     story.append(PageBreak())
 
+
+# ===================== Section 1: Executive Summary =====================
 
 def build_section1(story, s):
     from ar_data1 import EXECUTIVE, STATS
@@ -157,6 +181,8 @@ def build_section1(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 2: Tech Infrastructure =====================
+
 def build_section2(story, s):
     from ar_data1 import TECH_STACK, ARCHITECTURE
     h1(story, s, "2. البنية التحتية التقنية")
@@ -179,6 +205,8 @@ def build_section2(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 3: Database =====================
+
 def build_section3(story, s):
     from ar_data1 import DB_TITLE, DB_DESC, DB_MODELS, RELATIONSHIPS
     h1(story, s, "3. بنية قاعدة البيانات")
@@ -199,6 +227,8 @@ def build_section3(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 4: API =====================
+
 def build_section4(story, s):
     from ar_data2 import API_TITLE, API_DESC, API_MODULES
     h1(story, s, "4. نقاط نهاية API")
@@ -213,6 +243,8 @@ def build_section4(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 5: Pages =====================
+
 def build_section5(story, s):
     from ar_data2 import PAGES_TITLE, PAGES_DESC, PAGE_CATEGORIES
     h1(story, s, "5. الصفحات والمسارات")
@@ -224,6 +256,8 @@ def build_section5(story, s):
             bullet(story, s, page)
     story.append(PageBreak())
 
+
+# ===================== Section 6: Security =====================
 
 def build_section6(story, s):
     from ar_data2 import SECURITY_TITLE, SECURITY_DESC, SECURITY_LAYERS
@@ -250,6 +284,8 @@ def build_section6(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 7: AI =====================
+
 def build_section7(story, s):
     from ar_data2 import AI_TITLE, AI_DESC, AI_FEATURES, AI_MODELS
     h1(story, s, "7. قدرات الذكاء الاصطناعي")
@@ -271,6 +307,8 @@ def build_section7(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 8: UI =====================
+
 def build_section8(story, s):
     from ar_data2 import UI_TITLE, UI_DESC, DESIGN_SYSTEM
     h1(story, s, "8. تصميم واجهة المستخدم")
@@ -282,6 +320,8 @@ def build_section8(story, s):
             bullet(story, s, item)
     story.append(PageBreak())
 
+
+# ===================== Section 9: Market =====================
 
 def build_section9(story, s):
     from ar_data2 import MARKET_TITLE, MARKET_DESC, MARKET_INSIGHTS, COMPETITORS
@@ -313,6 +353,8 @@ def build_section9(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 10: Social Impact =====================
+
 def build_section10(story, s):
     from ar_data2 import SOCIAL_TITLE, SOCIAL_IMPACT
     h1(story, s, "10. التأثير الاجتماعي")
@@ -333,6 +375,8 @@ def build_section10(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 11: SWOT =====================
+
 def build_section11(story, s):
     from ar_data2 import SWOT_TITLE, SWOT
     h1(story, s, "11. تحليل SWOT")
@@ -343,6 +387,8 @@ def build_section11(story, s):
             bullet(story, s, item)
     story.append(PageBreak())
 
+
+# ===================== Section 12: Performance =====================
 
 def build_section12(story, s):
     from ar_data2 import PERF_TITLE, PERFORMANCE
@@ -356,6 +402,8 @@ def build_section12(story, s):
     story.append(PageBreak())
 
 
+# ===================== Section 13: Roadmap =====================
+
 def build_section13(story, s):
     from ar_data2 import ROADMAP_TITLE, ROADMAP
     h1(story, s, "13. خارطة الطريق المستقبلية")
@@ -364,3 +412,402 @@ def build_section13(story, s):
         h2(story, s, phase)
         for item in items:
             bullet(story, s, item)
+
+
+# ===================== Section 14: API Detail =====================
+
+def build_section14(story, s):
+    from ar_data3 import API_DETAIL_TITLE, API_DETAIL_SECTIONS
+    h1(story, s, "14. تفصيل تطبيقات واجهة البرمجة API")
+
+    for section_name, section_data in API_DETAIL_SECTIONS.items():
+        h2(story, s, section_name)
+        body(story, s, section_data["intro"])
+
+        for route in section_data["routes"]:
+            h3(story, s, route["name"])
+            body(story, s, route["description"])
+
+            if "lines" in route:
+                bullet(story, s, f"عدد الأسطر: {route['lines']}")
+            if "auth" in route:
+                bullet(story, s, f"المصادقة: {route['auth']}")
+
+            if "details" in route:
+                for detail in route["details"]:
+                    if isinstance(detail, str):
+                        bullet(story, s, detail)
+
+            if "error_handling" in route:
+                bullet(story, s, f"معالجة الأخطاء: {route['error_handling']}")
+
+        story.append(Spacer(1, 6))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 15: DB Detail =====================
+
+def build_section15(story, s):
+    from ar_data3 import DB_DETAIL_TITLE, DB_DETAIL_DESC, DB_MODEL_DETAILS
+    h1(story, s, "15. تفصيل نماذج قاعدة البيانات")
+    body(story, s, DB_DETAIL_DESC)
+
+    for model_name, model_data in DB_MODEL_DETAILS.items():
+        h2(story, s, model_name)
+        body(story, s, model_data["desc"])
+
+        # Fields table
+        if "fields" in model_data:
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_auction" in model_data:
+            h3(story, s, "نموذج المزاد")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_auction"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_bid" in model_data:
+            h3(story, s, "نموذج العرض")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_bid"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_topic" in model_data:
+            h3(story, s, "نموذج الموضوع")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_topic"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_post" in model_data:
+            h3(story, s, "نموذج المنشور")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_post"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_recording" in model_data:
+            h3(story, s, "نموذج التسجيل الصوتي")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_recording"]],
+                [80, 60, 120, 160]
+            )
+
+        if "fields_analysis" in model_data:
+            h3(story, s, "نموذج التحليل")
+            make_table(story, s,
+                ["الحقل", "النوع", "السمات", "الوصف"],
+                [[f, t, a, d] for f, t, a, d in model_data["fields_analysis"]],
+                [80, 60, 120, 160]
+            )
+
+        if "relations" in model_data:
+            h3(story, s, "العلاقات")
+            for rel in model_data["relations"]:
+                bullet(story, s, rel)
+
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 16: React Components =====================
+
+def build_section16(story, s):
+    from ar_data3 import COMPONENTS_TITLE, COMPONENTS_DESC, COMPONENT_DETAILS
+    h1(story, s, "16. تفصيل المكونات React")
+    body(story, s, COMPONENTS_DESC)
+
+    for comp in COMPONENT_DETAILS:
+        h2(story, s, comp["name"])
+        bullet(story, s, f"الملف: {comp['file']}")
+        bullet(story, s, comp["desc"])
+        for feat in comp["features"]:
+            bullet(story, s, feat)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 17: Library Files =====================
+
+def build_section17(story, s):
+    from ar_data3 import LIB_TITLE, LIB_DESC, LIB_DETAILS
+    h1(story, s, "17. تفصيل ملفات المكتبة والأدوات المساعدة")
+    body(story, s, LIB_DESC)
+
+    for lib in LIB_DETAILS:
+        h2(story, s, lib["name"])
+        bullet(story, s, f"عدد الأسطر: {lib['lines']}")
+        bullet(story, s, lib["desc"])
+        for feat in lib["features"]:
+            bullet(story, s, feat)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 18: Hooks =====================
+
+def build_section18(story, s):
+    from ar_data3 import HOOKS_TITLE, HOOKS_DESC, HOOK_DETAILS
+    h1(story, s, "18. تفصيل Hooks وإدارة الحالة")
+    body(story, s, HOOKS_DESC)
+
+    for hook in HOOK_DETAILS:
+        h2(story, s, hook["name"])
+        bullet(story, s, f"الملف: {hook['file']}")
+        bullet(story, s, hook["desc"])
+        for feat in hook["features"]:
+            bullet(story, s, feat)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 19: Middleware =====================
+
+def build_section19(story, s):
+    from ar_data3 import MIDDLEWARE_TITLE, MIDDLEWARE_DESC, MIDDLEWARE_DETAILS
+    h1(story, s, "19. تفصيل Middleware وطبقة الأمان")
+    body(story, s, MIDDLEWARE_DESC)
+
+    for mw in MIDDLEWARE_DETAILS:
+        h2(story, s, mw["name"])
+        body(story, s, mw["desc"])
+        for detail in mw["details"]:
+            bullet(story, s, detail)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 20: Config Files =====================
+
+def build_section20(story, s):
+    from ar_data3 import CONFIG_TITLE, CONFIG_DESC, CONFIG_DETAILS
+    h1(story, s, "20. تفصيل ملفات الإعدادات والبنية التحتية")
+    body(story, s, CONFIG_DESC)
+
+    for cfg in CONFIG_DETAILS:
+        h2(story, s, cfg["name"])
+        bullet(story, s, f"عدد الأسطر: {cfg['lines']}")
+        bullet(story, s, cfg["desc"])
+        for detail in cfg["details"]:
+            bullet(story, s, detail)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 21: Intent Detection =====================
+
+def build_section21(story, s):
+    from ar_data3 import INTENT_TITLE, INTENT_DESC, INTENT_TABLE, INTENT_PATTERNS_TABLE
+    h1(story, s, "21. نظام كشف النوايا باللغة العربية")
+    body(story, s, INTENT_DESC)
+
+    h2(story, s, "النوايا المدعومة")
+    make_table(story, s,
+        ["النية", "المعرّف", "الأيقونة", "الوصف", "أمثلة"],
+        [list(row) for row in INTENT_TABLE],
+        [65, 65, 50, 80, 180]
+    )
+
+    h2(story, s, "أنماط كشف النية")
+    make_table(story, s,
+        ["النية", "النمط 1", "النمط 2", "النمط 3", "النمط 4", "النمط 5", "النمط 6", "النمط 7"],
+        [list(row) for row in INTENT_PATTERNS_TABLE],
+        [60, 50, 50, 50, 50, 50, 50, 50]
+    )
+
+    story.append(PageBreak())
+
+
+# ===================== Section 22: Stateless Flow =====================
+
+def build_section22(story, s):
+    from ar_data3 import STATELESS_TITLE, STATELESS_DESC, STATELESS_FLOW, STATELESS_AUTH_FLOW
+    h1(story, s, "22. نظام التدفق Stateless لإنشاء السيارة")
+    body(story, s, STATELESS_DESC)
+
+    h2(story, s, "تدفق إنشاء السيارة")
+    for step in STATELESS_FLOW:
+        h3(story, s, step["step"])
+        bullet(story, s, f"العميل: {step['client']}")
+        bullet(story, s, f"الخادم: {step['server']}")
+        bullet(story, s, f"الاستجابة: {step['response']}")
+        story.append(Spacer(1, 4))
+
+    h2(story, s, "تدفق المصادقة المتسلسل")
+    for step in STATELESS_AUTH_FLOW:
+        bullet(story, s, step)
+
+    story.append(PageBreak())
+
+
+# ===================== Section 23: Image Upload =====================
+
+def build_section23(story, s):
+    from ar_data3 import IMAGE_TITLE, IMAGE_DESC, IMAGE_FLOW
+    h1(story, s, "23. نظام رفع الصور وسير العمل")
+    body(story, s, IMAGE_DESC)
+
+    h2(story, s, "خطوات رفع الصور")
+    for step in IMAGE_FLOW:
+        h3(story, s, step["step"])
+        body(story, s, step["desc"])
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 24: Notifications =====================
+
+def build_section24(story, s):
+    from ar_data3 import NOTIFICATION_TITLE, NOTIFICATION_DESC, NOTIFICATION_TYPES
+    h1(story, s, "24. نظام الإشعارات والتنبيهات")
+    body(story, s, NOTIFICATION_DESC)
+
+    h2(story, s, "أنواع الإشعارات")
+    make_table(story, s,
+        ["النوع", "الوصف", "الوحدة", "القناة"],
+        [list(row) for row in NOTIFICATION_TYPES],
+        [80, 140, 80, 120]
+    )
+
+    story.append(PageBreak())
+
+
+# ===================== Section 25: Auth Flow =====================
+
+def build_section25(story, s):
+    from ar_data3 import AUTH_FLOW_TITLE, AUTH_FLOW_STEPS
+    h1(story, s, "25. تدفق المصادقة الكامل خطوة بخطوة")
+
+    for flow_name, steps in AUTH_FLOW_STEPS:
+        h2(story, s, flow_name)
+        for step in steps:
+            bullet(story, s, step)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 26: Stream Architecture =====================
+
+def build_section26(story, s):
+    from ar_data3 import STREAM_TITLE, STREAM_DESC, STREAM_EVENTS, STREAM_ARCHITECTURE, STREAM_CAR_FLOW
+    h1(story, s, "26. بنية نظام المحادثة البث المباشر (SSE)")
+    body(story, s, STREAM_DESC)
+
+    h2(story, s, "أحداث البث")
+    make_table(story, s,
+        ["الحدث", "النوع", "الوصف"],
+        [[e, t, d] for e, t, d in STREAM_EVENTS],
+        [80, 120, 260]
+    )
+
+    h2(story, s, "بنية النظام")
+    for step in STREAM_ARCHITECTURE:
+        bullet(story, s, step)
+
+    h2(story, s, "تدفق إنشاء السيارة عبر Chat")
+    for step in STREAM_CAR_FLOW:
+        bullet(story, s, step)
+
+    story.append(PageBreak())
+
+
+# ===================== Section 27: Code Quality =====================
+
+def build_section27(story, s):
+    from ar_data3 import CODE_ANALYSIS_TITLE, CODE_ANALYSIS
+    h1(story, s, "27. تحليل جودة الكود والۂراعة البرمجية")
+
+    for section in CODE_ANALYSIS:
+        h2(story, s, section["name"])
+        for item in section["items"]:
+            bullet(story, s, item)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 28: External Integrations =====================
+
+def build_section28(story, s):
+    from ar_data3 import INTEGRATIONS_TITLE, INTEGRATIONS
+    h1(story, s, "28. التكاملات الخارجية والخدمات")
+
+    for integration in INTEGRATIONS:
+        h2(story, s, integration["name"])
+        body(story, s, integration["desc"])
+        for detail in integration["details"]:
+            bullet(story, s, detail)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 29: Roadmap Detail =====================
+
+def build_section29(story, s):
+    from ar_data3 import ROADMAP_DETAIL_TITLE, ROADMAP_DETAIL
+    h1(story, s, "29. خارطة الطريق المستقبلية - تفصيل تنفيذي")
+
+    for phase in ROADMAP_DETAIL:
+        h2(story, s, phase["phase"])
+        bullet(story, s, f"الجدول الزمني: {phase['timeline']}")
+        bullet(story, s, f"الأولوية: {phase['priority']}")
+
+        for item in phase["items"]:
+            h3(story, s, item["name"])
+            body(story, s, item["desc"])
+            bullet(story, s, f"الوقت المقدر: {item['estimated_time']}")
+            for impl in item["implementation"]:
+                bullet(story, s, impl)
+            story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 30: Performance Detail =====================
+
+def build_section30(story, s):
+    from ar_data3 import PERFORMANCE_TITLE, PERFORMANCE_SECTIONS
+    h1(story, s, "30. تحليل الأداء والتحسينات")
+
+    for section in PERFORMANCE_SECTIONS:
+        h2(story, s, section["name"])
+        for item in section["items"]:
+            bullet(story, s, item)
+        story.append(Spacer(1, 4))
+
+    story.append(PageBreak())
+
+
+# ===================== Section 31: Stats =====================
+
+def build_section31(story, s):
+    from ar_data3 import STATS_TITLE, STATS_SUMMARY
+    h1(story, s, "31. إحصائيات تفصيلية للمنصة")
+
+    h2(story, s, "ملخص الإحصائيات")
+    make_table(story, s,
+        ["المقياس", "القيمة"],
+        [[k, v] for k, v in STATS_SUMMARY.items()],
+        [200, 200]
+    )

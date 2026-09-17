@@ -103,6 +103,8 @@ export default function PlateDetailPage() {
               {plate.isNegotiable && <p className="text-xs text-amber-500 mt-1">قابل للتفاوض</p>}
             </div>
 
+            <PlateValuation plateNumber={plate.plateNumber} type={plate.type} price={plate.price} />
+
             <div className="card p-6">
               <div className="text-center mb-4">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">
@@ -126,8 +128,7 @@ export default function PlateDetailPage() {
               </div>
             </div>
 
-            {isOwner && (
-              <div className="card p-6 space-y-3">
+            {isOwner && (              <div className="card p-6 space-y-3">
                 <h3 className="font-semibold text-gray-900 dark:text-white mb-2">التحكم</h3>
                 <Link href={`/my-plates`} className="w-full py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all flex items-center justify-center gap-2">
                   <Pencil className="w-4 h-4" /> عرض لوحاتي
@@ -140,6 +141,59 @@ export default function PlateDetailPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlateValuation({ plateNumber, type, price }: { plateNumber: string; type: string; price: number }) {
+  const [avg, setAvg] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/plates?type=${type}&limit=50`)
+      .then(r => r.json())
+      .then(d => {
+        const list: any[] = d.data?.plates || d.data || [];
+        const prices = list.map(p => p.price).filter((p: number) => p > 0);
+        if (prices.length > 0) setAvg(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
+      })
+      .catch(() => {});
+  }, [type]);
+
+  const digits = (plateNumber || '').replace(/\D/g, '');
+  const tags: string[] = [];
+  let score = 50;
+  if (digits.length > 0 && digits.length <= 3) { tags.push('رقم قصير نادر 🏆'); score += 25; }
+  if (/^(\d)\1+$/.test(digits)) { tags.push('أرقام مكررة 💎'); score += 20; }
+  if (/^(012+|123+|234+|345+|456+|567+|678+|789+|987+|876+|765+|654+|543+|432+|321+|210+)$/.test(digits)) { tags.push('رقم متسلسل 🔢'); score += 15; }
+  if (digits === digits.split('').reverse().join('') && digits.length > 1) { tags.push('رقم متناظر 🪞'); score += 10; }
+  score = Math.min(100, score);
+
+  const diff = avg && avg > 0 ? Math.round(((price - avg) / avg) * 100) : null;
+
+  return (
+    <div className="card p-6">
+      <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">تقييم تميّز اللوحة ✨</p>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+          <div className="h-full rounded-full bg-gradient-to-l from-amber-400 to-orange-500" style={{ width: `${score}%` }} />
+        </div>
+        <span className="text-sm font-black text-amber-500">{score}/100</span>
+      </div>
+      {tags.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {tags.map(t => <span key={t} className="px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-bold">{t}</span>)}
+        </div>
+      ) : (
+        <p className="text-[11px] text-gray-500 mb-2">رقم عادي — القيمة حسب العرض والطلب</p>
+      )}
+      {avg !== null && (
+        <p className="text-xs text-gray-500">
+          متوسط نفس الفئة بالموقع: <strong className="text-gray-800 dark:text-gray-200">{formatPrice(avg)}</strong>
+          {diff !== null && diff !== 0 && (
+            <span className={diff > 0 ? 'text-red-500' : 'text-emerald-500'}> ({diff > 0 ? '+' : ''}{diff}%)</span>
+          )}
+        </p>
+      )}
     </div>
   );
 }

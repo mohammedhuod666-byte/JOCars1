@@ -1,65 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Star,
-  Phone,
-  MessageCircle,
-  Mail,
-  Globe,
-  MapPin,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Loader2,
-  Send,
-  Upload,
-  Calendar,
-  Flag,
-  Image as ImageIcon,
-  ThumbsUp,
-  Wrench,
-  X,
-  Eye,
-  Users,
-  Award,
+  Star, Phone, MessageCircle, Mail, Globe, MapPin, Clock,
+  CheckCircle, XCircle, Loader2, Send, Upload, Calendar,
+  Flag, Image as ImageIcon, ThumbsUp, Wrench, X, Eye,
+  Users, Award, ShieldCheck, Truck, AlertTriangle, Coffee,
+  ChevronLeft, ChevronRight, Share2, Sparkles, AlertCircle,
+  Tag, ExternalLink, ArrowRight, DollarSign, Navigation
 } from 'lucide-react';
-
-interface Workshop {
-  id: string;
-  name: string;
-  logo: string | null;
-  coverImage: string | null;
-  description: string | null;
-  phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
-  website: string | null;
-  address: string | null;
-  lat: number | null;
-  lng: number | null;
-  rating: number;
-  reviewCount: number;
-  viewCount: number;
-  priceRange: string | null;
-  provinceId: string | null;
-  cityId: string | null;
-  services: { id: string; name: string; category: string | null }[];
-  brands: { id: string; brand: string; workshopId: string }[];
-  isVerified: boolean;
-  workingHours: string | null;
-  workingDays: string | null;
-  yearsOfExperience: number | null;
-  employeeCount: number | null;
-  recommendPercent: number;
-  prices: WorkshopPrice[];
-  reviews: WorkshopReview[];
-  ads: WorkshopAd[];
-  user: { id: string; name: string; image: string | null; phone: string | null; whatsapp: string | null } | null;
-}
+import { useAuth } from '@/hooks/useAuth';
 
 interface WorkshopPrice {
   id: string;
@@ -101,18 +55,81 @@ interface WorkshopAd {
   status: string;
 }
 
+interface Workshop {
+  id: string;
+  name: string;
+  logo: string | null;
+  coverImage: string | null;
+  description: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  emergencyPhone: string | null;
+  email: string | null;
+  website: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  rating: number;
+  reviewCount: number;
+  viewCount: number;
+  priceRange: string | null;
+  provinceId: string | null;
+  cityId: string | null;
+  isMobileService: boolean;
+  hasTowingService: boolean;
+  hasWarranty: boolean;
+  warrantyPeriod: string | null;
+  hasWaitingArea: boolean;
+  offersSpareParts: boolean;
+  paymentMethods: string | null;
+  specialties: string | null;
+  gallery: string | null;
+  discountOffer: string | null;
+  services: { id: string; name: string; category: string | null }[];
+  brands: { id: string; brand: string; workshopId: string }[];
+  isVerified: boolean;
+  workingHours: string | null;
+  workingDays: string | null;
+  yearsOfExperience: number | null;
+  employeeCount: number | null;
+  recommendPercent: number;
+  prices: WorkshopPrice[];
+  reviews: WorkshopReview[];
+  ads: WorkshopAd[];
+  user: { id: string; name: string; image: string | null; phone: string | null; whatsapp: string | null } | null;
+}
+
+const RATING_LABELS: Record<string, string> = {
+  quality: 'جودة الإصلاح',
+  price: 'مناسبة السعر',
+  speed: 'سرعة الإنجاز',
+  service: 'التعامل والخدمة',
+  cleanliness: 'نظافة الورشة',
+  punctuality: 'الالتزام بالمواعيد',
+  parts: 'جودة قطع الغيار',
+};
+
 export default function WorkshopDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const workshopId = params.id as string;
+  const { isAuthenticated, user: currentUser } = useAuth();
 
   const [workshop, setWorkshop] = useState<Workshop | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'about' | 'services' | 'prices' | 'gallery' | 'reviews' | 'ads'>('about');
+  
+  // Modals & Lightbox
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [showBookForm, setShowBookForm] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
 
+  // Forms
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
     carMake: '',
@@ -136,7 +153,7 @@ export default function WorkshopDetailPage() {
 
   const [bookForm, setBookForm] = useState({
     date: '',
-    time: '',
+    time: '10:00',
     serviceType: '',
     carMake: '',
     carModel: '',
@@ -149,7 +166,7 @@ export default function WorkshopDetailPage() {
   const [bookStatus, setBookStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const [reportForm, setReportForm] = useState({
-    reason: '',
+    reason: 'إعلان مضلل',
     description: '',
   });
   const [reportStatus, setReportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -158,7 +175,11 @@ export default function WorkshopDetailPage() {
     try {
       const res = await fetch(`/api/workshops/${workshopId}`);
       const data = await res.json();
-      setWorkshop(data.data);
+      if (data.success && data.data) {
+        setWorkshop(data.data);
+      } else {
+        setWorkshop(null);
+      }
     } catch {
       setWorkshop(null);
     } finally {
@@ -169,6 +190,19 @@ export default function WorkshopDetailPage() {
   useEffect(() => {
     fetchWorkshop();
   }, [fetchWorkshop]);
+
+  // Auth token helper
+  const getAuthToken = () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = localStorage.getItem('jo-cars-auth');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.state?.token) return parsed.state.token;
+      }
+    } catch {}
+    return localStorage.getItem('token');
+  };
 
   const submitReview = async () => {
     const formData = new FormData();
@@ -191,28 +225,38 @@ export default function WorkshopDetailPage() {
     if (reviewForm.beforeImage) formData.append('beforeImage', reviewForm.beforeImage);
     if (reviewForm.afterImage) formData.append('afterImage', reviewForm.afterImage);
 
+    const token = getAuthToken();
+
     try {
-      await fetch(`/api/workshops/${workshopId}/reviews`, {
+      const res = await fetch(`/api/workshops/${workshopId}/reviews`, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
-      setShowReviewForm(false);
-      fetchWorkshop();
+      if (res.ok) {
+        setShowReviewForm(false);
+        fetchWorkshop();
+      }
     } catch {}
   };
 
   const submitBooking = async () => {
     setBookStatus('loading');
+    const token = getAuthToken();
     try {
       const res = await fetch(`/api/workshops/${workshopId}/appointments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(bookForm),
       });
+
       if (res.ok) {
         setBookStatus('success');
-        setBookForm({ date: '', time: '', serviceType: '', carMake: '', carModel: '', carYear: '', plateNumber: '', budget: '', isUrgent: false, description: '' });
-        setTimeout(() => { setBookStatus('idle'); setShowBookForm(false); }, 2000);
+        setBookForm({ date: '', time: '10:00', serviceType: '', carMake: '', carModel: '', carYear: '', plateNumber: '', budget: '', isUrgent: false, description: '' });
+        setTimeout(() => { setBookStatus('idle'); setShowBookForm(false); }, 2500);
       } else {
         setBookStatus('error');
         setTimeout(() => setBookStatus('idle'), 3000);
@@ -225,15 +269,18 @@ export default function WorkshopDetailPage() {
 
   const submitReport = async () => {
     setReportStatus('loading');
+    const token = getAuthToken();
     try {
       const res = await fetch(`/api/workshops/${workshopId}/report`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ ...reportForm, type: 'workshop' }),
       });
       if (res.ok) {
         setReportStatus('success');
-        setReportForm({ reason: '', description: '' });
         setTimeout(() => { setReportStatus('idle'); setShowReport(false); }, 2000);
       } else {
         setReportStatus('error');
@@ -246,16 +293,38 @@ export default function WorkshopDetailPage() {
   };
 
   const submitReply = async (reviewId: string) => {
+    const token = getAuthToken();
     try {
       await fetch(`/api/workshops/${workshopId}/reviews/${reviewId}/reply`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ reply: replyText }),
       });
       setReplyingTo(null);
       setReplyText('');
       fetchWorkshop();
     } catch {}
+  };
+
+  const handleShare = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const parseGalleryImages = (galleryStr: string | null): string[] => {
+    if (!galleryStr) return [];
+    try {
+      const parsed = JSON.parse(galleryStr);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
   };
 
   const parseAdImages = (imagesStr: string): string[] => {
@@ -268,7 +337,7 @@ export default function WorkshopDetailPage() {
   };
 
   const getRatingBreakdown = (reviews: WorkshopReview[]) => {
-    if (reviews.length === 0) return null;
+    if (!reviews || reviews.length === 0) return null;
     const sum = reviews.reduce(
       (acc, r) => ({
         quality: acc.quality + r.qualityRating,
@@ -293,768 +362,932 @@ export default function WorkshopDetailPage() {
     };
   };
 
-  const ratingLabels: Record<string, string> = {
-    quality: 'الجودة',
-    price: 'السعر',
-    speed: 'سرعة التنفيذ',
-    service: 'الخدمة',
-    cleanliness: 'النظافة',
-    punctuality: 'الالتزام بالمواعيد',
-    parts: 'قطع الغيار',
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#1a1a2e' }}>
-        <Loader2 className="w-10 h-10 animate-spin text-[#0084ff]" />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
+        <Loader2 className="w-12 h-12 animate-spin text-emerald-400 mb-4" />
+        <p className="text-slate-400 text-sm animate-pulse">جاري تحميل بيانات الورشة...</p>
       </div>
     );
   }
 
   if (!workshop) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: '#1a1a2e' }}>
-        <XCircle className="w-20 h-20 text-gray-600 mb-4" />
-        <h2 className="text-xl text-white font-semibold mb-2">الورشة غير موجودة</h2>
-        <p className="text-gray-400">لم يتم العثور على هذه الورشة</p>
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 px-4 text-center">
+        <div className="w-20 h-20 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-4">
+          <XCircle className="w-10 h-10" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">الورشة غير موجودة</h2>
+        <p className="text-slate-400 text-sm mb-6">قد تكون الورشة أزيلت أو الرابط غير صحيح.</p>
+        <Link href="/workshops" className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold text-sm transition-colors">
+          العودة لدليل الورش
+        </Link>
       </div>
     );
   }
 
   const ratingBreakdown = getRatingBreakdown(workshop.reviews);
+  const galleryImages = parseGalleryImages(workshop.gallery);
+  const phoneFormatted = (workshop.phone || workshop.user?.phone || '').replace(/[^0-9]/g, '');
+  const whatsappFormatted = (workshop.whatsapp || workshop.user?.whatsapp || phoneFormatted).replace(/[^0-9]/g, '');
 
   return (
-    <div className="min-h-screen" style={{ background: '#1a1a2e' }}>
-      {/* Cover Image */}
-      <div className="relative h-64 md:h-96 w-full">
-        {workshop.coverImage ? (
-          <Image src={workshop.coverImage} alt={workshop.name} fill className="object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-b from-[#0f3460] to-[#1a1a2e]" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a2e] via-[#1a1a2e]/50 to-transparent" />
-        <div className="absolute bottom-6 right-6 md:right-10">
-          <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl border-4 border-[#1a1a2e] overflow-hidden bg-[#16213e] shadow-xl flex items-center justify-center">
-            {workshop.logo ? (
-              <Image src={workshop.logo} alt={workshop.name} width={112} height={112} className="object-cover" />
-            ) : (
-              <Wrench className="w-10 h-10 text-[#0084ff]" />
-            )}
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+      {/* Navigation Top Bar */}
+      <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30">
+        <div className="container-custom py-3 flex items-center justify-between">
+          <Link href="/workshops" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-semibold">
+            <ArrowRight className="w-4 h-4" />
+            <span>العودة لقائمة الورش</span>
+          </Link>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{copiedLink ? 'تم نسخ الرابط!' : 'مشاركة'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowReport(true)}
+              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-slate-700 transition-colors"
+              title="إبلاغ عن محتوى"
+            >
+              <Flag className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 max-w-6xl pb-20">
-        {/* Workshop Header Info */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl md:text-3xl font-bold text-white">{workshop.name}</h1>
-            {workshop.isVerified && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-[#0084ff]/20 text-[#0084ff] text-xs rounded-full">
-                <CheckCircle className="w-3.5 h-3.5" />
-                موثّق
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-4 mb-3 flex-wrap">
-            <div className="flex items-center gap-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className={`w-5 h-5 ${i < Math.round(workshop.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`} />
-              ))}
-              <span className="text-white font-semibold mr-1">{workshop.rating.toFixed(1)}</span>
-              <span className="text-gray-400 text-sm">({workshop.reviewCount} تقييم)</span>
+      {/* Hero Cover & Workshop Banner */}
+      <div className="relative w-full bg-slate-900 overflow-hidden border-b border-slate-800">
+        <div className="relative h-64 md:h-96 w-full bg-slate-950">
+          {workshop.coverImage ? (
+            <Image
+              src={workshop.coverImage}
+              alt={workshop.name}
+              fill
+              priority
+              className="object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-r from-emerald-950/60 via-slate-900 to-slate-950 flex items-center justify-center">
+              <Wrench className="w-24 h-24 text-slate-800/80" />
             </div>
-            <div className="flex items-center gap-1 text-gray-400 text-sm">
-              <Eye className="w-4 h-4" />
-              <span>{workshop.viewCount} مشاهدة</span>
-            </div>
-            {workshop.priceRange && (
-              <span className="px-3 py-1 bg-[#0f3460] text-gray-300 text-xs rounded-full">
-                {workshop.priceRange === 'budget' ? 'اقتصادي' : workshop.priceRange === 'moderate' ? 'متوسط' : workshop.priceRange === 'expensive' ? 'مرتفع' : workshop.priceRange}
+          )}
+
+          {/* Dark Glassmorphic Gradients */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-slate-950/60 via-transparent to-slate-950/60" />
+
+          {/* Emergency Badge Overlay */}
+          {workshop.hasTowingService && (
+            <div className="absolute top-4 right-4">
+              <span className="px-3.5 py-1.5 rounded-2xl bg-rose-600/90 backdrop-blur-md text-white text-xs font-extrabold flex items-center gap-1.5 shadow-xl animate-pulse">
+                <AlertTriangle className="w-4 h-4" />
+                ونش وسحب طوارئ 24/7
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <MapPin className="w-4 h-4" />
-            <span>{workshop.address || 'العنوان غير محدد'}</span>
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Description */}
-            {workshop.description && (
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-                <h2 className="text-lg font-semibold text-white mb-3">عن الورشة</h2>
-                <p className="text-gray-300 leading-relaxed">{workshop.description}</p>
-              </div>
-            )}
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {workshop.yearsOfExperience != null && (
-                <div className="rounded-xl border border-gray-700 bg-[#16213e] p-4 text-center">
-                  <Award className="w-6 h-6 text-[#0084ff] mx-auto mb-2" />
-                  <p className="text-white font-bold text-lg">{workshop.yearsOfExperience}</p>
-                  <p className="text-gray-400 text-xs">سنة خبرة</p>
-                </div>
-              )}
-              {workshop.employeeCount != null && (
-                <div className="rounded-xl border border-gray-700 bg-[#16213e] p-4 text-center">
-                  <Users className="w-6 h-6 text-[#0084ff] mx-auto mb-2" />
-                  <p className="text-white font-bold text-lg">{workshop.employeeCount}</p>
-                  <p className="text-gray-400 text-xs">موظف</p>
-                </div>
-              )}
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-4 text-center">
-                <Star className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-                <p className="text-white font-bold text-lg">{workshop.rating.toFixed(1)}</p>
-                <p className="text-gray-400 text-xs">التقييم</p>
-              </div>
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-4 text-center">
-                <ThumbsUp className="w-6 h-6 text-green-400 mx-auto mb-2" />
-                <p className="text-white font-bold text-lg">{workshop.recommendPercent}%</p>
-                <p className="text-gray-400 text-xs">يوصون</p>
-              </div>
-            </div>
-
-            {/* Working Hours */}
-            <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#0084ff]" />
-                أوقات العمل
-              </h2>
-              {workshop.workingHours ? (
-                <p className="text-gray-300">{workshop.workingHours}</p>
-              ) : (
-                <p className="text-gray-500">غير محدد</p>
-              )}
-              {workshop.workingDays && (
-                <div className="mt-3">
-                  <p className="text-sm text-gray-400 mb-2">أيام العمل:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {workshop.workingDays.split(',').map((day, i) => (
-                      <span key={i} className="px-3 py-1 bg-[#0f3460] text-gray-300 text-sm rounded-lg">{day.trim()}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Services */}
-            {workshop.services.length > 0 && (
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <Wrench className="w-5 h-5 text-[#0084ff]" />
-                  الخدمات
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {workshop.services.map((service) => (
-                    <div key={service.id} className="flex items-center gap-2 px-4 py-3 bg-[#0f3460] rounded-lg">
-                      <CheckCircle className="w-4 h-4 text-[#0084ff] shrink-0" />
-                      <span className="text-gray-200 text-sm">{service.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Brands */}
-            {workshop.brands.length > 0 && (
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">الماركات</h2>
-                <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                  {workshop.brands.map((brand) => (
-                    <div key={brand.id} className="flex flex-col items-center gap-2 px-3 py-4 bg-[#0f3460] rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-[#1a1a2e] flex items-center justify-center">
-                        <span className="text-[#0084ff] text-xs font-bold">{brand.brand.charAt(0)}</span>
-                      </div>
-                      <span className="text-gray-300 text-xs text-center">{brand.brand}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Prices */}
-            {workshop.prices.length > 0 && (
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">الأسعار التقريبية</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-700">
-                        <th className="text-right py-3 px-4 text-gray-400 font-medium">الخدمة</th>
-                        <th className="text-right py-3 px-4 text-gray-400 font-medium">السعر الأدنى</th>
-                        <th className="text-right py-3 px-4 text-gray-400 font-medium">السعر الأعلى</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {workshop.prices.map((price) => (
-                        <tr key={price.id} className="border-b border-gray-700/50 hover:bg-[#0f3460]/50">
-                          <td className="py-3 px-4 text-white">{price.serviceName}</td>
-                          <td className="py-3 px-4 text-green-400 font-medium">{price.minPrice} د.أ</td>
-                          <td className="py-3 px-4 text-green-400 font-medium">{price.maxPrice} د.أ</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Reviews Section */}
-            <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-white">التقييمات</h2>
-                <button
-                  onClick={() => setShowReviewForm(true)}
-                  className="px-4 py-2 bg-[#0084ff] text-white rounded-lg text-sm hover:bg-[#006cd9] transition-colors"
-                >
-                  اكتب تقييم
-                </button>
-              </div>
-
-              {/* Overall Rating */}
-              <div className="flex flex-col md:flex-row gap-8 mb-8">
-                <div className="text-center md:text-right">
-                  <div className="text-5xl font-bold text-white mb-2">{workshop.rating.toFixed(1)}</div>
-                  <div className="flex items-center justify-center md:justify-start gap-0.5 mb-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} className={`w-5 h-5 ${i < Math.round(workshop.rating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`} />
-                    ))}
-                  </div>
-                  <p className="text-gray-400 text-sm">{workshop.reviewCount} تقييم</p>
-                  <div className="mt-3 flex items-center justify-center md:justify-start gap-2">
-                    <ThumbsUp className="w-4 h-4 text-green-400" />
-                    <span className="text-white text-sm">{workshop.recommendPercent}% يوصون</span>
-                  </div>
-                </div>
-
-                {ratingBreakdown && (
-                  <div className="flex-1 space-y-2">
-                    {Object.entries(ratingBreakdown).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-3">
-                        <span className="text-gray-400 text-sm w-32 text-right">{ratingLabels[key]}</span>
-                        <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#0084ff] rounded-full"
-                            style={{ width: `${((value || 0) / 5) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-white text-sm w-8">{(value || 0).toFixed(1)}</span>
-                      </div>
-                    ))}
+        {/* Profile Info Row Overlapping Cover */}
+        <div className="container-custom relative -mt-20 md:-mt-24 z-10 pb-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            
+            {/* Logo & Main Titles */}
+            <div className="flex items-end gap-4 md:gap-6">
+              <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-3xl border-4 border-slate-950 bg-slate-900 shadow-2xl overflow-hidden shrink-0 flex items-center justify-center">
+                {workshop.logo ? (
+                  <Image src={workshop.logo} alt={workshop.name} fill className="object-cover" />
+                ) : (
+                  <Wrench className="w-12 h-12 text-emerald-400" />
+                )}
+                {workshop.isVerified && (
+                  <div className="absolute bottom-1 right-1 bg-amber-500 text-slate-950 rounded-full p-1 shadow-lg" title="ورشة موثقة">
+                    <ShieldCheck className="w-4 h-4" />
                   </div>
                 )}
               </div>
 
-              {/* Individual Reviews */}
-              <div className="space-y-6">
-                {workshop.reviews.map((review) => (
-                  <div key={review.id} className="border-t border-gray-700 pt-6">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-[#0f3460] flex items-center justify-center shrink-0">
-                        {review.user.image ? (
-                          <Image src={review.user.image} alt="" width={40} height={40} className="rounded-full object-cover" />
-                        ) : (
-                          <span className="text-[#0084ff] font-bold text-sm">{review.user.name.charAt(0)}</span>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-white font-medium">{review.user.name}</span>
-                          <span className="text-gray-500 text-xs">{new Date(review.createdAt).toLocaleDateString('ar-JO')}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                          <span>{review.carMake} {review.carModel}</span>
-                          {review.carYear && <span>({review.carYear})</span>}
-                          <span>•</span>
-                          <span>{review.repairType}</span>
-                        </div>
-                        <div className="flex items-center gap-1 mt-1">
-                          {Array.from({ length: 5 }).map((_, i) => {
-                            const avg = (review.qualityRating + review.priceRating + review.speedRating + review.serviceRating + review.cleanlinessRating + review.punctualityRating + review.partsRating) / 7;
-                            return <Star key={i} className={`w-3.5 h-3.5 ${i < Math.round(avg) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'}`} />;
-                          })}
-                          {review.recommend && (
-                            <span className="text-green-400 text-xs mr-2 flex items-center gap-1">
-                              <ThumbsUp className="w-3 h-3" />
-                              يوصي
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-gray-300 text-sm mb-3">{review.description}</p>
-                    {(review.price != null || review.duration) && (
-                      <div className="flex gap-4 text-sm text-gray-400 mb-3">
-                        {review.price != null && <span>السعر: {review.price} د.أ</span>}
-                        {review.duration && <span>المدة: {review.duration}</span>}
-                      </div>
-                    )}
-                    {/* Review Images */}
-                    {(review.beforeImage || review.afterImage) && (
-                      <div className="flex gap-4 mb-3">
-                        {review.beforeImage && (
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">قبل:</p>
-                            <div className="relative w-20 h-20 rounded-lg overflow-hidden">
-                              <Image src={review.beforeImage} alt="" fill className="object-cover" />
-                            </div>
-                          </div>
-                        )}
-                        {review.afterImage && (
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">بعد:</p>
-                            <div className="relative w-20 h-20 rounded-lg overflow-hidden">
-                              <Image src={review.afterImage} alt="" fill className="object-cover" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {/* Workshop Reply */}
-                    {review.workshopReply && (
-                      <div className="bg-[#0f3460] rounded-lg p-4 mt-3 mr-6">
-                        <p className="text-xs text-[#0084ff] mb-1 font-medium">رد الورشة:</p>
-                        <p className="text-gray-300 text-sm">{review.workshopReply}</p>
-                      </div>
-                    )}
-                    {/* Reply Button */}
-                    <button
-                      onClick={() => { setReplyingTo(review.id); setReplyText(''); }}
-                      className="text-[#0084ff] text-sm mt-2 hover:underline"
-                    >
-                      رد على هذا التقييم
-                    </button>
-                    {replyingTo === review.id && (
-                      <div className="mt-3 flex gap-2">
-                        <input
-                          type="text"
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          placeholder="اكتب ردك..."
-                          className="flex-1 px-4 py-2 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                        />
-                        <button onClick={() => submitReply(review.id)} className="px-4 py-2 bg-[#0084ff] text-white rounded-lg text-sm">إرسال</button>
-                        <button onClick={() => setReplyingTo(null)} className="px-4 py-2 border border-gray-700 text-gray-400 rounded-lg text-sm">إلغاء</button>
-                      </div>
-                    )}
+              <div className="space-y-1.5 mb-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-2xl md:text-4xl font-extrabold text-white tracking-tight">{workshop.name}</h1>
+                  {workshop.isVerified && (
+                    <span className="px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 text-xs font-black flex items-center gap-1 shadow-md">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      معتمدة كارس جو
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 font-medium">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{workshop.address || 'المملكة الأردنية الهاشمية'}</span>
                   </div>
-                ))}
+
+                  <div className="flex items-center gap-1 text-amber-400 font-bold">
+                    <Star className="w-4 h-4 fill-amber-400" />
+                    <span className="text-white text-sm">{workshop.rating > 0 ? workshop.rating.toFixed(1) : '5.0'}</span>
+                    <span className="text-slate-400 font-normal">({workshop.reviewCount} تقييم)</span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-slate-400">
+                    <Eye className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{workshop.viewCount} مشاهدة</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Ads Section */}
-            {workshop.ads.length > 0 && (
-              <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">إعلانات الورشة</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {workshop.ads.map((ad) => {
-                    const adImages = parseAdImages(ad.images);
-                    return (
-                      <div key={ad.id} className="rounded-lg border border-gray-700 bg-[#0f3460] overflow-hidden">
-                        {adImages.length > 0 && (
-                          <div className="relative h-40">
-                            <Image src={adImages[0]} alt={ad.title} fill className="object-cover" />
-                          </div>
-                        )}
-                        <div className="p-4">
-                          <h3 className="text-white font-semibold mb-1">{ad.title}</h3>
-                          <p className="text-gray-400 text-sm">{ad.description}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Quick Primary Actions */}
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                onClick={() => setShowBookForm(true)}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-sm shadow-xl shadow-emerald-500/20 transition-all cursor-pointer"
+              >
+                <Calendar className="w-4 h-4" />
+                حجز موعد فوري
+              </button>
+
+              {phoneFormatted && (
+                <a
+                  href={`tel:${phoneFormatted}`}
+                  className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white font-bold text-sm transition-all"
+                >
+                  <Phone className="w-4 h-4 text-emerald-400" />
+                  <span>اتصال</span>
+                </a>
+              )}
+
+              {whatsappFormatted && (
+                <a
+                  href={`https://wa.me/${whatsappFormatted}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-emerald-400 font-bold text-sm transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>واتساب</span>
+                </a>
+              )}
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Feature Badges Showcase Bar */}
+      <div className="container-custom py-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+              <Award className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.yearsOfExperience || 5}+ سنوات</p>
+              <p className="text-slate-400 text-[10px]">خبرة في صيانة السيارات</p>
+            </div>
           </div>
 
-          {/* Sidebar */}
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.hasWarranty ? `كفالة ${workshop.warrantyPeriod || ''}` : 'كفالة صيانة'}</p>
+              <p className="text-slate-400 text-[10px]">ضمان وجودة قطعة الإصلاح</p>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-400 flex items-center justify-center shrink-0">
+              <Truck className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.isMobileService ? 'صيانة متنقلة' : 'ورشة متخصصة'}</p>
+              <p className="text-slate-400 text-[10px]">فريق مجهز للموقع</p>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+              <Coffee className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.hasWaitingArea ? 'استراحة زبائن' : 'استقبال مميز'}</p>
+              <p className="text-slate-400 text-[10px]">غرفة مكيفة وخدمات</p>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.offersSpareParts ? 'توفير قطع غيار' : 'استبدال قطع'}</p>
+              <p className="text-slate-400 text-[10px]">أصلي ومضمون</p>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-xs">{workshop.hasTowingService ? 'ونش 24 ساعة' : 'استجابة سريعة'}</p>
+              <p className="text-slate-400 text-[10px]">خدمة سحب وسرويس</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Special Offer Alert Banner if exists */}
+      {workshop.discountOffer && (
+        <div className="container-custom mb-6">
+          <div className="p-4 rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 border border-emerald-500/40 shadow-xl flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <Tag className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-emerald-400 text-xs font-bold block">عرض حصري لأعضاء موقع Cars JO 🏷️</span>
+                <p className="text-white text-sm font-extrabold mt-0.5">{workshop.discountOffer}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowBookForm(true)}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black shrink-0 transition-colors"
+            >
+              احصل على العرض عند الحجز
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Tabs */}
+      <div className="container-custom mb-8">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-slate-800">
+          {[
+            { id: 'about', label: 'عن الورشة والمعلومات', icon: Wrench },
+            { id: 'services', label: `الخدمات والماركات (${workshop.services.length})`, icon: Sparkles },
+            { id: 'prices', label: `جدول الأسعار (${workshop.prices.length})`, icon: DollarSign },
+            { id: 'gallery', label: `معرض الصور (${galleryImages.length})`, icon: ImageIcon },
+            { id: 'reviews', label: `التقييمات (${workshop.reviewCount})`, icon: Star },
+            { id: 'ads', label: `العروض والبوسترات (${workshop.ads.length})`, icon: Tag },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                  isActive
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Tab Content & Sidebar Grid */}
+      <div className="container-custom">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Left / Main Content Column */}
+          <div className="lg:col-span-2 space-y-8">
+
+            {/* TAB 1: ABOUT & OVERVIEW */}
+            {activeTab === 'about' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                
+                {/* Description Box */}
+                {workshop.description && (
+                  <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-3">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Wrench className="w-5 h-5 text-emerald-400" />
+                      الوصف والتخصصات
+                    </h3>
+                    <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">
+                      {workshop.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Services Overview Grid */}
+                {workshop.services.length > 0 && (
+                  <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-emerald-400" />
+                      أبرز الخدمات التي تتقنها الورشة
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {workshop.services.map((service) => (
+                        <div key={service.id} className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle className="w-4 h-4" />
+                          </div>
+                          <span className="text-white text-sm font-semibold">{service.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Brands Supported Overview */}
+                {workshop.brands.length > 0 && (
+                  <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Award className="w-5 h-5 text-amber-400" />
+                      الماركات المصرحة والمتخصصة بها
+                    </h3>
+
+                    <div className="flex flex-wrap gap-2.5">
+                      {workshop.brands.map((b) => (
+                        <span key={b.id} className="px-4 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-bold flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                          {b.brand}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Working Hours Box */}
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-emerald-400" />
+                    أوقات وأيام الدوام الرسمية
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1">
+                      <span className="text-slate-400 text-xs">ساعات استقبال السيارات:</span>
+                      <p className="text-white font-extrabold text-base">{workshop.workingHours || '08:00 صباحاً - 06:00 مساءً'}</p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1">
+                      <span className="text-slate-400 text-xs">أيام العمل خلال الأسبوع:</span>
+                      <p className="text-white font-extrabold text-base">{workshop.workingDays || 'طيلة أيام الأسبوع ما عدا الجمعة'}</p>
+                    </div>
+                  </div>
+                </div>
+
+              </motion.div>
+            )}
+
+            {/* TAB 2: SERVICES & BRANDS */}
+            {activeTab === 'services' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6">
+                  <div>
+                    <h3 className="text-xl font-extrabold text-white mb-2">قائمة الخدمات المتاحة لدى الورشة</h3>
+                    <p className="text-slate-400 text-xs">يمكنك حجز موعد محدد لأي من هذه الخدمات مباشرة</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {workshop.services.map((s) => (
+                      <div key={s.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                            <Wrench className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="text-white font-bold text-sm">{s.name}</h4>
+                            <span className="text-slate-500 text-[10px]">خدمة متخصصة ومكفولة</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setBookForm(b => ({ ...b, serviceType: s.name }));
+                            setShowBookForm(true);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 text-xs font-bold transition-colors"
+                        >
+                          حجز
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {workshop.brands.length > 0 && (
+                  <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                    <h3 className="text-lg font-bold text-white">الماركات والسيارات المدعومة</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {workshop.brands.map((b) => (
+                        <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-center space-y-1">
+                          <span className="text-emerald-400 font-black text-sm block">{b.brand}</span>
+                          <span className="text-slate-500 text-[10px]">فحص وصيانة كشف أعطال</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* TAB 3: PRICE GUIDE */}
+            {activeTab === 'prices' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-extrabold text-white mb-1">جدول أسعار الخدمات التقريبية</h3>
+                      <p className="text-slate-400 text-xs">الأسعار تشمل تقدير أجور اليد والقطع بالدينار الأردني</p>
+                    </div>
+
+                    <span className="px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold">
+                      أسعار شفافة ومضمونة
+                    </span>
+                  </div>
+
+                  {workshop.prices.length === 0 ? (
+                    <p className="text-slate-500 text-sm py-8 text-center">لم تقم الورشة بإضافة قائمة أسعار محددة بعد.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 text-xs">
+                            <th className="py-3 px-4">اسم الخدمة</th>
+                            <th className="py-3 px-4">السعر الأدنى</th>
+                            <th className="py-3 px-4">السعر الأعلى</th>
+                            <th className="py-3 px-4 text-center">حجز</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 text-white">
+                          {workshop.prices.map((p) => (
+                            <tr key={p.id} className="hover:bg-slate-950/60 transition-colors">
+                              <td className="py-3.5 px-4 font-bold">{p.serviceName}</td>
+                              <td className="py-3.5 px-4 text-emerald-400 font-bold">{p.minPrice} د.أ</td>
+                              <td className="py-3.5 px-4 text-emerald-400 font-bold">{p.maxPrice} د.أ</td>
+                              <td className="py-3.5 px-4 text-center">
+                                <button
+                                  onClick={() => {
+                                    setBookForm(b => ({ ...b, serviceType: p.serviceName }));
+                                    setShowBookForm(true);
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
+                                >
+                                  حجز الخدمة
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 4: GALLERY */}
+            {activeTab === 'gallery' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                  <h3 className="text-xl font-extrabold text-white">معرض صور الورشة والمعدات والأعمال</h3>
+
+                  {galleryImages.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">
+                      <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      لا توجد صور معرض مضافة لهذه الورشة بعد.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {galleryImages.map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          onClick={() => setLightboxImage(imgUrl)}
+                          className="relative h-44 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 group cursor-pointer"
+                        >
+                          <Image src={imgUrl} alt={`ورشة ${i + 1}`} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Eye className="w-6 h-6 text-white" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 5: REVIEWS */}
+            {activeTab === 'reviews' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+                    <div>
+                      <h3 className="text-xl font-extrabold text-white">آراء وتقييمات العملاء والزبائن</h3>
+                      <p className="text-slate-400 text-xs">تقييمات حقيقية من سائقين قصروا ورشاتهم هنا</p>
+                    </div>
+
+                    <button
+                      onClick={() => setShowReviewForm(true)}
+                      className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shrink-0"
+                    >
+                      أضف تقييمك للورشة ⭐
+                    </button>
+                  </div>
+
+                  {/* Rating Breakdown Bar */}
+                  {ratingBreakdown && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 rounded-2xl bg-slate-950 border border-slate-800">
+                      {Object.entries(ratingBreakdown).map(([k, val]) => (
+                        <div key={k} className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-400">{RATING_LABELS[k]}</span>
+                            <span className="text-emerald-400 font-bold">{val.toFixed(1)} / 5</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(val / 5) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reviews List */}
+                  {workshop.reviews.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-8">لا توجد تقييمات حتى الآن. كن أول من يقيم الورشة!</p>
+                  ) : (
+                    <div className="space-y-6 divide-y divide-slate-800/80">
+                      {workshop.reviews.map((r) => (
+                        <div key={r.id} className="pt-6 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+                                {r.user?.image ? (
+                                  <Image src={r.user.image} alt={r.user.name} width={40} height={40} className="rounded-full object-cover" />
+                                ) : (
+                                  r.user?.name?.charAt(0) || 'U'
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="text-white font-bold text-sm">{r.user?.name || 'مستخدم'}</h4>
+                                <p className="text-slate-500 text-[10px]">
+                                  سيارة {r.carMake} {r.carModel} {r.carYear ? `(${r.carYear})` : ''} • {r.repairType}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 text-amber-400">
+                              <Star className="w-4 h-4 fill-amber-400" />
+                              <span className="text-white font-bold text-xs">{(r.qualityRating || 5).toFixed(1)}</span>
+                            </div>
+                          </div>
+
+                          <p className="text-slate-300 text-sm leading-relaxed">{r.description}</p>
+
+                          {/* Before / After Images */}
+                          {(r.beforeImage || r.afterImage) && (
+                            <div className="flex items-center gap-4 pt-2">
+                              {r.beforeImage && (
+                                <div className="space-y-1">
+                                  <span className="text-rose-400 text-[10px] font-bold block">قبل الاصلاح:</span>
+                                  <img
+                                    src={r.beforeImage}
+                                    alt="قبل"
+                                    onClick={() => setLightboxImage(r.beforeImage)}
+                                    className="w-20 h-20 rounded-xl object-cover border border-slate-800 cursor-pointer"
+                                  />
+                                </div>
+                              )}
+                              {r.afterImage && (
+                                <div className="space-y-1">
+                                  <span className="text-emerald-400 text-[10px] font-bold block">بعد الاصلاح:</span>
+                                  <img
+                                    src={r.afterImage}
+                                    alt="بعد"
+                                    onClick={() => setLightboxImage(r.afterImage)}
+                                    className="w-20 h-20 rounded-xl object-cover border border-slate-800 cursor-pointer"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Workshop Reply if exists */}
+                          {r.workshopReply && (
+                            <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/20 space-y-1 text-xs">
+                              <span className="text-emerald-400 font-bold block">رد صاحب الورشة:</span>
+                              <p className="text-slate-300">{r.workshopReply}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* TAB 6: ADS */}
+            {activeTab === 'ads' && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 space-y-4">
+                  <h3 className="text-xl font-extrabold text-white">العروض والتخفيضات النشطة للورشة</h3>
+
+                  {workshop.ads.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-8">لا تتوفر إعلانات أو عروض ترويجية حالية.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {workshop.ads.map((ad) => {
+                        const adImgs = parseAdImages(ad.images);
+                        return (
+                          <div key={ad.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            {adImgs.length > 0 && (
+                              <div className="relative h-40 rounded-xl overflow-hidden bg-slate-900">
+                                <Image src={adImgs[0]} alt={ad.title} fill className="object-cover" />
+                              </div>
+                            )}
+                            <h4 className="text-white font-bold text-sm">{ad.title}</h4>
+                            <p className="text-slate-400 text-xs">{ad.description}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+          </div>
+
+          {/* Right Sidebar Column */}
           <div className="space-y-6">
-            {/* Contact Info */}
-            <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">التواصل</h2>
-              <div className="space-y-3">
-                {workshop.phone && (
-                  <a href={`tel:${workshop.phone}`} className="flex items-center gap-3 p-3 bg-[#0f3460] rounded-lg hover:bg-[#0f3460]/80 transition-colors">
-                    <Phone className="w-5 h-5 text-[#0084ff]" />
-                    <span className="text-white text-sm" dir="ltr">{workshop.phone}</span>
+            
+            {/* Quick Contact Box */}
+            <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Phone className="w-5 h-5 text-emerald-400" />
+                معلومات التواصل المباشر
+              </h3>
+
+              <div className="space-y-2.5">
+                {phoneFormatted && (
+                  <a
+                    href={`tel:${phoneFormatted}`}
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-white transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-bold dir-ltr">{workshop.phone || workshop.user?.phone}</span>
+                    </div>
+                    <span className="text-xs text-emerald-400 font-bold">اتصل الآن</span>
                   </a>
                 )}
-                {workshop.whatsapp && (
-                  <a href={`https://wa.me/${workshop.whatsapp}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-[#0f3460] rounded-lg hover:bg-[#0f3460]/80 transition-colors">
-                    <MessageCircle className="w-5 h-5 text-green-400" />
-                    <span className="text-white text-sm" dir="ltr">{workshop.whatsapp}</span>
+
+                {whatsappFormatted && (
+                  <a
+                    href={`https://wa.me/${whatsappFormatted}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-white transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                        <MessageCircle className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-bold">محادثة واتساب</span>
+                    </div>
+                    <span className="text-xs text-emerald-400 font-bold">ارسل رسالة</span>
                   </a>
                 )}
-                {workshop.email && (
-                  <a href={`mailto:${workshop.email}`} className="flex items-center gap-3 p-3 bg-[#0f3460] rounded-lg hover:bg-[#0f3460]/80 transition-colors">
-                    <Mail className="w-5 h-5 text-[#0084ff]" />
-                    <span className="text-white text-sm">{workshop.email}</span>
+
+                {workshop.emergencyPhone && (
+                  <a
+                    href={`tel:${workshop.emergencyPhone.replace(/[^0-9]/g, '')}`}
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-300 hover:bg-rose-900/40 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                      <span className="text-xs font-bold">طوارئ 24/7</span>
+                    </div>
+                    <span className="text-xs font-black dir-ltr">{workshop.emergencyPhone}</span>
                   </a>
                 )}
-                {workshop.website && (
-                  <a href={workshop.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-[#0f3460] rounded-lg hover:bg-[#0f3460]/80 transition-colors">
-                    <Globe className="w-5 h-5 text-[#0084ff]" />
-                    <span className="text-white text-sm">{workshop.website}</span>
-                  </a>
-                )}
+
                 {workshop.lat != null && workshop.lng != null && (
                   <a
                     href={`https://www.google.com/maps?q=${workshop.lat},${workshop.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-[#0f3460] rounded-lg hover:bg-[#0f3460]/80 transition-colors"
+                    className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-blue-500/40 text-white transition-all"
                   >
-                    <MapPin className="w-5 h-5 text-[#0084ff]" />
-                    <span className="text-white text-sm">عرض على الخريطة</span>
+                    <div className="flex items-center gap-3">
+                      <Navigation className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs font-bold">خرائط جوجل Google Maps</span>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-slate-400" />
                   </a>
                 )}
               </div>
             </div>
 
-            {/* Book Appointment */}
-            <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-[#0084ff]" />
-                حجز موعد
-              </h2>
-              {!showBookForm ? (
-                <button
-                  onClick={() => setShowBookForm(true)}
-                  className="w-full py-3 bg-[#0084ff] text-white rounded-lg font-medium hover:bg-[#006cd9] transition-colors"
-                >
-                  احجز موعداً
-                </button>
-              ) : bookStatus === 'success' ? (
-                <div className="text-center py-4">
-                  <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
-                  <p className="text-green-400 font-medium">تم إرسال طلب الحجز بنجاح!</p>
-                  <p className="text-gray-400 text-sm mt-1">سيتلقى صاحب الورشة إشعاراً بطلب الحجز</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <input
-                    type="date"
-                    value={bookForm.date}
-                    onChange={(e) => setBookForm({ ...bookForm, date: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <input
-                    type="time"
-                    value={bookForm.time}
-                    onChange={(e) => setBookForm({ ...bookForm, time: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <select
-                    value={bookForm.serviceType}
-                    onChange={(e) => setBookForm({ ...bookForm, serviceType: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  >
-                    <option value="">اختر الخدمة</option>
-                    {workshop.services.map((s) => (
-                      <option key={s.id} value={s.name}>{s.name}</option>
-                    ))}
-                  </select>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={bookForm.carMake}
-                      onChange={(e) => setBookForm({ ...bookForm, carMake: e.target.value })}
-                      placeholder="ماركة السيارة"
-                      className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                    />
-                    <input
-                      type="text"
-                      value={bookForm.carModel}
-                      onChange={(e) => setBookForm({ ...bookForm, carModel: e.target.value })}
-                      placeholder="موديل السيارة"
-                      className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      min="1900"
-                      max="2100"
-                      value={bookForm.carYear}
-                      onChange={(e) => setBookForm({ ...bookForm, carYear: e.target.value })}
-                      placeholder="سنة الصنع (اختياري)"
-                      className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                    />
-                    <input
-                      type="text"
-                      value={bookForm.plateNumber}
-                      onChange={(e) => setBookForm({ ...bookForm, plateNumber: e.target.value })}
-                      placeholder="رقم اللوحة (اختياري)"
-                      className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                    />
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
-                    value={bookForm.budget}
-                    onChange={(e) => setBookForm({ ...bookForm, budget: e.target.value })}
-                    placeholder="الميزانية المتوقعة (د.أ) — اختياري"
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <label className="flex items-center gap-2 px-3 py-2 bg-[#0f3460] border border-gray-700 rounded-lg cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={bookForm.isUrgent}
-                      onChange={(e) => setBookForm({ ...bookForm, isUrgent: e.target.checked })}
-                      className="w-4 h-4 accent-red-500"
-                    />
-                    <span className="text-white text-sm">⚡ حالة طارئة (أولوية قصوى)</span>
-                  </label>
-                  <textarea
-                    value={bookForm.description}
-                    onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
-                    placeholder="وصف المشكلة..."
-                    rows={3}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff] resize-none"
-                  />
-                  {bookStatus === 'error' && (
-                    <p className="text-red-400 text-sm">حدث خطأ، تأكد من ملء جميع الحقول المطلوبة</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={submitBooking}
-                      disabled={bookStatus === 'loading' || !bookForm.date || !bookForm.time || !bookForm.serviceType}
-                      className="flex-1 py-2.5 bg-[#0084ff] text-white rounded-lg text-sm font-medium hover:bg-[#006cd9] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {bookStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                      تأكيد الحجز
-                    </button>
-                    <button onClick={() => { setShowBookForm(false); setBookStatus('idle'); }} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-lg text-sm hover:bg-gray-800 transition-colors">
-                      إلغاء
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* Quick Appointment Call-to-Action Card */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/30 space-y-4 shadow-xl">
+              <div className="space-y-1">
+                <span className="text-emerald-400 text-xs font-bold block">حجز موعد مسبق 🗓️</span>
+                <h4 className="text-white font-extrabold text-base">تجنب الانتظار واضمن دورك في الورشة</h4>
+              </div>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                حدد التاريخ والوقت المناسب لك واطلب خدمة الفحص أو الإصلاح مباشرة.
+              </p>
+              <button
+                onClick={() => setShowBookForm(true)}
+                className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-colors shadow-lg shadow-emerald-500/20"
+              >
+                احجز موعدك الآن 🚀
+              </button>
             </div>
 
-            {/* Report */}
-            <div className="rounded-xl border border-gray-700 bg-[#16213e] p-6">
-              {!showReport ? (
-                <button
-                  onClick={() => setShowReport(true)}
-                  className="flex items-center gap-2 text-red-400 text-sm hover:text-red-300 transition-colors"
-                >
-                  <Flag className="w-4 h-4" />
-                  الإبلاغ عن الورشة
-                </button>
-              ) : reportStatus === 'success' ? (
-                <div className="text-center py-4">
-                  <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-2" />
-                  <p className="text-green-400 font-medium text-sm">تم إرسال البلاغ بنجاح!</p>
-                  <p className="text-gray-400 text-xs mt-1">شكراً على إبلاغك، سنراجع البلاغ قريباً</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-red-400 text-sm font-medium flex items-center gap-2">
-                    <Flag className="w-4 h-4" />
-                    الإبلاغ عن الورشة
-                  </p>
-                  <select
-                    value={reportForm.reason}
-                    onChange={(e) => setReportForm({ ...reportForm, reason: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  >
-                    <option value="">اختر السبب</option>
-                    <option value="fake">معلومات كاذبة</option>
-                    <option value="scam">نصب/احتيال</option>
-                    <option value="quality">جودة سيئة</option>
-                    <option value="other">أخرى</option>
-                  </select>
-                  <textarea
-                    value={reportForm.description}
-                    onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
-                    placeholder="تفاصيل البلاغ..."
-                    rows={3}
-                    className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff] resize-none"
-                  />
-                  {reportStatus === 'error' && (
-                    <p className="text-red-400 text-sm">حدث خطأ، تأكد من اختيار السبب</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={submitReport}
-                      disabled={reportStatus === 'loading' || !reportForm.reason}
-                      className="flex-1 py-2.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {reportStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flag className="w-4 h-4" />}
-                      إرسال البلاغ
-                    </button>
-                    <button onClick={() => { setShowReport(false); setReportStatus('idle'); }} className="px-4 py-2.5 border border-gray-700 text-gray-400 rounded-lg text-sm hover:bg-gray-800 transition-colors">
-                      إلغاء
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
+
         </div>
       </div>
 
-      {/* Review Form Modal */}
+      {/* MODAL 1: BOOK APPOINTMENT */}
       <AnimatePresence>
-        {showReviewForm && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-            onClick={() => setShowReviewForm(false)}
-          >
+        {showBookForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setShowBookForm(false)} />
+
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-gray-700 bg-[#16213e] p-6"
-              onClick={(e) => e.stopPropagation()}
+              className="relative z-10 w-full max-w-lg rounded-3xl border border-emerald-500/30 bg-slate-900 p-6 md:p-8 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-white">اكتب تقييمك</h3>
-                <button onClick={() => setShowReviewForm(false)} className="text-gray-400 hover:text-white">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <h3 className="font-extrabold text-white text-lg flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-400" />
+                  حجز موعد لدى {workshop.name}
+                </h3>
+                <button onClick={() => setShowBookForm(false)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                {/* Star Rating */}
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">التقييم العام</label>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <button key={i} onClick={() => setReviewForm({ ...reviewForm, rating: i + 1 })}>
-                        <Star className={`w-8 h-8 ${i < reviewForm.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'} hover:text-yellow-400 transition-colors`} />
-                      </button>
-                    ))}
+              {bookStatus === 'success' ? (
+                <div className="text-center py-8 space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-8 h-8" />
                   </div>
+                  <h4 className="text-white font-extrabold text-xl">تم إرسال طلب الحجز بنجاح!</h4>
+                  <p className="text-slate-400 text-xs">سيتواصل معك فريق الورشة لتأكيد موعدك.</p>
                 </div>
-
-                {/* Category Ratings */}
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(ratingLabels).map(([key, label]) => (
-                    <div key={key}>
-                      <label className="block text-xs text-gray-400 mb-1">{label}</label>
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <button
-                            key={i}
-                            onClick={() => setReviewForm({ ...reviewForm, [`${key}Rating`]: i + 1 } as any)}
-                          >
-                            <Star className={`w-4 h-4 ${i < (reviewForm as any)[`${key}Rating`] ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'} hover:text-yellow-400`} />
-                          </button>
-                        ))}
-                      </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">تاريخ الموعد *</label>
+                      <input
+                        type="date"
+                        value={bookForm.date}
+                        onChange={(e) => setBookForm(b => ({ ...b, date: e.target.value }))}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">الوقت المفضل *</label>
+                      <input
+                        type="time"
+                        value={bookForm.time}
+                        onChange={(e) => setBookForm(b => ({ ...b, time: e.target.value }))}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
 
-                {/* Car Info */}
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    value={reviewForm.carMake}
-                    onChange={(e) => setReviewForm({ ...reviewForm, carMake: e.target.value })}
-                    placeholder="ماركة السيارة"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <input
-                    type="text"
-                    value={reviewForm.carModel}
-                    onChange={(e) => setReviewForm({ ...reviewForm, carModel: e.target.value })}
-                    placeholder="موديل السيارة"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">نوع الخدمة *</label>
+                    <select
+                      value={bookForm.serviceType}
+                      onChange={(e) => setBookForm(b => ({ ...b, serviceType: e.target.value }))}
+                      className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                    >
+                      <option value="">اختر الخدمة المطلوبة</option>
+                      {workshop.services.map((s) => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
+                      <option value="صيانة عامة وفحص">صيانة عامة وفحص</option>
+                    </select>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="number"
-                    value={reviewForm.carYear}
-                    onChange={(e) => setReviewForm({ ...reviewForm, carYear: e.target.value })}
-                    placeholder="سنة الصنع"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <input
-                    type="text"
-                    value={reviewForm.repairType}
-                    onChange={(e) => setReviewForm({ ...reviewForm, repairType: e.target.value })}
-                    placeholder="نوع الإصلاح"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">ماركة السيارة</label>
+                      <input
+                        type="text"
+                        value={bookForm.carMake}
+                        onChange={(e) => setBookForm(b => ({ ...b, carMake: e.target.value }))}
+                        placeholder="تويوتا، هيونداي..."
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">موديل وقوة المحرك</label>
+                      <input
+                        type="text"
+                        value={bookForm.carModel}
+                        onChange={(e) => setBookForm(b => ({ ...b, carModel: e.target.value }))}
+                        placeholder="كامري، سوناتا..."
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="number"
-                    value={reviewForm.price}
-                    onChange={(e) => setReviewForm({ ...reviewForm, price: e.target.value })}
-                    placeholder="السعر (د.أ)"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                  <input
-                    type="text"
-                    value={reviewForm.duration}
-                    onChange={(e) => setReviewForm({ ...reviewForm, duration: e.target.value })}
-                    placeholder="المدة"
-                    className="px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff]"
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">سنة الصنع</label>
+                      <input
+                        type="number"
+                        placeholder="2020"
+                        value={bookForm.carYear}
+                        onChange={(e) => setBookForm(b => ({ ...b, carYear: e.target.value }))}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">الميزانية المتوقعة (د.أ)</label>
+                      <input
+                        type="number"
+                        placeholder="مثال: 50"
+                        value={bookForm.budget}
+                        onChange={(e) => setBookForm(b => ({ ...b, budget: e.target.value }))}
+                        className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
 
-                <textarea
-                  value={reviewForm.description}
-                  onChange={(e) => setReviewForm({ ...reviewForm, description: e.target.value })}
-                  placeholder="اكتب تجربتك..."
-                  rows={4}
-                  className="w-full px-3 py-2.5 bg-[#0f3460] border border-gray-700 rounded-lg text-white text-sm outline-none focus:border-[#0084ff] resize-none"
-                />
-
-                {/* Before/After Images */}
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="flex items-center justify-center gap-2 py-4 border border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#0084ff] transition-colors">
-                    <ImageIcon className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-400 text-xs">صورة قبل</span>
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={(e) => setReviewForm({ ...reviewForm, beforeImage: e.target.files?.[0] || null })} />
+                  <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bookForm.isUrgent}
+                      onChange={(e) => setBookForm(b => ({ ...b, isUrgent: e.target.checked }))}
+                      className="w-4 h-4 accent-emerald-500"
+                    />
+                    <span className="text-rose-400 font-bold text-xs">⚡ حالة طارئة تعطل على الطريق (أولوية فحص)</span>
                   </label>
-                  <label className="flex items-center justify-center gap-2 py-4 border border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#0084ff] transition-colors">
-                    <ImageIcon className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-400 text-xs">صورة بعد</span>
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={(e) => setReviewForm({ ...reviewForm, afterImage: e.target.files?.[0] || null })} />
-                  </label>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">ملاحظات وشكوى السيارة</label>
+                    <textarea
+                      rows={2}
+                      value={bookForm.description}
+                      onChange={(e) => setBookForm(b => ({ ...b, description: e.target.value }))}
+                      placeholder="صف أعراض المشكلة أو نوع الفحص..."
+                      className="w-full p-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500 resize-none"
+                    />
+                  </div>
+
+                  {bookStatus === 'error' && (
+                    <p className="text-rose-400 text-xs text-center font-bold">حدث خطأ، يرجى اختيار التاريخ والوقت والخدمة.</p>
+                  )}
+
+                  <button
+                    onClick={submitBooking}
+                    disabled={bookStatus === 'loading' || !bookForm.date || !bookForm.time || !bookForm.serviceType}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {bookStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد الحجز والإرسال 🚀'}
+                  </button>
                 </div>
-
-                {/* Recommend */}
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={reviewForm.recommend}
-                    onChange={(e) => setReviewForm({ ...reviewForm, recommend: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-700 bg-[#0f3460] text-[#0084ff] focus:ring-[#0084ff]"
-                  />
-                  <span className="text-gray-300 text-sm">هل أنصح بالورشة؟</span>
-                </label>
-
-                <button
-                  onClick={submitReview}
-                  className="w-full py-3 bg-[#0084ff] text-white rounded-lg font-medium hover:bg-[#006cd9] transition-colors"
-                >
-                  إرسال التقييم
-                </button>
-              </div>
+              )}
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
+
+      {/* MODAL 2: LIGHTBOX PHOTO VIEWER */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
+            <button onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 p-3 bg-slate-900 rounded-full text-white">
+              <X className="w-6 h-6" />
+            </button>
+            <div className="relative max-w-4xl max-h-[85vh] w-full h-full flex items-center justify-center">
+              <img src={lightboxImage} alt="عرض مكبر" className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

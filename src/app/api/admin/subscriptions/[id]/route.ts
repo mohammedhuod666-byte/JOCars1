@@ -39,6 +39,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.status !== undefined) updateData.status = body.status;
     if (body.autoRenew !== undefined) updateData.autoRenew = body.autoRenew;
 
+    // Extend subscription by N days from current endDate (or from now if expired)
+    let extendedDays = 0;
+    if (typeof body.extendDays === 'number' && body.extendDays > 0 && body.extendDays <= 365) {
+      extendedDays = Math.floor(body.extendDays);
+      const base = existing.endDate && new Date(existing.endDate) > new Date() ? new Date(existing.endDate) : new Date();
+      base.setDate(base.getDate() + extendedDays);
+      updateData.endDate = base;
+      if (existing.status !== 'ACTIVE') updateData.status = 'ACTIVE';
+    }
+
     const updated = await prisma.subscription.update({
       where: { id },
       data: updateData,
@@ -49,8 +59,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     await prisma.auditLog.create({
       data: {
-        action: body.status === 'CANCELLED' ? 'SYSTEM' : 'SYSTEM',
-        description: `تم ${body.status === 'CANCELLED' ? 'تعطيل' : body.status === 'ACTIVE' ? 'تفعيل' : 'تحديث'} اشتراك المستخدم ${existing.userId}`,
+        action: extendedDays > 0 ? 'SYSTEM' : (body.status === 'CANCELLED' ? 'SYSTEM' : 'SYSTEM'),
+        description: extendedDays > 0
+          ? `تمديد اشتراك المستخدم ${existing.userId} بمقدار ${extendedDays} يوم`
+          : `تم ${body.status === 'CANCELLED' ? 'تعطيل' : body.status === 'ACTIVE' ? 'تفعيل' : 'تحديث'} اشتراك المستخدم ${existing.userId}`,
         entityType: 'USER',
         entityId: existing.userId,
         oldValue: existing.status,

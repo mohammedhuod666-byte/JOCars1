@@ -17,7 +17,7 @@ import {
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, refreshProfile } = useAuth();
   const { theme, setTheme } = useTheme();
   const { setMobileMenuOpen } = useUIStore();
   const { unreadCount } = useNotificationStore();
@@ -226,7 +226,12 @@ export function Header() {
                 <>
                   <button
                     ref={userBtnRef}
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    onClick={() => {
+                      // Sync role/permissions from server every time the menu opens,
+                      // so freshly-granted roles (e.g. ADMIN) appear without a reload
+                      if (!userMenuOpen) refreshProfile();
+                      setUserMenuOpen(!userMenuOpen);
+                    }}
                     className="hidden md:flex items-center gap-1.5 p-1.5 pr-2.5 rounded-lg hover:bg-surface-800 transition-all duration-200"
                   >
                     <div className="w-8 h-8 rounded-full bg-accent-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-gold-100/20">
@@ -338,7 +343,12 @@ export function Header() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="font-bold text-surface-200 text-sm truncate">{user?.name}</p>
+                  <p className="font-bold text-surface-200 text-sm truncate flex items-center gap-1.5">
+                    {user?.name}
+                    {user?.role === 'ADMIN' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400">مدير</span>
+                    )}
+                  </p>
                   <p className="text-xs text-surface-500 truncate">{user?.email}</p>
                 </div>
               </div>

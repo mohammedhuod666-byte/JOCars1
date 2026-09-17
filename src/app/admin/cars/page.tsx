@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Car, CheckCircle, XCircle, Eye, Star, Sparkles, Trash2, Tag, Search, Clock, Filter } from 'lucide-react';
+import { Car, CheckCircle, XCircle, Eye, Star, Sparkles, Trash2, Tag, Search, Clock, Filter, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Car as CarType } from '@/types';
 
@@ -77,8 +77,7 @@ export default function AdminCarsPage() {
     loadCars(search, status);
   };
 
-  const updateStatus = async (carId: string, status: string) => {
-    try {
+  const updateStatus = async (carId: string, status: string) => {    try {
       const token = useAuth.getState().token;
       const res = await fetch(`/api/admin/cars/${carId}`, {
         method: 'PUT',
@@ -90,6 +89,23 @@ export default function AdminCarsPage() {
         toast.success(`تم ${status === 'APPROVED' ? 'قبول' : status === 'REJECTED' ? 'رفض' : 'تحديث'} الإعلان`);
         loadCounts();
       }
+    } catch { toast.error('فشل التحديث'); }
+  };
+
+  const toggleInspection = async (carId: string, current: boolean) => {
+    if (!confirm(current ? 'إلغاء شارة الفحص المعتمد عن هذا الإعلان؟' : 'منح شارة الفحص المعتمد لهذا الإعلان؟')) return;
+    try {
+      const token = useAuth.getState().token;
+      const res = await fetch(`/api/admin/cars/${carId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ inspectionVerified: !current }),
+      });
+      const d = await res.json();
+      if (d.success) {
+        setCars(cars.map(c => c.id === carId ? { ...c, inspectionVerified: !current } as CarType : c));
+        toast.success(!current ? 'تم منح شارة الفحص المعتمد ✅' : 'تم إلغاء شارة الفحص');
+      } else { toast.error('فشل التحديث'); }
     } catch { toast.error('فشل التحديث'); }
   };
 
@@ -280,6 +296,10 @@ export default function AdminCarsPage() {
                             .then(data => setCarTagsMap(prev => ({ ...prev, [car.id]: (data.data || []).map((t: any) => t.id) })));
                         }}>
                           <Tag className="w-4 h-4 text-purple-400" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => toggleInspection(car.id, !!(car as any).inspectionVerified)}
+                          title={(car as any).inspectionVerified ? 'إلغاء شارة الفحص المعتمد' : 'منح شارة الفحص المعتمد'}>
+                          <ShieldCheck className={`w-4 h-4 ${(car as any).inspectionVerified ? 'text-emerald-500' : 'text-gray-400'}`} />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => deleteCar(car.id)}>
                           <Trash2 className="w-4 h-4 text-red-500" />

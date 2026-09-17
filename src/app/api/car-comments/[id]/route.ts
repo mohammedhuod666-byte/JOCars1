@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { createAuditLog } from '@/lib/audit';
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await authenticateRequest(_request);
@@ -13,5 +14,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (comment.userId !== user.id && user.role !== 'ADMIN') return errorResponse('غير مصرح', 403);
 
   await prisma.carComment.delete({ where: { id } });
+  await createAuditLog({
+    action: 'DELETE_COMMENT', actorId: user.id,
+    entityType: 'CAR_COMMENT', entityId: id,
+    description: `حذف تعليق على إعلان ${comment.carId}`,
+  });
   return successResponse({ deleted: true });
 }

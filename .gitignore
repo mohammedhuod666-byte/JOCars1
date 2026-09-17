@@ -59,6 +59,9 @@ backups/
 
 # OS / editor
 Thumbs.db
+nul
+__pycache__/
+*.pyc
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json

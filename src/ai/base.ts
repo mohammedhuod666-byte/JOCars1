@@ -13,9 +13,9 @@
  */
 import OpenAI from 'openai';
 
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '';
 const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
-const NVIDIA_MODEL = 'openai/gpt-oss-120b';
+const NVIDIA_MODEL = 'openai/gpt-oss-20b';
 export type AIProviderType = 'local' | 'custom';
 
 export interface AIProviderConfig {

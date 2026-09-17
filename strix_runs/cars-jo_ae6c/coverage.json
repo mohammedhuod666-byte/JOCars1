@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-10 18:47:00 UTC",
+  "run_id": "cars-jo_ae6c",
+  "run_name": "cars-jo_ae6c",
+  "scope": {
+    "targets": [
+      {
+        "type": "local_code",
+        "details": {
+          "target_path": "C:\\Users\\zi-jo.com\\OneDrive\\Documents\\Cars JO",
+          "workspace_subdir": "Cars-JO"
+        },
+        "original": "C:\\Users\\zi-jo.com\\OneDrive\\Documents\\Cars JO"
+      }
+    ],
+    "scan_mode": "deep",
+    "scope_mode": "auto",
+    "diff_scope": {
+      "active": false,
+      "mode": "auto"
+    },
+    "instruction": ""
+  },
+  "summary": {
+    "surfaces_reviewed": 0,
+    "outcomes": {},
+    "findings_filed": 0,
+    "gaps": 1
+  },
+  "machine_observed": {
+    "agents": [
+      {
+        "agent_id": "f835a4f4",
+        "agent_name": "Root Agent",
+        "status": "completed",
+        "skills": [],
+        "task": "\n\nLocal Codebases: - C:\\Users\\zi-jo.com\\OneDrive\\Documents\\Cars JO (available at: /workspace/Cars-JO; this is the user's real directory, mounted live and writable — .git/.agents/.codex are read-only)",
+        "is_root": true
+      },
+      {
+        "agent_id": "9fbbbd93",
+        "agent_name": "SAST Agent",
+        "status": "completed",
+        "skills": [
+          "source_aware_sast"
+        ],
+        "task": "Perform source-aware static security analysis on the Cars-JO repository, produce artefacts for further exploitation",
+        "is_root": false
+      }
+    ],
+    "skills_exercised": [
+      "source_aware_sast"
+    ],
+    "findings_filed": 0,
+    "source": "runtime"
+  },
+  "completeness": {
+    "complete": true,
+    "scan_status": "completed",
+    "exit_reason": "finished_by_tool",
+    "caveats": []
+  },
+  "entries": [],
+  "gaps": [
+    {
+      "kind": "agent_recorded_no_coverage",
+      "agent_name": "SAST Agent",
+      "detail": "SAST Agent ran (status: completed) without recording any coverage. Whatever it examined is absent from this record."
+    }
+  ]
+}

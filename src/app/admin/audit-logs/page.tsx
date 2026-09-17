@@ -56,6 +56,14 @@ const actionLabels: Record<string, string> = {
   SOUND_RECORD: 'تسجيل صوت',
   SOUND_REPORT: 'إبلاغ صوت',
   SOUND_BAN: 'حظر صوتي',
+  FOLLOW_USER: 'متابعة مستخدم',
+  UNFOLLOW_USER: 'إلغاء متابعة',
+  UPDATE_USER_EMAIL: 'تغيير بريد مستخدم',
+  RESET_USER_PASSWORD: 'إعادة تعيين كلمة سر',
+  BACKUP_CREATED: 'نسخة احتياطية',
+  TRADER_REQUEST: 'طلب توثيق تاجر',
+  TRADER_APPROVE: 'اعتماد تاجر',
+  TRADER_REJECT: 'رفض توثيق تاجر',
 };
 
 const actionIcons: Record<string, typeof LogIn> = {
@@ -65,10 +73,13 @@ const actionIcons: Record<string, typeof LogIn> = {
   UPDATE_CAR_PRICE: Edit3, UPDATE_CAR: Edit3, DELETE_CAR: Trash2, RESTORE_CAR: CheckCircle,
   TICKET_CLOSE: CheckCircle, TICKET_ASSIGN: Bell, SYSTEM: Shield,
   PUBLISH_CAR: Car, ADD_COMMENT: MessageSquare, EDIT_COMMENT: MessageSquare,
-  DELETE_COMMENT: Trash2, LIKE_COMMENT: Star, REPORT: Bell,
+  DELETE_COMMENT: Trash2, LIKE_COMMENT: Star,   REPORT: Bell,
   UPDATE_PROFILE: Edit3, CHANGE_PASSWORD: Shield, FAVORITE_CAR: Star,
   UNFAVORITE_CAR: Star, VIEW_CAR: Eye, SEARCH: Search,
   SOUND_RECORD: Bell, SOUND_REPORT: Bell, SOUND_BAN: Ban,
+  FOLLOW_USER: User, UNFOLLOW_USER: User, UPDATE_USER_EMAIL: Edit3,
+  RESET_USER_PASSWORD: Shield, BACKUP_CREATED: CheckCircle,
+  TRADER_REQUEST: Bell, TRADER_APPROVE: CheckCircle, TRADER_REJECT: Ban,
 };
 
 const actionColors: Record<string, string> = {
@@ -105,6 +116,14 @@ const actionColors: Record<string, string> = {
   SOUND_RECORD: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20',
   SOUND_REPORT: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
   SOUND_BAN: 'text-red-600 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
+  FOLLOW_USER: 'text-teal-600 bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/20',
+  UNFOLLOW_USER: 'text-gray-600 bg-gray-50 dark:bg-gray-500/10 border-gray-200 dark:border-gray-500/20',
+  UPDATE_USER_EMAIL: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20',
+  RESET_USER_PASSWORD: 'text-red-600 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
+  BACKUP_CREATED: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/20',
+  TRADER_REQUEST: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20',
+  TRADER_APPROVE: 'text-green-600 bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-500/20',
+  TRADER_REJECT: 'text-red-600 bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20',
 };
 
 const entityTypeLabels: Record<string, string> = {
@@ -113,7 +132,10 @@ const entityTypeLabels: Record<string, string> = {
   TICKET: 'تذكرة',
   SYSTEM: 'نظام',
   COMMENT: 'تعليق',
+  CAR_COMMENT: 'تعليق سيارة',
   SOUND: 'صوت',
+  BACKUP: 'نسخة احتياطية',
+  TRADER_VERIFICATION: 'توثيق تاجر',
 };
 
 const activityCategories = [
@@ -124,7 +146,7 @@ const activityCategories = [
   { label: 'الدخول والخروج', value: 'auth', icon: LogIn },
 ];
 
-const userActions = ['LOGIN', 'LOGOUT', 'REGISTER', 'UPDATE_PROFILE', 'CHANGE_PASSWORD', 'BAN_USER', 'UNBAN_USER', 'DELETE_USER', 'UPDATE_USER_ROLE'];
+const userActions = ['LOGIN', 'LOGOUT', 'REGISTER', 'UPDATE_PROFILE', 'CHANGE_PASSWORD', 'BAN_USER', 'UNBAN_USER', 'DELETE_USER', 'UPDATE_USER_ROLE', 'UPDATE_USER_EMAIL', 'RESET_USER_PASSWORD', 'FOLLOW_USER', 'UNFOLLOW_USER', 'TRADER_REQUEST', 'TRADER_APPROVE', 'TRADER_REJECT', 'BACKUP_CREATED'];
 const carActions = ['PUBLISH_CAR', 'APPROVE_CAR', 'REJECT_CAR', 'FEATURE_CAR', 'UNFEATURE_CAR', 'UPDATE_CAR_PRICE', 'UPDATE_CAR', 'DELETE_CAR', 'RESTORE_CAR', 'VIEW_CAR', 'FAVORITE_CAR', 'UNFAVORITE_CAR'];
 const commentActions = ['ADD_COMMENT', 'EDIT_COMMENT', 'DELETE_COMMENT', 'LIKE_COMMENT'];
 const authActions = ['LOGIN', 'LOGOUT', 'REGISTER'];

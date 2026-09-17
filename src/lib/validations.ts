@@ -20,7 +20,8 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email('البريد الإلكتروني غير صحيح'),
+  // Accepts email OR Jordanian phone (07XXXXXXXX) — routed by presence of '@'
+  email: z.string().min(3, 'أدخل البريد الإلكتروني أو رقم الهاتف'),
   password: z.string().min(1, 'كلمة المرور مطلوبة'),
 });
 
@@ -36,6 +37,8 @@ export const updateProfileSchema = z.object({
   dealerLng: z.number().optional(),
   dealerLogo: z.string().optional(),
   dealerBannerImage: z.string().optional(),
+  dealerCommercialReg: z.string().max(100).optional(),
+  image: z.string().max(2000).optional(),
   whatsappNotifications: z.boolean().optional(),
 });
 

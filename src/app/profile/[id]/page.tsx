@@ -6,6 +6,7 @@ import { Star, MapPin, Calendar, Car, MessageCircle, Shield, ShieldCheck, Store,
 import Link from 'next/link';
 import { CarCard } from '@/components/cars/CarCard';
 import { BadgeDisplay } from '@/components/badges/BadgeDisplay';
+import { FollowButton } from '@/components/users/FollowButton';
 import { useAuth } from '@/hooks/useAuth';
 
 interface UserProfile {
@@ -21,6 +22,7 @@ interface UserProfile {
   dealerVerified?: boolean;
   dealerViewCount?: number;
   dealerBannerImage?: string | null;
+  phoneVerified?: boolean;
   phone: string | null;
   rating: number;
   ratingCount: number;
@@ -37,24 +39,35 @@ export default function PublicProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cars, setCars] = useState<any[]>([]);
   const [ratings, setRatings] = useState<any[]>([]);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [accuracy, setAccuracy] = useState<{ count: number; avgOverPct: number | null; score: number | null; label: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!params.id) return;
-    fetch(`/api/users?id=${params.id}`)
-      .then(r => r.json())
+    fetch(`/api/users?id=${params.id}`)      .then(r => r.json())
       .then(data => {
         if (data.success) {
           setProfile(data.data.user);
           setCars(data.data.cars);
           setRatings(data.data.recentRatings);
+          setFollowersCount(data.data.followersCount || 0);
+          setFollowingCount(data.data.followingCount || 0);
+          setIsFollowing(!!data.data.isFollowing);
         } else {
           setError('المستخدم غير موجود');
         }
       })
       .catch(() => setError('حدث خطأ'))
       .finally(() => setLoading(false));
+    // Seller pricing accuracy (based on AI fair-price estimates)
+    fetch(`/api/users/${params.id}/accuracy`)
+      .then(r => r.json())
+      .then(data => { if (data.success) setAccuracy(data.data); })
+      .catch(() => {});
   }, [params.id]);
 
   if (loading) {
@@ -91,20 +104,26 @@ export default function PublicProfilePage() {
         <div className="card overflow-hidden">
           {/* Phase C: trader banner replaces the gradient strip when set */}
           {profile.dealerBannerImage ? (
-            <div className="h-32 w-full overflow-hidden">
+            <div className="h-44 sm:h-56 w-full overflow-hidden relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={profile.dealerBannerImage} alt="" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
             </div>
           ) : (
-            <div className={`h-32 bg-gradient-to-br ${
-              isVerifiedTrader
-                ? 'from-emerald-600 via-green-600 to-teal-600'
-                : 'from-blue-600 via-indigo-600 to-purple-600'
-            }`} />
+            <div className={`h-44 sm:h-56 ${
+              isDealer
+                ? 'bg-gradient-to-br from-emerald-700 via-teal-800 to-slate-900'
+                : isVerifiedTrader
+                ? 'from-emerald-600 via-green-600 to-teal-600 bg-gradient-to-br'
+                : 'from-blue-600 via-indigo-600 to-purple-600 bg-gradient-to-br'
+            } relative overflow-hidden`}>
+              <Store className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 text-white/10" />
+            </div>
           )}
           <div className="px-6 pb-6">
-            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-12">
-              <div className="w-24 h-24 rounded-2xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-xl flex items-center justify-center overflow-hidden">
+            {/* Avatar sits ON TOP of the banner edge (Facebook-style overlap) */}
+            <div className="flex items-end gap-4 -mt-16 sm:-mt-20 relative z-10">
+              <div className="w-32 h-32 rounded-3xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-2xl flex items-center justify-center overflow-hidden ring-2 ring-emerald-500/30 shrink-0">
                 {profile.dealerLogo && isDealer ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={profile.dealerLogo} alt="" className="w-full h-full object-cover" />
@@ -115,9 +134,16 @@ export default function PublicProfilePage() {
                   <span className="text-3xl font-bold text-blue-500">{profile.name.charAt(0)}</span>
                 )}
               </div>
-              <div className="flex-1 text-center sm:text-right pb-1">
+            </div>
+            <div className="mt-3">
+              <div className="text-center sm:text-right pb-1">
                 <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
+                  {profile.phoneVerified && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold" title="رقم هاتف موثّق">
+                      مشترٍ جاد ✅
+                    </span>
+                  )}
                   {isVerifiedTrader && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold" title="تاجر موثّق">
                       <ShieldCheck className="w-3.5 h-3.5" /> موثّق
@@ -133,8 +159,12 @@ export default function PublicProfilePage() {
                 <div className="flex items-center gap-2 justify-center sm:justify-start mt-2">
                   <BadgeDisplay badges={profile.badges} />
                 </div>
+                <div className="flex items-center gap-4 justify-center sm:justify-start mt-2 text-sm">
+                  <span className="text-gray-600 dark:text-gray-300"><strong className="font-bold text-gray-900 dark:text-white">{followersCount}</strong> متابِع</span>
+                  <span className="text-gray-600 dark:text-gray-300"><strong className="font-bold text-gray-900 dark:text-white">{followingCount}</strong> يتابع</span>
+                </div>
               </div>
-              <div className="flex items-center gap-3 pb-1">
+              <div className="flex items-center gap-3 mt-4 flex-wrap justify-center sm:justify-start">
                 {isOwnProfile && (profile.role === 'TRADER' || profile.role === 'DEALER' || profile.role === 'ADMIN') && (
                   <Link
                     href="/dealer/dashboard"
@@ -153,6 +183,29 @@ export default function PublicProfilePage() {
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
                   <MessageCircle className="w-4 h-4" /> تواصل
                 </Link>
+                {!isOwnProfile && (
+                  <FollowButton
+                    userId={profile.id}
+                    initialFollowing={isFollowing}
+                    onChange={(d) => {
+                      setIsFollowing(d.following);
+                      setFollowersCount(d.followersCount);
+                      setFollowingCount(d.followingCount);
+                    }}
+                  />
+                )}
+                <button
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({ title: profile.dealerName || profile.name, url: window.location.href });
+                    } else {
+                      navigator.clipboard.writeText(window.location.href);
+                    }
+                  }}
+                  title="مشاركة المعرض"
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                  <Share2 className="w-4 h-4" /> مشاركة
+                </button>
               </div>
             </div>
           </div>
@@ -223,6 +276,13 @@ export default function PublicProfilePage() {
                 </div>
                 <p className="text-xs text-gray-500">{profile.ratingCount} تقييم</p>
               </div>
+              {accuracy && accuracy.score !== null && (
+                <div className="text-center p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl">
+                  <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{accuracy.score}/100</p>
+                  <p className="text-xs text-gray-500">دقة الأسعار: {accuracy.label}</p>
+                  <p className="text-[10px] text-gray-400">بناءً على {accuracy.count} إعلان بتقييم AI</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                   <p className="text-xl font-bold text-blue-500">{profile._count.cars}</p>

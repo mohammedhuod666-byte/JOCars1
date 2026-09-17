@@ -13,9 +13,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (car.userId !== user.id && user.role !== 'ADMIN') return errorResponse('لا تملك صلاحية', 403);
     if (car.status === 'SOLD') return errorResponse('السيارة مباعة بالفعل', 400);
     if (car.deletedAt) return errorResponse('السيارة محذوفة', 400);
+    const body = await request.json().catch(() => ({}));
+    const soldPrice = typeof body.soldPrice === 'number' && body.soldPrice > 0 ? Math.round(body.soldPrice) : null;
     const updated = await prisma.car.update({
       where: { id },
-      data: { status: 'SOLD', soldAt: new Date() },
+      data: { status: 'SOLD', soldAt: new Date(), ...(soldPrice ? { soldPrice } : {}) },
     });
     await prisma.carLog.create({ data: { carId: id, userId: user.id, action: 'SOLD' } });
     return successResponse(updated);

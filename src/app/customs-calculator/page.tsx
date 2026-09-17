@@ -14,63 +14,57 @@ export default function CustomsCalculatorPage() {
   const [kwPower, setKwPower] = useState<number>(150);
   const [estimatedValue, setEstimatedValue] = useState<number>(20000);
 
-  // Calculations based on Jordanian Customs Regulations
+  // Calculations based on 2024-2026 Jordanian Customs Regulations
   const calculateFees = () => {
     let specialTaxRate = 0;
-    let salesTaxRate = 0.16; // Standard 16% sales tax
+    let salesTaxRate = 0.16; // Standard 16% sales tax on top
     let customsFeeRate = 0.05; // Standard 5% customs duty
+    let weightTax = 0;
+    
+    // Age depreciation discount allowance (Max 5 years)
+    const age = Math.max(0, 2026 - year);
+    const ageDiscount = Math.min(0.25, age * 0.05);
+    const adjustedValue = estimatedValue * (1 - ageDiscount);
+
     let annualLicensingFee = 150;
     let compulsoryInsurance = 100;
 
     if (fuelType === 'EV') {
-      // EV Tax Tiers in Jordan
-      if (kwPower <= 250) {
-        specialTaxRate = 0.10; // 10% for EV <= 250 kW
-      } else {
-        specialTaxRate = 0.55; // 55% for high power EV > 250 kW
-      }
-      annualLicensingFee = kwPower <= 250 ? 80 : 180;
+      // EV Jordan Tariffs — flat 27% special tax (amended June 2025)
+      specialTaxRate = 0.27;
+      weightTax = 250; // Electric vehicle weight tax
+      annualLicensingFee = 80;
+      compulsoryInsurance = 85;
     } else if (fuelType === 'HYBRID') {
-      // Hybrid Tax Tiers in Jordan (Engine CC & age)
-      if (engineCc <= 2500) {
-        specialTaxRate = 0.55;
-      } else {
-        specialTaxRate = 0.70;
-      }
+      // Hybrid Jordan Tariffs — flat 39% special tax (amended June 2025)
+      specialTaxRate = 0.39;
+      weightTax = 150;
       annualLicensingFee = engineCc <= 2000 ? 130 : 250;
+      compulsoryInsurance = engineCc <= 2000 ? 105 : 130;
     } else {
-      // Petrol / Diesel (ICE)
-      if (engineCc <= 1600) {
-        specialTaxRate = 0.65;
-        annualLicensingFee = 120;
-      } else if (engineCc <= 2000) {
-        specialTaxRate = 0.79;
-        annualLicensingFee = 180;
-      } else if (engineCc <= 3000) {
-        specialTaxRate = 0.91;
-        annualLicensingFee = 350;
-      } else {
-        specialTaxRate = 1.05;
-        annualLicensingFee = 550;
-      }
+      // Petrol / Diesel (ICE) — flat 51% special tax (amended June 2025)
+      specialTaxRate = 0.51;
+      weightTax = 100;
+      annualLicensingFee = 120;
+      compulsoryInsurance = 92;
     }
 
-    // Age depreciation discount allowance (Max 5 years)
-    const age = Math.max(0, 2026 - year);
-    const ageDiscount = Math.min(0.25, age * 0.05);
-
-    const adjustedValue = estimatedValue * (1 - ageDiscount);
     const customsDuty = adjustedValue * customsFeeRate;
     const specialTax = (adjustedValue + customsDuty) * specialTaxRate;
     const salesTax = (adjustedValue + customsDuty + specialTax) * salesTaxRate;
-    const totalCustomsAndTaxes = Math.round(customsDuty + specialTax + salesTax);
-    const totalRegistration = Math.round(annualLicensingFee + compulsoryInsurance + 150); // 150 stamp & plate fee
+    
+    // Add weight tax and fixed stamp fees
+    const totalCustomsAndTaxes = Math.round(customsDuty + specialTax + salesTax + weightTax + 100); // 100 stamps
+    
+    // Registration & Plates
+    const totalRegistration = Math.round(annualLicensingFee + compulsoryInsurance + 150); // 150 registration/plates/inspection
 
     return {
       adjustedValue: Math.round(adjustedValue),
       customsDuty: Math.round(customsDuty),
       specialTax: Math.round(specialTax),
       salesTax: Math.round(salesTax),
+      weightTax,
       totalCustomsAndTaxes,
       annualLicensingFee,
       compulsoryInsurance,
@@ -187,7 +181,7 @@ export default function CustomsCalculatorPage() {
                 />
                 <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                   <Info className="w-3.5 h-3.5 text-emerald-400" />
-                  أقل من 250kW تخضع لضريبة خاصة 10%، أعلى من 250kW تخضع لـ 55%.
+                  ضريبة خاصة موحدة 27% لجميع السيارات الكهربائية وفق تعديل التعرفة الخاصة (حزيران 2025). يُمنع استيراد السيارات الكهربائية الأقدم من 3 سنوات.
                 </p>
               </div>
             )}
@@ -221,6 +215,16 @@ export default function CustomsCalculatorPage() {
                 ))}
               </select>
             </div>
+
+            {/* EV import age ban warning */}
+            {fuelType === 'EV' && year <= 2023 && (
+              <div className="mb-4 flex items-start gap-2 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <span>
+                  <strong>ممنوع الاستيراد:</strong> السيارات الكهربائية الأقدم من 3 سنوات (موديل قبل {new Date().getFullYear() - 3}) لا يجوز التخليص الجمركي عليها في الأردن وفق تعليمات 2025.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Detailed Calculations Output */}
@@ -247,8 +251,13 @@ export default function CustomsCalculatorPage() {
                   <span className="font-semibold text-white">{results.salesTax.toLocaleString()} د.أ</span>
                 </div>
 
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/60">
+                  <span className="text-slate-400">ضريبة الوزن وطوابع جمركية</span>
+                  <span className="font-semibold text-white">{(results.weightTax + 100).toLocaleString()} د.أ</span>
+                </div>
+
                 <div className="flex justify-between items-center py-3 bg-emerald-500/10 px-4 rounded-xl text-emerald-400 font-bold border border-emerald-500/20">
-                  <span>مجموع الجمارك والضرائب</span>
+                  <span>إجمالي رسوم الجمارك والضرائب</span>
                   <span className="text-lg">{results.totalCustomsAndTaxes.toLocaleString()} د.أ</span>
                 </div>
 
@@ -259,7 +268,7 @@ export default function CustomsCalculatorPage() {
                   </div>
 
                   <div className="flex justify-between items-center py-2 border-b border-slate-800/60">
-                    <span className="text-slate-400">التأمين الإجباري واللوحات والتمويل</span>
+                    <span className="text-slate-400">التأمين الإلزامي (ضد الغير) ورسوم لوحات</span>
                     <span className="font-semibold text-white">{(results.compulsoryInsurance + 150).toLocaleString()} د.أ</span>
                   </div>
                 </div>
@@ -276,7 +285,7 @@ export default function CustomsCalculatorPage() {
 
               <div className="mt-4 flex items-start gap-2 text-xs text-slate-500">
                 <AlertCircle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
-                <span>ملاحظة: هذه الحسابات تقديرية وتستند إلى تعريفات دائرة الجمارك الأردنية وإدارة الترخيص. التخمين النهائي يخضع لمعاينة دائرة الجمارك.</span>
+                <span>ملاحظة: هذه الحسابات تقديرية وتستند إلى التعرفة الخاصة المعدلة (حزيران 2025) وتعريفات دائرة الجمارك الأردنية وإدارة الترخيص. التخمين النهائي يخضع لمعاينة دائرة الجمارك.</span>
               </div>
             </div>
           </div>

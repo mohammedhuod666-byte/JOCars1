@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { otpStore } from '../send-otp/route';
+
+const MAX_OTP_ATTEMPTS = 5;
 
 export async function POST(request: NextRequest) {
   try {
     const user = await authenticateRequest(request);
     if (!user) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
+    }
+
+    // Brute-force protection: max 10 verify attempts per IP per minute
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateLimit = checkRateLimit(`verify-otp:${ip}`, { windowMs: 60 * 1000, maxRequests: 10 });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ success: false, error: 'محاولات كثيرة. حاول بعد دقيقة' }, { status: 429 });
     }
 
     const body = await request.json();
@@ -33,6 +43,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (record.code !== code.trim()) {
+      // Count wrong attempts — burn the code after too many guesses
+      const attempts = (record.attempts || 0) + 1;
+      if (attempts >= MAX_OTP_ATTEMPTS) {
+        otpStore.delete(formattedPhone);
+        return NextResponse.json({ success: false, error: 'تجاوزت عدد المحاولات. اطلب رمزاً جديداً' }, { status: 400 });
+      }
+      otpStore.set(formattedPhone, { ...record, attempts });
       return NextResponse.json({ success: false, error: 'رمز التحقق غير صحيح' }, { status: 400 });
     }
 

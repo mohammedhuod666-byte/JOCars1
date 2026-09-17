@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true, name: true, image: true, bio: true,
+        id: true, name: true, image: true, bio: true, phoneVerified: true,
         dealerName: true, dealerLogo: true, dealerDescription: true, dealerAddress: true,
         dealerLat: true, dealerLng: true,
         // Phase C trader marketplace fields
@@ -62,7 +62,20 @@ export async function GET(request: NextRequest) {
       }).catch(() => { /* view-count is best-effort */ });
     }
 
-    return successResponse({ user, cars, recentRatings });
+    // Follow counts + whether the viewer follows this profile
+    const [followersCount, followingCount] = await Promise.all([
+      prisma.follow.count({ where: { followingId: userId } }).catch(() => 0),
+      prisma.follow.count({ where: { followerId: userId } }).catch(() => 0),
+    ]);
+    let isFollowing = false;
+    if (viewer && viewer.id !== userId) {
+      const rel = await prisma.follow.findUnique({
+        where: { followerId_followingId: { followerId: viewer.id, followingId: userId } },
+      }).catch(() => null);
+      isFollowing = !!rel;
+    }
+
+    return successResponse({ user, cars, recentRatings, followersCount, followingCount, isFollowing });
   } catch (error) {
     console.error('users GET error:', error);
     return errorResponse('Failed to load profile', 500);

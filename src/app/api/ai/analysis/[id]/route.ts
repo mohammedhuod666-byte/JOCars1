@@ -149,12 +149,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         city: car.city?.nameAr ?? undefined,
       });
       if (condResult.success && condResult.data) {
-        conditionScore = condResult.data.score;
+        conditionScore = Math.round(condResult.data.score);
         conditionLabel = condResult.data.label;
         conditionFactors = condResult.data.factors;
-        exteriorScore = condResult.data.exteriorScore;
-        interiorScore = condResult.data.interiorScore;
-        engineBayScore = condResult.data.engineBayScore;
+        exteriorScore = Math.round(condResult.data.exteriorScore || 0);
+        interiorScore = Math.round(condResult.data.interiorScore || 0);
+        engineBayScore = Math.round(condResult.data.engineBayScore || 0);
         damages = condResult.data.damages;
         conditionSummary = condResult.data.summary;
         isRealVision = condResult.data.isRealVision;
@@ -201,6 +201,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       } else {
         avgPrice = fairPrice;
       }
+    }
+
+    // Never report 0% confidence when we DO have an estimate (e.g. stored
+    // fairPriceEstimate with a timed-out estimator) — derive it from the
+    // strongest available evidence instead.
+    if (fairPrice > 0 && (!priceConfidence || priceConfidence <= 0)) {
+      priceConfidence = dbPrices.length >= 2 ? 70 : 50;
     }
 
     const pricePosition = car.price > avgPrice ? 'above' : car.price < avgPrice ? 'below' : 'match';

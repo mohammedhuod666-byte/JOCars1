@@ -32,6 +32,14 @@ export default function AdminPage() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
+  // News importer state
+  const [newsBusy, setNewsBusy] = useState(false);
+  const [newsResult, setNewsResult] = useState<{
+    message: string; created: { title: string; slug: string; source: string }[];
+    checked: number; verified: number; seconds: number;
+    sources: Record<string, { fetched: number; kept: number; ok: boolean }>;
+  } | null>(null);
+  const [newsToday, setNewsToday] = useState<number | null>(null);
 
   useEffect(() => {
     if (!_hydrated) return;
@@ -52,6 +60,10 @@ export default function AdminPage() {
     fetch('/api/admin/notifications', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => { if (data.success) { setNotifications(data.data.notifications); setUnreadCount(data.data.unreadCount); } })
+      .catch(() => {});
+    fetch('/api/admin/news-aggregator', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => { if (data.success) setNewsToday(data.data.todayCount ?? null); })
       .catch(() => {});
   }, [_hydrated, isAuthenticated, user]);
 
@@ -193,31 +205,79 @@ export default function AdminPage() {
 
         {/* News Aggregator */}
         <div className="card p-5 mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shrink-0">
                 <Download className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">استيراد أخبار السيارات</h3>
-                <p className="text-xs text-gray-500">جلب آخر أخبار السيارات والوقود والجمارك من Jordan News</p>
+                <h3 className="font-semibold text-gray-900 dark:text-white">استيراد أخبار السيارات 🚗</h3>
+                <p className="text-xs text-gray-500">أخبار سيارات فقط (وقود • جمارك • كهرباء • سوق) من 10 مصادر — مع تحقق مزدوج وملخص ذكي</p>
+                {newsToday !== null && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">مستورد اليوم: {newsToday} خبر</p>
+                )}
               </div>
             </div>
-            <button id="newsAggregatorBtn" onClick={async () => {
-              const btn = document.getElementById('newsAggregatorBtn') as HTMLButtonElement;
-              btn.disabled = true; btn.innerHTML = 'جاري الاستيراد...';
-              try {
-                const res = await fetch('/api/admin/news-aggregator', { method: 'POST', headers: { Authorization: `Bearer ${useAuth.getState().token}` } });
-                const data = await res.json();
-                if (data.success) alert(data.data.message);
-                else alert('خطأ: ' + data.error);
-              } catch { alert('فشل الاتصال'); }
-              btn.disabled = false; btn.innerHTML = 'استيراد الآن';
-            }}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-all shadow-lg shadow-green-500/20 flex items-center gap-2 whitespace-nowrap">
-              <Download className="w-4 h-4" /> استيراد الآن
+            <button
+              disabled={newsBusy}
+              onClick={async () => {
+                setNewsBusy(true); setNewsResult(null);
+                try {
+                  const res = await fetch('/api/admin/news-aggregator', { method: 'POST', headers: { Authorization: `Bearer ${useAuth.getState().token}` } });
+                  const data = await res.json();
+                  if (data.success) {
+                    setNewsResult(data.data);
+                    try {
+                      const g = await fetch('/api/admin/news-aggregator', { headers: { Authorization: `Bearer ${useAuth.getState().token}` } }).then(r => r.json());
+                      if (g.success) setNewsToday(g.data.todayCount ?? null);
+                    } catch {}
+                  } else {
+                    setNewsResult({ message: 'خطأ: ' + data.error, created: [], checked: 0, verified: 0, seconds: 0, sources: {} });
+                  }
+                } catch { setNewsResult({ message: 'فشل الاتصال', created: [], checked: 0, verified: 0, seconds: 0, sources: {} }); }
+                setNewsBusy(false);
+              }}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-semibold hover:from-green-600 hover:to-emerald-600 disabled:opacity-60 transition-all shadow-lg shadow-green-500/20 flex items-center gap-2 whitespace-nowrap">
+              <Download className={`w-4 h-4 ${newsBusy ? 'animate-bounce' : ''}`} />
+              {newsBusy ? 'جاري الاستيراد... (نفحص المصادر)' : 'استيراد الآن'}
             </button>
           </div>
+
+          {newsBusy && (
+            <div className="mt-4">
+              <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                <div className="h-full w-1/2 rounded-full bg-gradient-to-l from-green-500 to-emerald-400 animate-pulse" style={{ animation: 'newsbar 1.2s ease-in-out infinite' }} />
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1.5">نجلب من أخبار جوجل + عمون + خبرني + رؤيا + الغد... ثم نتحقق من كل خبر ونلخصه بالذكاء الاصطناعي</p>
+            </div>
+          )}
+
+          {newsResult && (
+            <div className="mt-4 p-4 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 space-y-3">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{newsResult.message}</p>
+              {Object.keys(newsResult.sources || {}).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(newsResult.sources).map(([name, s]) => (
+                    <span key={name} title={`جُلب ${s.fetched} • قُبِل ${s.kept}`}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${s.ok ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200'}`}>
+                      {s.ok ? '●' : '○'} {name} ({s.kept}/{s.fetched})
+                    </span>
+                  ))}
+                </div>
+              )}
+              {newsResult.created.length > 0 && (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pl-1">
+                  {newsResult.created.map(c => (
+                    <a key={c.slug} href={`/news/${c.slug}`} target="_blank"
+                      className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white dark:bg-gray-800 hover:shadow transition-shadow text-xs">
+                      <span className="font-bold text-gray-800 dark:text-gray-200 truncate">{c.title}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0">{c.source}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}

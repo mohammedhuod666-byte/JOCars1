@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { createAuditLog } from '@/lib/audit';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       where: { carId: id },
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, name: true, image: true, role: true } },
+        user: { select: { id: true, name: true, image: true, role: true, phoneVerified: true } },
       },
     });
     return successResponse(comments);
@@ -34,7 +35,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const comment = await prisma.carComment.create({
       data: { content: content.trim(), carId: id, userId: user.id },
-      include: { user: { select: { id: true, name: true, image: true, role: true } } },
+      include: { user: { select: { id: true, name: true, image: true, role: true, phoneVerified: true } } },
+    });
+    await createAuditLog({
+      action: 'ADD_COMMENT', actorId: user.id,
+      entityType: 'CAR_COMMENT', entityId: comment.id,
+      description: `تعليق على إعلان ${id}: ${content.trim().slice(0, 80)}`,
     });
     return successResponse(comment, 201);
   } catch {

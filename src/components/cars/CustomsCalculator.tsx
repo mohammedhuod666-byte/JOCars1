@@ -2,13 +2,24 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calculator, X, ChevronDown, Loader2, Truck, FileText, BadgeCheck } from 'lucide-react';
+import { Calculator, X, ChevronDown, Loader2, Truck, FileText, BadgeCheck, Bell, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import toast from 'react-hot-toast';
 
 interface Props {
   year: number;
   engineCapacity: number | null;
   price: number;
+  fuelType: string;
 }
+
+const FUEL_LABELS: Record<string, string> = {
+  PETROL: 'بنزين ⛽ (51%)',
+  DIESEL: 'ديزل 🛢️ (51%)',
+  HYBRID: 'هايبرد 🔋 (39%)',
+  ELECTRIC: 'كهرباء ⚡ (27%)',
+  PLUGIN_HYBRID: 'بلج-إن هايبرد 🔌 (39%)',
+};
 
 interface CalculationResult {
   customsDuty: number;
@@ -28,19 +39,48 @@ interface CalculationResult {
   };
 }
 
-export function CustomsCalculator({ year, engineCapacity, price }: Props) {
+export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Props) {
+  const { token, isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   const [isFreeZone, setIsFreeZone] = useState(false); // المنطقة الحرة vs مجمركة جاهزة
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [remindDate, setRemindDate] = useState('');
+  const [remindBusy, setRemindBusy] = useState(false);
+  const [remindDone, setRemindDone] = useState(false);
 
-  const calculate = async () => {
+  const handleRemind = async () => {
+    if (!isAuthenticated) { toast.error('سجل الدخول أولاً'); return; }
+    if (!remindDate) { toast.error('اختر تاريخ انتهاء الترخيص'); return; }
+    setRemindBusy(true);
+    try {
+      const res = await fetch('/api/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          type: 'LICENSE',
+          title: `تجديد ترخيص سيارة موديل ${year}`,
+          description: `تذكير بالترخيص السنوي التقديري (${result?.annualLicensing || ''} د.أ)`,
+          dueDate: remindDate,
+          notifyBefore: 14,
+        }),
+      });
+      const d = await res.json();
+      if (d.success) { setRemindDone(true); toast.success('تم تفعيل تذكير الترخيص! 🔔'); }
+      else toast.error(d.error || 'فشل');
+    } catch { toast.error('تعذر الاتصال'); }
+    setRemindBusy(false);
+  };
+
+  const calculate = async (freeZoneOverride?: boolean) => {
+    const fz = freeZoneOverride ?? isFreeZone;
     setLoading(true);
     try {
       const res = await fetch('/api/ai/customs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year, engineCapacity, price, isFreeZone }),
+        // fuelType is critical: EV 27% / Hybrid 39% / Petrol 51% (June 2025 tariff)
+        body: JSON.stringify({ year, engineCapacity, price, fuelType, isFreeZone: fz }),
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -55,7 +95,7 @@ export function CustomsCalculator({ year, engineCapacity, price }: Props) {
   const handleToggle = () => {
     if (!open) {
       setOpen(true);
-      if (!result) calculate();
+      if (!result) calculate(false);
     } else {
       setOpen(false);
     }
@@ -74,7 +114,7 @@ export function CustomsCalculator({ year, engineCapacity, price }: Props) {
               <p className="font-semibold text-gray-900 dark:text-white">حاسبة الجمارك والترخيص الأردنية 🇯🇴</p>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">تحديث 2026</span>
             </div>
-            <p className="text-xs text-gray-500">حساب الرسوم الجمركية والترخيص والتأمين وفقاً للتعريفة الرسمية</p>
+            <p className="text-xs text-gray-500">حساب الرسوم الجمركية والترخيص والتأمين وفقاً للتعريفة الرسمية — هذه السيارة: <strong className="text-emerald-600 dark:text-emerald-400">{FUEL_LABELS[fuelType] || fuelType}</strong> • موديل {year} • {engineCapacity ? `${engineCapacity} CC` : 'بدون سعة محددة'}</p>
           </div>
         </div>
         <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -93,7 +133,7 @@ export function CustomsCalculator({ year, engineCapacity, price }: Props) {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => { setIsFreeZone(false); calculate(); }}
+                    onClick={() => { setIsFreeZone(false); calculate(false); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       !isFreeZone
                         ? 'bg-emerald-600 text-white shadow-md'
@@ -104,7 +144,7 @@ export function CustomsCalculator({ year, engineCapacity, price }: Props) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setIsFreeZone(true); calculate(); }}
+                    onClick={() => { setIsFreeZone(true); calculate(true); }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                       isFreeZone
                         ? 'bg-amber-600 text-white shadow-md'
@@ -191,6 +231,27 @@ export function CustomsCalculator({ year, engineCapacity, price }: Props) {
 
                   <div className="text-[11px] text-gray-400 leading-relaxed">
                     * الحسابات دقيقة وتستند إلى تعريفات دائرة الجمارك الأردنية 2026 وقوانين استيراد المنطقة الحرة بالزرقاء. التقييم النهائي يرتبط بمعاينة التخمين الجمركي عند المعاينة الفتية.
+                  </div>
+
+                  {/* License renewal reminder */}
+                  <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
+                    {remindDone ? (
+                      <p className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4" /> تم تفعيل تذكير الترخيص — ستجدها بصفحة «تذكيراتي»
+                      </p>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <p className="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5 flex-1">
+                          <Bell className="w-4 h-4" /> ذكّرني بتجديد الترخيص قبل انتهائه
+                        </p>
+                        <input type="date" value={remindDate} onChange={e => setRemindDate(e.target.value)}
+                          className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-gray-900 text-xs" />
+                        <button onClick={handleRemind} disabled={remindBusy}
+                          className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all">
+                          {remindBusy ? '...' : 'تفعيل 🔔'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : null}

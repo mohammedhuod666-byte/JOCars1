@@ -260,12 +260,16 @@ export interface Report {
 
 export interface UsedPart {
   id: string;
+  userId: string;
   slug: string;
   title: string;
   description?: string | null;
   partType: string;
   brandId?: string | null;
   partNumber?: string | null;
+  oemNumber?: string | null;
+  originCountry?: string | null;
+  compatibleModels?: string;
   condition: string;
   price: number;
   currency: string;
@@ -277,6 +281,10 @@ export interface UsedPart {
   cityId?: string | null;
   status: string;
   isNegotiable: boolean;
+  hasWarranty?: boolean;
+  warrantyPeriod?: string | null;
+  hasDelivery?: boolean;
+  deliveryFee?: number | null;
   views: number;
   createdAt: string;
   soldAt?: string | null;
@@ -473,7 +481,7 @@ export interface CarComment {
   updatedAt: string;
   carId: string;
   userId: string;
-  user: { id: string; name: string; image?: string | null; role?: string };
+  user: { id: string; name: string; image?: string | null; role?: string; phoneVerified?: boolean };
 }
 
 export interface Province {

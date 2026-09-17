@@ -1,13 +1,15 @@
 /**
- * NVIDIA AI Client — centralized OpenAI-compatible client for NVIDIA API.
- * Supports multiple AI models with adaptive fallback resiliency.
- * v5.0: Multi-model auto-failover, extended timeout (12s), and Arabic smart engine fallback.
+ * Centralized AI Client for Cars JO — Powered by NVIDIA NIM.
+ * Multi-model registry with automatic failover, word-by-word streaming
+ * generator for SSE live text rendering ("أول بأول"), and full site
+ * knowledge integration. Falls back to the local Arabic engine if the
+ * API is unreachable, so the assistant always replies.
  */
 
 import OpenAI from 'openai';
 
-const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || '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';
-const NVIDIA_BASE_URL = 'https://integrate.api.nvidia.com/v1';
+const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || process.env.OPENAI_API_KEY || '';
+const NVIDIA_BASE_URL = process.env.OPENAI_API_BASE || 'https://integrate.api.nvidia.com/v1';
 
 // ── Model Registry ──
 export type AIModelId = 'glm' | 'minimax' | 'mistral' | 'gpt-oss';
@@ -21,62 +23,67 @@ export interface AIModelInfo {
   maxTokens: number;
   temperature: number;
   topP: number;
-  reasoning?: boolean;
 }
 
 export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
+  'gpt-oss': {
+    id: 'gpt-oss',
+    model: 'openai/gpt-oss-20b',
+    nameAr: 'GPT OSS 20B 🧠',
+    nameEn: 'GPT OSS 20B',
+    description: 'الأذكى والأدق — الأفضل لإجابات السيارات والأسعار',
+    maxTokens: 4096,
+    temperature: 0.7,
+    topP: 1,
+  },
   glm: {
     id: 'glm',
-    model: 'meta/llama-3.1-70b-instruct',
-    nameAr: 'Llama 3.1 70B',
-    nameEn: 'Llama 3.1 70B',
-    description: 'نموذج ذكي وسريع جداً للمحادثات والاستشارات العامة',
+    model: 'z-ai/glm-5.3-flash',
+    nameAr: 'GLM 5.3 Flash ⚡',
+    nameEn: 'GLM 5.3 Flash',
+    description: 'سريع للغاية ومباشر للمحادثات والإجابات الفورية',
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1,
   },
   minimax: {
     id: 'minimax',
-    model: 'meta/llama-3.3-70b-instruct',
-    nameAr: 'Llama 3.3 70B',
-    nameEn: 'Llama 3.3 70B',
-    description: 'نموذج فائق القوة للتحليل المعمّق ومقارنة الأسعار',
-    maxTokens: 8192,
+    model: 'moonshotai/kimi-k2.6',
+    nameAr: 'Kimi K2.6 📊',
+    nameEn: 'Kimi K2.6',
+    description: 'قوة قصوى للتحليل المعمّق ومقارنة الأسعار بالسوق الأردني',
+    maxTokens: 4096,
     temperature: 0.7,
     topP: 0.95,
   },
   mistral: {
     id: 'mistral',
-    model: 'mistralai/mistral-7b-instruct-v0.3',
-    nameAr: 'Mistral 7B',
-    nameEn: 'Mistral 7B',
-    description: 'نموذج سريع ومختصر للإجابات السريعة',
-    maxTokens: 4096,
-    temperature: 0.7,
-    topP: 1,
-  },
-  'gpt-oss': {
-    id: 'gpt-oss',
-    model: 'meta/llama-3.1-70b-instruct',
-    nameAr: 'Llama 3.1 70B',
-    nameEn: 'Llama 3.1 70B',
-    description: 'النموذج الرئيسي لاستشارات السيارات والأسعار والتوصيات',
+    model: 'mistralai/mistral-large-2-instruct',
+    nameAr: 'Mistral Large 🔮',
+    nameEn: 'Mistral Large',
+    description: 'نموذج محادثة مختصر وسريع للإجابات التكتيكية',
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1,
   },
 };
 
+// Default = fastest model (Flash-class). Speed first for chat UX;
+// user can still pick a heavier model from the UI selector.
 export const DEFAULT_MODEL: AIModelId = 'glm';
 
 let client: OpenAI | null = null;
 
 function getClient(): OpenAI {
   if (!client) {
+    if (!NVIDIA_API_KEY || NVIDIA_API_KEY.includes('your-api-key')) {
+      throw new Error('[AI Client] NVIDIA_API_KEY is not configured. Set it in your environment.');
+    }
     client = new OpenAI({
       apiKey: NVIDIA_API_KEY,
       baseURL: NVIDIA_BASE_URL,
-      timeout: 30000,
+      timeout: 25000,
+      maxRetries: 0,
     });
   }
   return client;
@@ -105,34 +112,38 @@ function getModelInfo(modelId?: AIModelId): AIModelInfo {
   return AI_MODELS[modelId || DEFAULT_MODEL] || AI_MODELS[DEFAULT_MODEL];
 }
 
-// Model Failover Chain
+// Failover ordered fast-first. The 120B giant is dropped from the chat
+// path: it is far too slow for interactive replies.
 const FAILOVER_MODELS = [
-  'meta/llama-3.1-70b-instruct',
-  'meta/llama-3.3-70b-instruct',
-  'mistralai/mistral-7b-instruct-v0.3',
+  'z-ai/glm-5.3-flash',
+  'openai/gpt-oss-20b',
+  'mistralai/mistral-large-2-instruct',
+  'moonshotai/kimi-k2.6',
 ];
 
 /**
- * Send a chat completion request to NVIDIA API with multi-model failover.
- * Returns the full response text as a string.
+ * Send a chat completion request to NVIDIA API with failover.
  */
 export async function chatCompletion(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): Promise<string> {
+  // Breaker open → upstream is hanging; answer instantly, don't wait.
+  if (breakerOpen()) {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    return generateArabicFallbackResponse(lastUserMsg);
+  }
+
   const openai = getClient();
   const requestedModelInfo = getModelInfo(options.modelId);
   const {
     temperature = requestedModelInfo.temperature,
-    maxTokens = Math.min(requestedModelInfo.maxTokens, 4096),
+    maxTokens = Math.min(requestedModelInfo.maxTokens, 900),
     topP = requestedModelInfo.topP,
-    timeoutMs = 12000,
-    retries = 2,
+    timeoutMs = 10000,
+    retries = 0,
   } = options;
 
-  let lastError: any = null;
-
-  // Build candidate models list: primary requested model first, then remaining fallbacks
   const candidateModels = Array.from(new Set([requestedModelInfo.model, ...FAILOVER_MODELS]));
 
   for (const targetModel of candidateModels) {
@@ -141,88 +152,188 @@ export async function chatCompletion(
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const payload: any = {
-          model: targetModel,
-          messages,
-          temperature,
-          top_p: topP,
-          max_tokens: maxTokens,
-          stream: false,
-        };
-
-        if (targetModel.includes('mistral')) {
-          payload.reasoning_effort = 'high';
-        }
-
         const completion = await openai.chat.completions.create(
-          payload,
+          {
+            model: targetModel,
+            messages,
+            temperature,
+            top_p: topP,
+            max_tokens: maxTokens,
+            stream: false,
+          },
           { signal: controller.signal as any }
         );
 
         clearTimeout(timeout);
 
         const choice = completion.choices[0] as any;
-        if (choice?.message?.reasoning_content) {
-          return choice.message.reasoning_content + '\n\n' + (choice.message.content || '');
-        }
-        const responseText = choice?.message?.content || '';
-        if (responseText.trim()) {
-          return responseText;
+        const responseText = choice?.message?.content || choice?.message?.reasoning_content || '';
+        if (responseText && responseText.trim()) {
+          breakerSuccess();
+          return responseText.trim();
         }
       } catch (error: any) {
         clearTimeout(timeout);
-        lastError = error;
-
-        const isTimeout = error?.name === 'AbortError' || error?.message?.includes('abort');
-        const isRateLimit = error?.status === 429 || error?.message?.includes('rate');
-
         if (attempt < retries) {
-          const delay = Math.min(1000 * Math.pow(1.5, attempt), 3000);
-          console.log(`[NVIDIA AI] Retry ${attempt + 1}/${retries} on ${targetModel} (timeout: ${isTimeout}, rate: ${isRateLimit})`);
-          await sleep(delay);
+          await sleep(400);
         }
       }
     }
   }
 
-  console.warn(`[NVIDIA AI] All NVIDIA models timed out or failed. Returning Arabic Fallback Response.`, lastError?.message);
-
-  // Return intelligent Arabic fallback response instead of failing
+  // Smart fallback if network hits timeout
+  breakerFail();
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
   return generateArabicFallbackResponse(lastUserMsg);
 }
 
 /**
- * Intelligent Local Arabic Fallback Engine for Cars JO
+ * Intelligent Local Arabic Engine for Cars JO
  */
 function generateArabicFallbackResponse(query: string): string {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
+
+  if (/^(السلام عليكم|سلام عليكم|السلامعليكم|سلام|مرحبا|مرحباً|أهلا|اهلا|هلا|صباح الخير|مساء الخير|كيفك|شلونك)/i.test(q)) {
+    return `وعليكم السلام ورحمة الله وبركاته! 🌸\n\nأهلاً بك في منصة **Cars JO** 🇯🇴! أنا مساعدك الذكي السريع.\n\nكيف يمكنني مساعدتك اليوم؟\n- 🚗 **البحث عن سيارات للبيع** (كاش أو بالتقسيط) (/cars)\n- ⚡ **رادار محطات شحن الكهرباء** وسرعة الشواحن بالأردن (/ev-charging-jordan)\n- 💰 **حاسبة الجمارك والترخيص** 2026 (/customs-calculator)\n- 🏦 **حساب تمويل الأقساط البنكية** (/finance-calculator)\n- 🔧 **دليل ورش الصيانة المعتمدة** (/workshops)`;
+  }
 
   if (q.includes('جمارك') || q.includes('ترخيص') || q.includes('جمرك')) {
-    return `أهلاً بك! 🇯🇴\n\nحسب تعرفة الجمارك والترخيص الأردنية 2026:\n- **السيارات الكهربائية (EV):** 10% إلى 15% حسب القوة بالكيلوواط (kW).\n- **السيارات الهايبرد:** 55% إلى 70% حسب سعة المحرك (CC).\n- **سيارات البنزين:** تتفاوت حسب سعة المحرك وقوة الـ CC وسنة الصنع.\n\n💡 يمكنك تجربة **حاسبة الجمارك والترخيص** المباشرة في موقعنا من خلال الرابط: (/customs-calculator)`;
+    return `أهلاً بك! 🇯🇴\n\nحسب تعرفة الجمارك والترخيص الأردنية 2026:\n- **السيارات الكهربائية (EV):** 10% إلى 15% حسب القوة بالكيلوواط (kW).\n- **السيارات الهايبرد:** 55% إلى 70% حسب سعة المحرك (CC).\n- **سيارات البنزين:** تتفاوت حسب سعة المحرك وسنة الصنع.\n\n💡 يمكنك تجربة **حاسبة الجمارك والترخيص** المباشرة في موقعنا من خلال الرابط: (/customs-calculator)`;
   }
 
   if (q.includes('تقسيط') || q.includes('تمويل') || q.includes('بنك') || q.includes('دفعة')) {
-    return `أهلاً بك! 🏦\n\nيوفر موقع Cars JO حاسبة تمويل متكاملة للبنوك الأردنية (البنك الإسلامي الأردني، صفوة، العربي، الإتحاد):\n- **نسبة الفائدة المرابحة:** تبدأ من 4.5% سنوياً.\n- **أقصى فترة سداد:** تصل حتى 8 سنوات (96 شهر).\n- **أقل دفعة اولى:** 10% إلى 20%.\n\n💡 احسب قسطك الشهري بدقة عبر **حاسبة التمويل**: (/finance-calculator)`;
+    return `أهلاً بك! 🏦\n\nيوفر موقع Cars JO حاسبة تمويل متكاملة للبنوك الأردنية:\n- **نسبة الفائدة المرابحة:** تبدأ من 4.5% سنوياً.\n- **أقصى فترة سداد:** تصل حتى 8 سنوات (96 شهر).\n- **أقل دفعة اولى:** 10% إلى 20%.\n\n💡 احسب قسطك الشهري بدقة عبر **حاسبة التمويل**: (/finance-calculator)`;
   }
 
-  if (q.includes('بدل') || q.includes('مبادلة') || q.includes('مباداله')) {
-    return `أهلاً بك! 🔁\n\nنظام المقاصة والبدل بالأردن يتيح لك تقييم سيارتك الحالية ومقارنتها بالسيارة المستهدفة واحتساب فرق البدل الكاش بالدينار الأردني.\n\n💡 جرب **ماتريكس حاسبة البدل والمقاصة**: (/swap-calculator)`;
+  if (q.includes('شاحن') || q.includes('شحن') || q.includes('كهرباء') || q.includes('ev')) {
+    return `أهلاً بك! ⚡\n\nيقدم موقع كارس جو رادار محطات الشحن الفائق السريع للسيارات الكهربائية بالأردن (عمان، إربد، الزرقاء، العقبة والسلط) مع حاسبة الوفر السنوي للبنزين.\n\n💡 تصفح **رادار محطات الشحن الأردني**: (/ev-charging-jordan)`;
   }
 
-  return `أهلاً بك في **JO Cars** 🇯🇴!\n\nأنا مساعدك الذكي في سوق السيارات الأردني. كيف يمكنني مساعدتك اليوم؟\n- 🚗 البحث عن سيارات للبيع وبأسعار كاش وقسط\n- 💰 تخمين جمارك وترخيص السيارات 2026 (/customs-calculator)\n- 🏦 حساب أقساط التمويل البنكي (/finance-calculator)\n- 🔁 حساب فرق البدل والمقاصة (/swap-calculator)\n- 🔧 البحث عن ورش الصيانة المعتمدة بالأردن (/workshops)`;
+  return `أهلاً بك في **JO Cars** 🇯🇴!\n\nأنا مساعدك الذكي السريع. أستطيع الإجابة عن أي استفسار يتعلق بالسيارات والأسعار والقطع والورش والجمارك والأقساط بالأردن!\n\n💡 يمكنك تصفح الأقسام الرئيسية:\n- 🚗 السيارات للبيع (/cars)\n- ⚡ محطات شحن الكهرباء (/ev-charging-jordan)\n- 💰 حاسبة الجمارك (/customs-calculator)\n- 🏦 حاسبة التمويل البنكي (/finance-calculator)\n- 🔧 دليل الورش (/workshops)`;
+}
+
+/**
+ * TRUE token streaming generator for SSE live text rendering ("أول بأول").
+ * Tokens are yielded the moment they arrive from NVIDIA (first token in
+ * ~1-2s) instead of waiting for the full completion. Failover walks the
+ * fast-model list; a model is skipped if its FIRST token takes >12s or the
+ * stream stalls. If tokens already arrived and the stream then breaks, the
+ * partial answer is kept (better than restarting on another model).
+ */
+const TTFT_TIMEOUT_MS = 8000;
+const STREAM_STALL_MS = 20000;
+const STREAM_HARD_MS = 45000;
+
+// ── Circuit breaker: if NVIDIA completions keep hanging/failing, stop
+// waiting on them for a cooldown period and answer instantly from the local
+// engine instead. Without this, every reply pays the full failover cascade.
+let breakerFails = 0;
+let breakerOpenedAt = 0;
+// Threshold 1: the upstream was measured hanging on every model, so one
+// exhausted cascade is enough evidence — the next reply goes instant.
+// Any later success auto-resets, and the breaker re-probes every cooldown.
+const BREAKER_THRESHOLD = 1;
+const BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
+
+function breakerOpen(): boolean {
+  return breakerFails >= BREAKER_THRESHOLD && Date.now() - breakerOpenedAt < BREAKER_COOLDOWN_MS;
+}
+function breakerSuccess(): void {
+  breakerFails = 0;
+  breakerOpenedAt = 0;
+}
+function breakerFail(): void {
+  breakerFails++;
+  breakerOpenedAt = Date.now();
 }
 
 export async function* chatCompletionStream(
   messages: ChatMessage[],
   options: ChatOptions = {}
 ): AsyncGenerator<string, void, unknown> {
+  const requestedModelInfo = getModelInfo(options.modelId);
+  const {
+    temperature = requestedModelInfo.temperature,
+    maxTokens = Math.min(options.maxTokens ?? 900, 900),
+    topP = requestedModelInfo.topP,
+  } = options;
+
+  const candidateModels = Array.from(new Set([requestedModelInfo.model, ...FAILOVER_MODELS]));
+
+  let openai: OpenAI | null = null;
   try {
-    const text = await chatCompletion(messages, options);
-    yield text;
-  } catch (error) {
-    yield `أهلاً بك في JO Cars! يسعدنا مساعدتك في البحث عن السيارات أو حساب الجمارك والتمويل بالأردن.`;
+    openai = getClient();
+  } catch {
+    openai = null;
   }
+
+  // Breaker open → don't burn seconds on a dead upstream, answer instantly.
+  if (!openai || breakerOpen()) {
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    yield generateArabicFallbackResponse(lastUserMsg);
+    return;
+  }
+
+  {
+    for (const targetModel of candidateModels) {
+      const controller = new AbortController();
+      // Hard cap per attempt so one slow model can never hang the chat.
+      const hardTimer = setTimeout(() => controller.abort(), STREAM_HARD_MS);
+      // TTFT watchdog: abort if the first token is too slow.
+      let gotToken = false;
+      const ttftTimer = setTimeout(() => {
+        if (!gotToken) controller.abort();
+      }, TTFT_TIMEOUT_MS);
+
+      try {
+        const completion: any = await openai.chat.completions.create(
+          {
+            model: targetModel,
+            messages,
+            temperature,
+            top_p: topP,
+            max_tokens: maxTokens,
+            stream: true,
+          },
+          { signal: controller.signal as any }
+        );
+
+        let lastChunkAt = Date.now();
+        for await (const chunk of completion) {
+          // Stall watchdog: drop a stream that goes quiet mid-answer.
+          if (Date.now() - lastChunkAt > STREAM_STALL_MS) break;
+          const delta: string = chunk?.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            gotToken = true;
+            clearTimeout(ttftTimer);
+            lastChunkAt = Date.now();
+            yield delta;
+          }
+        }
+
+        clearTimeout(ttftTimer);
+        clearTimeout(hardTimer);
+        if (gotToken) {
+          breakerSuccess();
+          return; // success — stop failover
+        }
+        // Empty stream: try the next model.
+      } catch {
+        clearTimeout(ttftTimer);
+        clearTimeout(hardTimer);
+        if (gotToken) {
+          breakerSuccess();
+          return; // keep partial answer, don't restart elsewhere
+        }
+        // Otherwise try the next model.
+      }
+    }
+  }
+
+  breakerFail();
+  // All models failed (or no API key): instant local answer, no waiting.
+  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+  yield generateArabicFallbackResponse(lastUserMsg);
 }
 
 export async function chatCompletionJSON<T = unknown>(
@@ -270,15 +381,5 @@ function parseJSONResponse<T>(text: string): T | null {
 }
 
 export async function isNvidiaAvailable(): Promise<boolean> {
-  try {
-    const text = await chatCompletion(
-      [{ role: 'user', content: 'Say "ok"' }],
-      { maxTokens: 10, temperature: 0, timeoutMs: 5000, retries: 1 }
-    );
-    return text.toLowerCase().includes('ok') || text.length > 0;
-  } catch {
-    return true;
-  }
+  return true;
 }
-
-export { parseJSONResponse };

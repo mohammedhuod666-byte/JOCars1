@@ -12,6 +12,12 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get('city') || '';
     const brand = searchParams.get('brand') || '';
     const sortBy = searchParams.get('sortBy') || 'rating';
+    const verifiedOnly = searchParams.get('verifiedOnly') === 'true';
+    const isMobile = searchParams.get('mobile') === 'true';
+    const hasTowing = searchParams.get('towing') === 'true';
+    const hasWarranty = searchParams.get('warranty') === 'true';
+    const hasWaiting = searchParams.get('waiting') === 'true';
+    const offersParts = searchParams.get('parts') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const skip = (page - 1) * limit;
@@ -19,18 +25,28 @@ export async function GET(request: NextRequest) {
     const where: any = {
       isBanned: false,
       isPaused: false,
-      isVerified: true,
     };
+
+    if (verifiedOnly) {
+      where.isVerified = true;
+    }
+
+    if (isMobile) where.isMobileService = true;
+    if (hasTowing) where.hasTowingService = true;
+    if (hasWarranty) where.hasWarranty = true;
+    if (hasWaiting) where.hasWaitingArea = true;
+    if (offersParts) where.offersSpareParts = true;
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
       ];
     }
 
     if (service) {
-      where.services = { some: { name: { contains: service } } };
+      where.services = { some: { name: { contains: service, mode: 'insensitive' } } };
     }
 
     if (province) {
@@ -48,13 +64,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (brand) {
-      where.brands = { some: { brand: { contains: brand } } };
+      where.brands = { some: { brand: { contains: brand, mode: 'insensitive' } } };
     }
 
-    let orderBy: any = { rating: 'desc' };
-    if (sortBy === 'newest') orderBy = { createdAt: 'desc' };
-    else if (sortBy === 'views') orderBy = { viewCount: 'desc' };
-    else if (sortBy === 'reviews') orderBy = { reviewCount: 'desc' };
+    let orderBy: any[] = [{ isVerified: 'desc' }, { rating: 'desc' }];
+    if (sortBy === 'newest') orderBy = [{ isVerified: 'desc' }, { createdAt: 'desc' }];
+    else if (sortBy === 'views') orderBy = [{ isVerified: 'desc' }, { viewCount: 'desc' }];
+    else if (sortBy === 'reviews') orderBy = [{ isVerified: 'desc' }, { reviewCount: 'desc' }];
 
     const [workshops, total] = await Promise.all([
       prisma.workshop.findMany({
@@ -64,13 +80,13 @@ export async function GET(request: NextRequest) {
           brands: true,
           prices: true,
           user: {
-            select: { id: true, name: true, image: true },
+            select: { id: true, name: true, image: true, phone: true, whatsapp: true },
           },
           reviews: {
             where: { isHidden: false },
             select: { id: true, qualityRating: true, recommend: true },
           },
-          _count: { select: { reviews: true } },
+          _count: { select: { reviews: true, appointments: true } },
         },
         orderBy,
         skip,
@@ -101,9 +117,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      name, description, phone, whatsapp, email, website,
-      address, lat, lng, cityId, provinceId, logo, coverImage,
+      name, description, phone, whatsapp, email, website, emergencyPhone,
+      address, lat, lng, cityId, provinceId, logo, coverImage, gallery,
       workingHours, workingDays, yearsOfExperience, employeeCount,
+      priceRange, isMobileService, hasTowingService, hasWarranty, warrantyPeriod,
+      hasWaitingArea, offersSpareParts, paymentMethods, specialties, discountOffer,
       services, brands, prices,
     } = body;
 
@@ -115,39 +133,51 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           name,
           description: description || null,
-          phone: phone || null,
-          whatsapp: whatsapp || null,
-          email: email || null,
+          phone: phone || user.phone || null,
+          whatsapp: whatsapp || user.whatsapp || user.phone || null,
+          email: email || user.email || null,
           website: website || null,
+          emergencyPhone: emergencyPhone || null,
           address: address || null,
-          lat: lat || null,
-          lng: lng || null,
+          lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
+          lng: Number.isFinite(Number(lng)) ? Number(lng) : null,
           cityId: cityId || null,
           provinceId: provinceId || null,
           logo: logo || null,
           coverImage: coverImage || null,
+          gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : (typeof gallery === 'string' ? gallery : '[]'),
           workingHours: workingHours || '08:00-17:00',
           workingDays: workingDays || 'Sun-Thu',
-          yearsOfExperience: yearsOfExperience || 0,
-          employeeCount: employeeCount || 1,
+          yearsOfExperience: Number.isFinite(Number(yearsOfExperience)) ? Number(yearsOfExperience) : 0,
+          employeeCount: Number.isFinite(Number(employeeCount)) ? Number(employeeCount) : 1,
+          priceRange: priceRange || 'moderate',
+          isMobileService: Boolean(isMobileService),
+          hasTowingService: Boolean(hasTowingService),
+          hasWarranty: Boolean(hasWarranty),
+          warrantyPeriod: warrantyPeriod || null,
+          hasWaitingArea: Boolean(hasWaitingArea),
+          offersSpareParts: Boolean(offersSpareParts),
+          paymentMethods: paymentMethods || 'CASH',
+          specialties: Array.isArray(specialties) ? JSON.stringify(specialties) : (typeof specialties === 'string' ? specialties : '[]'),
+          discountOffer: discountOffer || null,
         },
       });
 
       if (services && services.length > 0) {
         await tx.workshopService.createMany({
-          data: services.map((s: { name: string; category?: string }) => ({
+          data: services.map((s: { name: string; category?: string } | string) => ({
             workshopId: newWorkshop.id,
-            name: s.name,
-            category: s.category || null,
+            name: typeof s === 'string' ? s : s.name,
+            category: typeof s === 'string' ? null : (s.category || null),
           })),
         });
       }
 
       if (brands && brands.length > 0) {
         await tx.workshopBrand.createMany({
-          data: brands.map((b: { brand: string }) => ({
+          data: brands.map((b: { brand: string } | string) => ({
             workshopId: newWorkshop.id,
-            brand: b.brand,
+            brand: typeof b === 'string' ? b : b.brand,
           })),
         });
       }
@@ -157,8 +187,8 @@ export async function POST(request: NextRequest) {
           data: prices.map((p: { serviceName: string; minPrice: number; maxPrice: number }) => ({
             workshopId: newWorkshop.id,
             serviceName: p.serviceName,
-            minPrice: p.minPrice,
-            maxPrice: p.maxPrice,
+            minPrice: Number(p.minPrice) || 0,
+            maxPrice: Number(p.maxPrice) || 0,
           })),
         });
       }

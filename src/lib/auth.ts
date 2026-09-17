@@ -1,9 +1,10 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
 import prisma from './prisma';
 
-const TOKEN_EXPIRY = '30d';
+const TOKEN_EXPIRY = process.env.JWT_EXPIRY || '7d';
 const ROTATION_THRESHOLD = 6 * 60 * 60 * 1000; // 6 hours
 
 function getJwtSecret(): string {
@@ -39,7 +40,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export function signToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_EXPIRY as jwt.SignOptions['expiresIn'] ?? '7d' });
 }
 
 export function verifyToken(token: string): JWTPayload | null {
@@ -48,6 +49,25 @@ export function verifyToken(token: string): JWTPayload | null {
   } catch {
     return null;
   }
+}
+
+export function signPasswordResetToken(user: { id: string; email: string; password: string }): string {
+  const passwordVersion = createHash('sha256').update(user.password).digest('hex');
+  return jwt.sign({ sub: user.id, purpose: 'password-reset', passwordVersion }, getJwtSecret(), {
+    expiresIn: '15m', audience: 'password-reset', issuer: 'jo-cars',
+  });
+}
+
+export function verifyPasswordResetToken(token: string): { userId: string; passwordVersion: string } | null {
+  try {
+    const payload = jwt.verify(token, getJwtSecret(), { audience: 'password-reset', issuer: 'jo-cars' }) as jwt.JwtPayload;
+    if (payload.purpose !== 'password-reset' || typeof payload.sub !== 'string' || typeof payload.passwordVersion !== 'string') return null;
+    return { userId: payload.sub, passwordVersion: payload.passwordVersion };
+  } catch { return null; }
+}
+
+export function passwordVersion(passwordHash: string): string {
+  return createHash('sha256').update(passwordHash).digest('hex');
 }
 
 export function shouldRotateToken(token: string): boolean {
@@ -110,9 +130,12 @@ export function requireRole(...roles: string[]) {
 }
 
 export function setAuthCookie(response: Response, token: string) {
+  // Cookie lifetime must match the JWT lifetime (default 7d) —
+  // otherwise the cookie expires first and every authenticated
+  // fetch starts returning 401 while the user is still "logged in".
   response.headers.set(
     'Set-Cookie',
-    `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24}; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
+    `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Strict${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`
   );
 }
 

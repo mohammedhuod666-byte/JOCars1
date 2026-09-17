@@ -1,87 +1,73 @@
-"""Main Arabic PDF Report Generator"""
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from reportlab.platypus import SimpleDocTemplate, PageBreak
-from reportlab.lib.pagesizes import A4
-
-from ar_config import (
-    PAGE_W, PAGE_H, M, GOLD, DARK, LIGHT, GRAY, WHITE, BLACK,
-    register_fonts, ar, make_styles,
-)
+"""Arabic Report Generator - Complete 31 Sections"""
+from reportlab.platypus import SimpleDocTemplate, Spacer
+from ar_config import PAGE_W, M, BG_LIGHT, register_fonts, make_styles, ar
 from ar_sections import (
     build_cover, build_toc,
-    build_section1, build_section2, build_section3,
-    build_section4, build_section5, build_section6,
-    build_section7, build_section8, build_section9,
-    build_section10, build_section11, build_section12,
-    build_section13,
+    build_section1, build_section2, build_section3, build_section4,
+    build_section5, build_section6, build_section7, build_section8,
+    build_section9, build_section10, build_section11, build_section12,
+    build_section13, build_section14, build_section15, build_section16,
+    build_section17, build_section18, build_section19, build_section20,
+    build_section21, build_section22, build_section23, build_section24,
+    build_section25, build_section26, build_section27, build_section28,
+    build_section29, build_section30, build_section31,
 )
 
-
-def footer(canvas, doc):
-    canvas.saveState()
-    # Gold line top
-    canvas.setStrokeColor(GOLD)
-    canvas.setLineWidth(0.5)
-    canvas.line(M, PAGE_H - 28, PAGE_W - M, PAGE_H - 28)
-    # Page number
-    canvas.setFillColor(GRAY)
-    canvas.setFont("Helvetica", 8)
-    canvas.drawCentredString(PAGE_W / 2, 22, f"JO Cars  |  Page {doc.page}")
-    # Footer line
-    canvas.setStrokeColor(GOLD)
-    canvas.line(M, 32, PAGE_W - M, 32)
-    canvas.restoreState()
+OUTPUT = "JO_Cars_Consulting_Report_AR.pdf"
 
 
-def main():
+def build():
     ar_f, arb_f = register_fonts()
-    styles = make_styles(ar_f, arb_f)
+    s = make_styles(ar_f, arb_f)
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_path = os.path.join(os.path.dirname(script_dir), "JO_Cars_Technical_Report_AR.pdf")
-
-    doc = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        leftMargin=M, rightMargin=M,
-        topMargin=45, bottomMargin=45,
-        title="JO Cars Technical Report - Arabic",
-        author="JO Cars Platform",
-    )
+    doc = SimpleDocTemplate(OUTPUT, pagesize=(PAGE_W, 842),
+        leftMargin=M, rightMargin=M, topMargin=M, bottomMargin=M)
 
     story = []
+    story.append(Spacer(1, 1))
 
-    # Cover
-    build_cover(story, styles)
+    # Cover & TOC
+    build_cover(story, s)
+    build_toc(story, s)
 
-    # TOC
-    build_toc(story, styles)
+    # Sections 1-13 (main report)
+    build_section1(story, s)
+    build_section2(story, s)
+    build_section3(story, s)
+    build_section4(story, s)
+    build_section5(story, s)
+    build_section6(story, s)
+    build_section7(story, s)
+    build_section8(story, s)
+    build_section9(story, s)
+    build_section10(story, s)
+    build_section11(story, s)
+    build_section12(story, s)
+    build_section13(story, s)
 
-    # 13 Sections
-    build_section1(story, styles)
-    build_section2(story, styles)
-    build_section3(story, styles)
-    build_section4(story, styles)
-    build_section5(story, styles)
-    build_section6(story, styles)
-    build_section7(story, styles)
-    build_section8(story, styles)
-    build_section9(story, styles)
-    build_section10(story, styles)
-    build_section11(story, styles)
-    build_section12(story, styles)
-    build_section13(story, styles)
+    # Sections 14-31 (deep-dive)
+    build_section14(story, s)
+    build_section15(story, s)
+    build_section16(story, s)
+    build_section17(story, s)
+    build_section18(story, s)
+    build_section19(story, s)
+    build_section20(story, s)
+    build_section21(story, s)
+    build_section22(story, s)
+    build_section23(story, s)
+    build_section24(story, s)
+    build_section25(story, s)
+    build_section26(story, s)
+    build_section27(story, s)
+    build_section28(story, s)
+    build_section29(story, s)
+    build_section30(story, s)
+    build_section31(story, s)
 
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
-
-    size_kb = os.path.getsize(output_path) / 1024
-    print(f"PDF generated: {output_path}")
-    print(f"Pages: {doc.page}")
-    print(f"Size: {size_kb:.1f} KB")
+    doc.build(story)
+    print(f"Generated: {OUTPUT}")
 
 
 if __name__ == "__main__":
-    main()
+    build()

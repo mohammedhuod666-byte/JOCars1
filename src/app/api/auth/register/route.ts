@@ -6,6 +6,7 @@ import { successResponse, errorResponse, validationErrorResponse } from '@/lib/a
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
+import { createAuditLog } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -91,6 +92,12 @@ export async function POST(request: NextRequest) {
     const token = signToken({ userId: result.id, email: result.email, role: result.role });
     const response = successResponse({ user: result, token }, 201);
     setAuthCookie(response, token);
+    await createAuditLog({
+      action: 'REGISTER', actorId: result.id,
+      entityType: 'USER', entityId: result.id,
+      description: `حساب جديد (${result.role}): ${result.name}`,
+      ip: ip !== 'unknown' ? ip : undefined,
+    });
     return response;
   } catch (error) {
     console.error('Register error:', error);

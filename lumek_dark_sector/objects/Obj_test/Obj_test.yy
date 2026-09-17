@@ -1,0 +1,36 @@
+{
+  "$GMObject":"",
+  "%Name":"Obj_test",
+  "eventList":[
+    {"$GMEvent":"v1","%Name":"","collisionObjectId":null,"eventNum":67,"eventType":5,"isDnD":false,"name":"","resourceType":"GMEvent","resourceVersion":"2.0"},
+    {"$GMEvent":"v1","%Name":"","collisionObjectId":null,"eventNum":83,"eventType":10,"isDnD":false,"name":"","resourceType":"GMEvent","resourceVersion":"2.0"}
+  ],
+  "managed":true,
+  "name":"Obj_test",
+  "overriddenProperties":[],
+  "parent":{
+    "name":"group_controller",
+    "path":"folders/Objects/group_controller.yy"
+  },
+  "parentObjectId":null,
+  "persistent":false,
+  "physicsAngularDamping":0.1,
+  "physicsDensity":0.5,
+  "physicsFriction":0.2,
+  "physicsGroup":1,
+  "physicsKinematic":false,
+  "physicsLinearDamping":0.1,
+  "physicsObject":false,
+  "physicsRestitution":0.1,
+  "physicsSensor":false,
+  "physicsShape":1,
+  "physicsShapePoints":[],
+  "physicsStartAwake":true,
+  "properties":[],
+  "resourceType":"GMObject",
+  "resourceVersion":"2.0",
+  "solid":false,
+  "spriteId":null,
+  "spriteMaskId":null,
+  "visible":true
+}

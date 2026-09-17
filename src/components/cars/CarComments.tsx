@@ -5,6 +5,9 @@ import { MessageCircle, Send, Flag, Loader2, Trash2 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import type { CarComment } from '@/types';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { SafeAvatar } from '@/components/ui/SafeAvatar';
+import Link from 'next/link';
 
 interface Props {
   carId: string;
@@ -12,6 +15,7 @@ interface Props {
 }
 
 export function CarComments({ carId, currentUser }: Props) {
+  const { token } = useAuth();
   const [comments, setComments] = useState<CarComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
@@ -29,19 +33,30 @@ export function CarComments({ carId, currentUser }: Props) {
     setLoading(false);
   };
 
+  const authHeaders = (json = false): HeadersInit => {
+    const h: Record<string, string> = {};
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) { toast.error('سجل الدخول أولاً'); return; }
     if (!content.trim()) return;
     setSubmitting(true);
-    const res = await fetch(`/api/cars/${carId}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: content.trim() }),
-    });
-    const d = await res.json();
-    if (d.success) { setComments(p => [d.data, ...p]); setContent(''); }
-    else toast.error('فشل');
+    try {
+      const res = await fetch(`/api/cars/${carId}/comments`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ content: content.trim() }),
+      });
+      const d = await res.json();
+      if (d.success) { setComments(p => [d.data, ...p]); setContent(''); toast.success('تم نشر تعليقك! 💬'); }
+      else toast.error(d.error || 'فشل نشر التعليق');
+    } catch {
+      toast.error('تعذر الاتصال — تحقق من الإنترنت وحاول مجدداً');
+    }
     setSubmitting(false);
   };
 
@@ -62,7 +77,7 @@ export function CarComments({ carId, currentUser }: Props) {
     setReporting(commentId);
     const res = await fetch(`/api/car-comments/${commentId}/report`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders(true),
       body: JSON.stringify({ reason, description: '' }),
     });
     const d = await res.json();
@@ -75,7 +90,7 @@ export function CarComments({ carId, currentUser }: Props) {
     if (!confirm('حذف التعليق؟')) return;
     setDeleting(commentId);
     // Delete via a dedicated endpoint - we don't have one, use a general approach
-    const res = await fetch(`/api/car-comments/${commentId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/car-comments/${commentId}`, { method: 'DELETE', headers: authHeaders() });
     const d = await res.json();
     if (d.success) { setComments(p => p.filter(c => c.id !== commentId)); toast.success('تم الحذف'); }
     else toast.error('فشل');
@@ -114,11 +129,16 @@ export function CarComments({ carId, currentUser }: Props) {
             <div key={comment.id} className="card p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
-                    {comment.user.name?.[0] || '?'}
-                  </div>
+                  <Link href={`/profile/${comment.userId}`} title="فحص الحساب"
+                    className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold overflow-hidden shrink-0 hover:ring-2 hover:ring-blue-400 transition-all">
+                    <SafeAvatar src={comment.user.image} name={comment.user.name} className="w-full h-full object-cover" />
+                  </Link>
                   <div>
-                    <span className="text-sm font-medium">{comment.user.name}</span>
+                    <Link href={`/profile/${comment.userId}`} title="فحص الحساب"
+                      className="text-sm font-medium hover:text-blue-500 hover:underline transition-colors">{comment.user.name}</Link>
+                    {comment.user.phoneVerified && (
+                      <span title="رقم هاتف موثّق — مشترٍ جاد" className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">مشترٍ جاد ✅</span>
+                    )}
                     {comment.user.role === 'ADMIN' && <span className="mr-1 text-xs text-amber-500">مدير</span>}
                     <span className="mr-2 text-xs text-gray-400">{formatDate(comment.createdAt)}</span>
                   </div>

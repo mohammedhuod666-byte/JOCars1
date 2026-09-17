@@ -1,0 +1,1 @@
+Obj_player.allow_movement = true;

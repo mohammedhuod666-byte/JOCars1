@@ -74,40 +74,53 @@ export async function POST(request: NextRequest) {
   if (user.canPost === false) return NextResponse.json({ error: 'تم إيقاف النشر لحسابك' }, { status: 403 });
 
   try {
-    const formData = await request.formData();
-    const uploadedFiles = formData.getAll('images') as File[];
-    const data: Record<string, unknown> = {};
+    const contentType = request.headers.get('content-type') || '';
+    let data: Record<string, any> = {};
+    let urls: string[] = [];
 
-    for (const [key, value] of formData.entries()) {
-      if (key !== 'images') data[key] = value;
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const uploadedFiles = formData.getAll('images') as File[];
+      for (const [key, value] of formData.entries()) {
+        if (key !== 'images') data[key] = value;
+      }
+
+      const saveFile = async (file: File) => {
+        const bytes = await file.arrayBuffer();
+        if (!bytes || bytes.byteLength === 0) return null;
+        const buffer = Buffer.from(bytes);
+        const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) return null;
+        if (buffer.length > 10 * 1024 * 1024) return null;
+        const filename = `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const dir = path.join(process.cwd(), 'public', 'uploads');
+        await mkdir(dir, { recursive: true });
+        await writeFile(path.join(dir, filename), buffer);
+        return `/uploads/${filename}`;
+      };
+
+      for (const img of uploadedFiles) {
+        if (typeof img !== 'string') {
+          const url = await saveFile(img);
+          if (url) urls.push(url);
+        }
+      }
+    } else {
+      data = await request.json();
+      if (Array.isArray(data.images)) {
+        urls = data.images;
+      }
     }
 
-    data.price = parseFloat(data.price as string);
-    data.quantity = parseInt((data.quantity as string) || '1');
-    data.isNegotiable = data.isNegotiable === 'true';
+    const price = parseFloat(data.price as string) || 0;
+    const quantity = parseInt((data.quantity as string) || '1') || 1;
+    const isNegotiable = data.isNegotiable === true || data.isNegotiable === 'true';
+    const hasWarranty = data.hasWarranty === true || data.hasWarranty === 'true';
+    const hasDelivery = data.hasDelivery === true || data.hasDelivery === 'true';
+    const deliveryFee = data.deliveryFee ? parseFloat(data.deliveryFee as string) : null;
 
-    if (!data.title || !data.partType || !data.price || !data.phone) {
+    if (!data.title || !data.partType || !price || !data.phone) {
       return NextResponse.json({ error: 'العنوان، النوع، السعر، والهاتف مطلوب' }, { status: 400 });
-    }
-
-    const saveFile = async (file: File) => {
-      const bytes = await file.arrayBuffer();
-      if (!bytes || bytes.byteLength === 0) return null;
-      const buffer = Buffer.from(bytes);
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      if (!ALLOWED_EXTENSIONS.includes(ext)) return null;
-      if (buffer.length > 10 * 1024 * 1024) return null;
-      const filename = `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const dir = path.join(process.cwd(), 'public', 'uploads');
-      await mkdir(dir, { recursive: true });
-      await writeFile(path.join(dir, filename), buffer);
-      return `/uploads/${filename}`;
-    };
-
-    const urls: string[] = [];
-    for (const img of uploadedFiles) {
-      const url = await saveFile(img);
-      if (url) urls.push(url);
     }
 
     const slug = `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -120,14 +133,23 @@ export async function POST(request: NextRequest) {
         partType: data.partType as string,
         brandId: (data.brandId as string) || null,
         partNumber: (data.partNumber as string) || null,
+        oemNumber: (data.oemNumber as string) || null,
+        originCountry: (data.originCountry as string) || null,
+        compatibleModels: Array.isArray(data.compatibleModels)
+          ? JSON.stringify(data.compatibleModels)
+          : (typeof data.compatibleModels === 'string' ? data.compatibleModels : '[]'),
         condition: (data.condition as string) || 'USED',
-        price: data.price as number,
+        price,
         currency: (data.currency as string) || 'JOD',
-        quantity: data.quantity as number,
+        quantity,
         phone: data.phone as string,
         whatsapp: (data.whatsapp as string) || null,
         cityId: (data.cityId as string) || null,
-        isNegotiable: data.isNegotiable as boolean,
+        isNegotiable,
+        hasWarranty,
+        warrantyPeriod: (data.warrantyPeriod as string) || null,
+        hasDelivery,
+        deliveryFee,
         status: 'PENDING',
         userId: user.id,
         images: JSON.stringify(urls),

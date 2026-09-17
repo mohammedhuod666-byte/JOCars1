@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateRequest } from '@/lib/auth';
+import { authenticateRequest, hashPassword } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
 import { createAuditLog } from '@/lib/audit';
 import { sendWhatsAppToUser, buildUserMessage } from '@/lib/whatsapp';
@@ -24,6 +24,29 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const safeData: Record<string, any> = {};
     for (const key of allowedFields) {
       if (key in body) safeData[key] = body[key];
+    }
+
+    // Email change (any account including admins) — must stay unique
+    if (typeof body.email === 'string' && body.email.trim() && body.email.trim() !== oldUser.email) {
+      const email = body.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return errorResponse('البريد الإلكتروني غير صالح', 400);
+      }
+      const taken = await prisma.user.findUnique({ where: { email } });
+      if (taken && taken.id !== id) {
+        return errorResponse('البريد الإلكتروني مستخدم لحساب آخر', 400);
+      }
+      safeData.email = email;
+    }
+
+    // Password reset by admin (any account including admins)
+    let passwordChanged = false;
+    if (typeof body.password === 'string' && body.password.length > 0) {
+      if (body.password.length < 6) {
+        return errorResponse('كلمة السر الجديدة قصيرة (6 أحرف على الأقل)', 400);
+      }
+      safeData.password = await hashPassword(body.password);
+      passwordChanged = true;
     }
 
     const updated = await prisma.user.update({
@@ -61,6 +84,25 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         entityType: 'USER', entityId: id,
         description: `تغيير صلاحية المستخدم ${oldUser.name} من ${oldUser.role} إلى ${body.role}`,
         oldValue: oldUser.role, newValue: body.role,
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+      });
+    }
+
+    if (safeData.email && safeData.email !== oldUser.email) {
+      await createAuditLog({
+        action: 'UPDATE_USER_EMAIL', actorId: actor.id,
+        entityType: 'USER', entityId: id,
+        description: `تغيير بريد المستخدم ${oldUser.name} من ${oldUser.email} إلى ${safeData.email}`,
+        oldValue: oldUser.email, newValue: safeData.email,
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+      });
+    }
+
+    if (passwordChanged) {
+      await createAuditLog({
+        action: 'RESET_USER_PASSWORD', actorId: actor.id,
+        entityType: 'USER', entityId: id,
+        description: `إعادة تعيين كلمة سر المستخدم ${oldUser.name} بواسطة الإدارة`,
         ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
       });
     }

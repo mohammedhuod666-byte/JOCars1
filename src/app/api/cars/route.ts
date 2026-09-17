@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma, { getCached, invalidateCache } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { carSchema } from '@/lib/validations';
+import { sanitizePlainText } from '@/lib/sanitize';
 import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from '@/lib/api';
 import { generateSlug } from '@/lib/utils';
 import { generateRefCode } from '@/lib/generate-refcode';
 import { uploadMultipleImages, uploadImage } from '@/lib/cloudinary';
 import { analyzeCarPrice } from '@/ai/price-analysis';
 import { notifyAdmins } from '@/lib/admin-notify';
+import { createAuditLog } from '@/lib/audit';
+import { moderateListing } from '@/ai/moderate';
+import { compressToWebP } from '@/lib/image-compress';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -19,8 +23,21 @@ export async function GET(request: NextRequest) {
   const where: Record<string, unknown> = { status: 'APPROVED', deletedAt: null };
   if (searchParams.get('showSold') === 'true') delete where.status;
 
+  // Explicit status filter (used by sold archive, moderation queues, etc.)
+  const statusParam = searchParams.get('status');
+  if (statusParam && ['APPROVED', 'PENDING', 'REJECTED', 'SOLD'].includes(statusParam)) {
+    where.status = statusParam;
+  }
   if (searchParams.get('featured') === 'true') where.featured = true;
+
   if (searchParams.get('isNew') === 'true') where.isNew = true;
+
+  // Curated feeds: reels (has video) • wholesale (dealer-to-dealer) • salvage (damaged)
+  if (searchParams.get('hasVideo') === 'true') {
+    where.AND = [...((where.AND as any[]) || []), { videoUrl: { not: '' } }];
+  }
+  if (searchParams.get('wholesale') === 'true') where.isWholesale = true;
+  if (searchParams.get('damaged') === 'true') where.isDamaged = true;
   if (searchParams.get('search') || searchParams.get('query')) {
     const q = searchParams.get('search') || searchParams.get('query') || '';
     const normalized = q.trim().toUpperCase().replace(/[\s-]+/g, '');
@@ -205,6 +222,7 @@ export async function POST(request: NextRequest) {
     data.hasWarranty = data.hasWarranty === 'true';
     data.hasServiceHistory = data.hasServiceHistory === 'true';
     data.isDamaged = data.isDamaged === 'true';
+    data.isWholesale = data.isWholesale === 'true';
     data.isPaintOriginal = data.isPaintOriginal !== 'false';
     if (data.locationLat) data.locationLat = parseFloat(data.locationLat as string);
     if (data.locationLng) data.locationLng = parseFloat(data.locationLng as string);
@@ -232,21 +250,27 @@ export async function POST(request: NextRequest) {
       }
       const bytes = await file.arrayBuffer();
       if (!bytes || bytes.byteLength === 0) throw new Error('Empty file');
-      const base64 = Buffer.from(bytes).toString('base64');
-      return `data:${file.type};base64,${base64}`;
+      // Auto-compress to WebP (max 1600px) before storing
+      const { buffer, mime } = await compressToWebP(Buffer.from(bytes), file.type);
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    };
+
+    const toCompressedBuffer = async (file: File): Promise<Buffer> => {
+      const bytes = await file.arrayBuffer();
+      const { buffer } = await compressToWebP(Buffer.from(bytes), file.type);
+      return buffer;
     };
 
     try {
       if (hasCloudinary) {
         if (uploadedFiles.length > 0) {
-          const buffers = await Promise.all(uploadedFiles.map(img => img.arrayBuffer()));
-          const base64s = buffers.map(buf => Buffer.from(buf).toString('base64'));
+          const buffers = await Promise.all(uploadedFiles.map(img => toCompressedBuffer(img)));
+          const base64s = buffers.map(buf => buf.toString('base64'));
           uploadedImages = await uploadMultipleImages(base64s, 'jo-cars/cars');
         }
         if (coverFile) {
-          const buffer = await coverFile.arrayBuffer();
-          const base64 = Buffer.from(buffer).toString('base64');
-          const result = await uploadImage(base64, { folder: 'jo-cars/covers' });
+          const buffer = await toCompressedBuffer(coverFile);
+          const result = await uploadImage(buffer.toString('base64'), { folder: 'jo-cars/covers' });
           coverUrl = result.secure_url;
         }
       } else {
@@ -333,6 +357,44 @@ export async function POST(request: NextRequest) {
       `تم إضافة إعلان جديد: ${car.brand?.nameAr} ${car.model?.nameAr} ${car.year}`,
       '/admin/cars',
     );
+
+    await createAuditLog({
+      action: 'PUBLISH_CAR', actorId: car.userId,
+      entityType: 'CAR', entityId: car.id,
+      description: `نشر إعلان: ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year} — ${car.price} د.أ`,
+    }).catch(() => {});
+
+    // AI pre-moderation (fire-and-forget): obvious spam/scam gets an
+    // automatic report + admin notification so reviewers see it first
+    moderateListing({
+      brand: car.brand?.nameAr || '', model: car.model?.nameAr || '',
+      year: car.year, price: car.price, kilometers: car.kilometers || 0,
+      description: car.description || '', phone: car.phone || '', fuelType: car.fuelType || '',
+    }).then(async (verdict) => {
+      try {
+        await prisma.carLog.create({
+          data: { carId: car.id, userId: car.userId, action: verdict.ok ? 'AUTO_MOD_OK' : 'AUTO_MOD_FLAGGED' },
+        });
+        if (!verdict.ok) {
+          const admin = await prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+          if (admin) {
+            await prisma.report.create({
+              data: {
+                reason: 'AUTO_MODERATION',
+                description: `إشراف ذكي تلقائي: ${verdict.issues.join('؛ ')}`,
+                status: 'PENDING', userId: admin.id, carId: car.id,
+              },
+            });
+          }
+          await notifyAdmins(
+            'NEW_REPORT',
+            'بلاغ تلقائي من الإشراف الذكي 🤖',
+            `إعلان ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}: ${verdict.issues.join('، ')}`,
+            '/admin/reports',
+          );
+        }
+      } catch { /* moderation side-effects must never break publishing */ }
+    }).catch(() => {});
 
     return successResponse(car, 201);
   } catch (error) {

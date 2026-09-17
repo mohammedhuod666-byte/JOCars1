@@ -18,10 +18,10 @@ const CONVERSATION_META_KEY = 'jo-cars-ai-meta';
 type AIModelId = 'glm' | 'minimax' | 'mistral' | 'gpt-oss';
 interface AIModelOption { id: AIModelId; nameAr: string; nameEn: string; description: string; icon: string; }
 const AI_MODELS_LIST: AIModelOption[] = [
-  { id: 'glm', nameAr: 'GLM 5.2', nameEn: 'GLM 5.2', description: 'سريع ومتوازن — الأفضل للمحادثات', icon: '⚡' },
-  { id: 'minimax', nameAr: 'MiniMax M3', nameEn: 'MiniMax M3', description: 'قوي للنصوص الطويلة — التحليل المعمّق', icon: '🧠' },
-  { id: 'mistral', nameAr: 'Mistral Medium', nameEn: 'Mistral 3.5', description: 'ذكي مع reasoning — الأسئلة المعقدة', icon: '🔮' },
-  { id: 'gpt-oss', nameAr: 'GPT OSS 120B', nameEn: 'GPT OSS', description: 'OpenAI مفتوح — الإجابات الدقيقة', icon: '✨' },
+  { id: 'glm', nameAr: 'GLM 5.3 Flash (الأسرع ⚡)', nameEn: 'GLM 5.3 Flash', description: 'الأسرع — رد فوري للمحادثات', icon: '⚡' },
+  { id: 'gpt-oss', nameAr: 'GPT OSS 20B', nameEn: 'GPT OSS 20B', description: 'الأذكى والأدق — لكن أبطأ', icon: '✨' },
+  { id: 'minimax', nameAr: 'Kimi K2.6', nameEn: 'Kimi K2.6', description: 'قوي للنصوص الطويلة — التحليل المعمّق', icon: '🧠' },
+  { id: 'mistral', nameAr: 'Mistral Large', nameEn: 'Mistral Large', description: 'ذكي مع reasoning — الأسئلة المعقدة', icon: '🔮' },
 ];
 
 function loadConversation(): { messages: Message[]; sessionId: string } | null {
@@ -126,7 +126,7 @@ const mpQuestions: Record<MpStep, string> = {
 
 export default function AIPage() {
   const router = useRouter();
-  const { user, token } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -139,7 +139,7 @@ export default function AIPage() {
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [lastSuggestions, setLastSuggestions] = useState<string[]>([]);
   const [isRecordingSound, setIsRecordingSound] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<AIModelId>('gpt-oss');
+  const [selectedModel, setSelectedModel] = useState<AIModelId>('glm');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const [carFlowStep, setCarFlowStep] = useState<CarFlowStep | null>(null);
@@ -375,6 +375,17 @@ export default function AIPage() {
   const handleSend = useCallback(async (content: string) => {
     if (!content.trim() || isTyping) return;
 
+    // المساعد الذكي يتطلب تسجيل دخول (الـ API يرجع 401 بدونه) —
+    // اعرض رسالة واضحة بدل رسالة "خطأ في الاتصال" المضللة.
+    if (!isAuthenticated) {
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(), type: 'user', content: content.trim(), timestamp: new Date(),
+      }]);
+      setInput('');
+      botReply('🔒 المساعد الذكي يتطلب تسجيل الدخول.\n\nاضغط زر "دخول" أعلى الصفحة وسجّل الدخول، ثم ارجع واسألني أي شيء عن السيارات! 🚗');
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(), type: 'user', content: content.trim(), timestamp: new Date(),
     };
@@ -459,6 +470,8 @@ export default function AIPage() {
 
     const abortController = new AbortController();
     const fetchTimeout = setTimeout(() => abortController.abort(), 60000);
+    // الجلسة قد تنتهي أثناء الكتابة (كوكي منتهي) — نميّز 401 عن عطل الاتصال
+    let authExpired = false;
 
     try {
       const res = await fetch('/api/ai/chat/stream', {
@@ -478,6 +491,7 @@ export default function AIPage() {
         signal: abortController.signal,
       });
 
+      if (res.status === 401) { authExpired = true; throw new Error('Auth expired'); }
       if (!res.ok || !res.body) throw new Error('Stream failed');
 
       const reader = res.body.getReader();
@@ -571,8 +585,15 @@ export default function AIPage() {
           signal: fallbackAbort.signal,
         });
         clearTimeout(fallbackTimeout);
+        if (res.status === 401) authExpired = true;
         const data = await res.json();
-        if (data.success && data.data) {
+        if (authExpired) {
+          setMessages(prev => [...prev, {
+            id: botMsgId, type: 'bot',
+            content: '🔒 انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.',
+            timestamp: new Date(),
+          }]);
+        } else if (data.success && data.data) {
           setMessages(prev => [...prev, {
             id: botMsgId, type: 'bot',
             content: data.data.message,
@@ -597,7 +618,9 @@ export default function AIPage() {
       } catch {
         setMessages(prev => [...prev, {
           id: botMsgId, type: 'bot',
-          content: 'عذراً، حدث خطأ في الاتصال. حاول مرة أخرى.',
+          content: authExpired
+            ? '🔒 انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.'
+            : 'عذراً، حدث خطأ في الاتصال. حاول مرة أخرى.',
           timestamp: new Date(),
         }]);
       }
@@ -609,7 +632,7 @@ export default function AIPage() {
         return prev;
       });
     }
-  }, [isTyping, mpStep, personalityStep, personalityAnswers, sessionId, selectedModel, botReply, advanceMp, fetchPersonalityMatch, carFlowStep, carFlowData, carFlowImages]);
+  }, [isTyping, isAuthenticated, mpStep, personalityStep, personalityAnswers, sessionId, selectedModel, botReply, advanceMp, fetchPersonalityMatch, carFlowStep, carFlowData, carFlowImages]);
 
   // ── Image Upload for Car Flow ──
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1243,6 +1266,12 @@ export default function AIPage() {
       {/* Input Area */}
       <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 p-4">
         <div className="container-custom max-w-3xl mx-auto">
+          {!isAuthenticated && (
+            <Link href="/auth/login"
+              className="mb-3 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+              🔒 سجّل الدخول لاستخدام المساعد الذكي — اضغط هنا
+            </Link>
+          )}
           <form onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
             className="flex items-center gap-2">
             {/* Model Selector */}

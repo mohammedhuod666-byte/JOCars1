@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { BarChart3, TrendingUp, Users, Fuel, MapPin, Calendar, Loader2, Building2, DollarSign } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Fuel, MapPin, Calendar, Loader2, Building2, DollarSign, RefreshCw, Car } from 'lucide-react';
 
 interface AdvancedStats {
   brandDemand: { brandId: string; name: string; logo: string | null; count: number }[];
@@ -44,17 +44,22 @@ export default function AdminAdvancedStatsPage() {
   const router = useRouter();
   const [stats, setStats] = useState<AdvancedStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (_hydrated && (!isAuthenticated || user?.role !== 'ADMIN')) { router.push('/'); return; }
+  const loadStats = () => {
     const token = useAuth.getState().token;
     fetch('/api/admin/advanced-stats', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => {
         if (data.success) setStats(data.data);
-        setLoading(false);
+        setLoading(false); setRefreshing(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  useEffect(() => {
+    if (_hydrated && (!isAuthenticated || user?.role !== 'ADMIN')) { router.push('/'); return; }
+    loadStats();
   }, [isAuthenticated, user, router]);
 
   if (_hydrated && (!isAuthenticated || user?.role !== 'ADMIN')) return null;
@@ -65,14 +70,20 @@ export default function AdminAdvancedStatsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 flex items-center justify-center">
-          <BarChart3 className="w-5 h-5 text-green-500" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/10 flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-green-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">الإحصائيات المتقدمة</h1>
+            <p className="text-sm text-gray-500">رسوم بيانية وتحليلات متقدمة للسوق</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">الإحصائيات المتقدمة</h1>
-          <p className="text-sm text-gray-500">رسوم بيانية وتحليلات متقدمة للسوق</p>
-        </div>
+        <button onClick={() => { setRefreshing(true); loadStats(); }} disabled={refreshing}
+          className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-bold flex items-center gap-1.5 hover:bg-gray-200 transition-all self-start">
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> تحديث البيانات
+        </button>
       </div>
 
       {loading ? (
@@ -80,7 +91,10 @@ export default function AdminAdvancedStatsPage() {
       ) : !stats ? (
         <div className="text-center py-16"><p className="text-gray-500">فشل تحميل البيانات</p></div>
       ) : (
-        <div className="space-y-8">
+        <KpiHeader stats={stats} />
+      )}
+      {!loading && stats && (
+        <div className="space-y-8 mt-8">
           {/* Brand Demand */}
           <div className="card p-6">
             <div className="flex items-center gap-2 mb-6">
@@ -217,6 +231,35 @@ export default function AdminAdvancedStatsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function KpiHeader({ stats }: { stats: AdvancedStats }) {
+  const totalListings = stats.priceDistribution.reduce((a, p) => a + p.count, 0);
+  const lastMonth = stats.userActivity[stats.userActivity.length - 1];
+  const topBrand = stats.brandDemand[0];
+  const topCity = stats.cityDistribution[0];
+
+  const cards = [
+    { label: 'إجمالي الإعلانات', value: totalListings.toLocaleString('ar-JO'), icon: Car, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-500/10' },
+    { label: 'مستخدمون جدد (آخر شهر)', value: (lastMonth?.users || 0).toLocaleString('ar-JO'), icon: Users, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-500/10' },
+    { label: 'إعلانات جديدة (آخر شهر)', value: (lastMonth?.cars || 0).toLocaleString('ar-JO'), icon: TrendingUp, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-500/10' },
+    { label: 'الأكثر طلباً', value: topBrand ? `${topBrand.name} (${topBrand.count})` : '—', icon: Building2, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-500/10' },
+    { label: 'أنشط محافظة', value: topCity ? `${topCity.name} (${topCity.count})` : '—', icon: MapPin, color: 'text-cyan-500', bg: 'bg-cyan-100 dark:bg-cyan-500/10' },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {cards.map((c) => (
+        <div key={c.label} className="card p-4">
+          <div className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center mb-2`}>
+            <c.icon className={`w-4 h-4 ${c.color}`} />
+          </div>
+          <p className="text-lg font-black text-gray-900 dark:text-white truncate">{c.value}</p>
+          <p className="text-[11px] text-gray-500">{c.label}</p>
+        </div>
+      ))}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
-import { Car, Mail, Lock, Eye, EyeOff, ArrowRight, Shield, Zap, Users, ChevronLeft } from 'lucide-react';
+import { Car, Mail, Lock, Eye, EyeOff, ArrowRight, Shield, Zap, Users, ChevronLeft, Phone, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -15,6 +15,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '' });
   const [mounted, setMounted] = useState(false);
+  // Passwordless phone login (OTP over WhatsApp)
+  const [tab, setTab] = useState<'password' | 'otp'>('password');
+  const [otpPhone, setOtpPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpStep, setOtpStep] = useState<'phone' | 'code'>('phone');
+  const [otpLoading, setOtpLoading] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -42,6 +48,56 @@ export default function LoginPage() {
       toast.error('حدث خطأ في الاتصال');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpLoading(true);
+    try {
+      const res = await fetch('/api/auth/login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: otpPhone }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOtpStep('code');
+        toast.success(data.message);
+        if (data.whatsappConfigured === false) {
+          toast.error('تنبيه: خدمة واتساب غير مفعلة — تواصل مع الإدارة لتفعيل الرموز', { duration: 6000 });
+        }
+      } else {
+        toast.error(data.error || 'فشل إرسال الرمز');
+      }
+    } catch {
+      toast.error('حدث خطأ في الاتصال');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: otpPhone, code: otpCode }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        login(data.data.user, data.data.token);
+        toast.success('تم تسجيل الدخول بنجاح');
+        router.push('/');
+      } else {
+        toast.error(data.error || 'فشل التحقق');
+      }
+    } catch {
+      toast.error('حدث خطأ في الاتصال');
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -161,22 +217,34 @@ export default function LoginPage() {
               {/* Gold accent line at top of card */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-[2px] bg-gradient-to-r from-transparent via-[#ffc640]/60 to-transparent rounded-full" />
 
+              {/* Login method tabs */}
+              <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-[#1a1c1c]/80 border border-[#333535]/60 mb-5">
+                <button type="button" onClick={() => setTab('password')}
+                  className={`py-2.5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${tab === 'password' ? 'bg-[#ffc640] text-[#080a0a]' : 'text-[#909096] hover:text-white'}`}>
+                  <Lock className="w-4 h-4" /> كلمة المرور
+                </button>
+                <button type="button" onClick={() => setTab('otp')}
+                  className={`py-2.5 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${tab === 'otp' ? 'bg-[#ffc640] text-[#080a0a]' : 'text-[#909096] hover:text-white'}`}>
+                  <Phone className="w-4 h-4" /> رمز واتساب
+                </button>
+              </div>
+
+              {tab === 'password' ? (
               <form onSubmit={handleSubmit} className="space-y-5">
-                {/* Email */}
+                {/* Email or phone */}
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-[#c6c6cc] uppercase tracking-wider">
-                    البريد الإلكتروني
+                    البريد الإلكتروني أو رقم الهاتف
                   </label>
                   <div className="relative group">
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#909096] group-focus-within:text-[#ffc640] transition-colors duration-300">
                       <Mail className="w-5 h-5" />
                     </div>
                     <input
-                      type="email"
-                      placeholder="example@email.com"
+                      placeholder="example@email.com أو 0791234567"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      autoComplete="email"
+                      autoComplete="username"
                       inputMode="email"
                       required
                       className="w-full h-13 pr-12 pl-4 bg-[#1a1c1c]/80 border border-[#333535]/60 rounded-xl text-white placeholder-[#909096] text-sm transition-all duration-300 focus:border-[#ffc640]/50 focus:ring-2 focus:ring-[#ffc640]/10 focus:bg-[#1a1c1c] outline-none"
@@ -250,6 +318,78 @@ export default function LoginPage() {
                   )}
                 </motion.button>
               </form>
+              ) : otpStep === 'phone' ? (
+              <form onSubmit={handleSendOtp} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-[#c6c6cc] uppercase tracking-wider">
+                    رقم الهاتف الأردني
+                  </label>
+                  <div className="relative group">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[#909096] group-focus-within:text-[#ffc640] transition-colors duration-300">
+                      <Phone className="w-5 h-5" />
+                    </div>
+                    <input
+                      placeholder="0791234567"
+                      value={otpPhone}
+                      onChange={(e) => setOtpPhone(e.target.value)}
+                      autoComplete="tel"
+                      inputMode="tel"
+                      dir="ltr"
+                      required
+                      className="w-full h-13 pr-12 pl-4 bg-[#1a1c1c]/80 border border-[#333535]/60 rounded-xl text-white placeholder-[#909096] text-sm transition-all duration-300 focus:border-[#ffc640]/50 focus:ring-2 focus:ring-[#ffc640]/10 focus:bg-[#1a1c1c] outline-none text-left"
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#909096]">نرسل رمز دخول لمرة واحدة على واتساب — بدون كلمة مرور</p>
+                </div>
+                <motion.button
+                  type="submit"
+                  disabled={otpLoading}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className="w-full h-13 bg-gradient-to-r from-[#ffc640] to-[#e3aa00] text-[#080a0a] font-bold rounded-xl shadow-lg shadow-[#ffc640]/20 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 text-sm"
+                >
+                  {otpLoading ? (
+                    <div className="w-5 h-5 border-2 border-[#080a0a]/20 border-t-[#080a0a] rounded-full animate-spin" />
+                  ) : (
+                    <>إرسال رمز الدخول<MessageCircle className="w-5 h-5" /></>
+                  )}
+                </motion.button>
+              </form>
+              ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-[#c6c6cc] uppercase tracking-wider">
+                    رمز الدخول المرسل إلى {otpPhone}
+                  </label>
+                  <input
+                    placeholder="••••••"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                    inputMode="numeric"
+                    dir="ltr"
+                    required
+                    className="w-full h-13 px-4 bg-[#1a1c1c]/80 border border-[#333535]/60 rounded-xl text-white placeholder-[#909096] text-center text-2xl font-black tracking-[0.5em] transition-all duration-300 focus:border-[#ffc640]/50 focus:ring-2 focus:ring-[#ffc640]/10 outline-none"
+                  />
+                  <button type="button" onClick={() => { setOtpStep('phone'); setOtpCode(''); }}
+                    className="text-xs text-[#ffc640]/80 hover:text-[#ffc640] transition-colors">
+                    تغيير الرقم
+                  </button>
+                </div>
+                <motion.button
+                  type="submit"
+                  disabled={otpLoading}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  className="w-full h-13 bg-gradient-to-r from-[#ffc640] to-[#e3aa00] text-[#080a0a] font-bold rounded-xl shadow-lg shadow-[#ffc640]/20 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-3 text-sm"
+                >
+                  {otpLoading ? (
+                    <div className="w-5 h-5 border-2 border-[#080a0a]/20 border-t-[#080a0a] rounded-full animate-spin" />
+                  ) : (
+                    <>تأكيد الدخول<ArrowRight className="w-5 h-5 rotate-180" /></>
+                  )}
+                </motion.button>
+              </form>
+              )}
 
               {/* Divider */}
               <div className="relative my-7">

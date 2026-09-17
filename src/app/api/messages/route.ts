@@ -70,9 +70,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Notification
-    const msgPreview = validation.data.content.startsWith('📷')
-      ? '📷 صورة'
+    // Notification — detect image messages (IMG: prefix) or emoji prefix
+    const msgPreview = validation.data.content.startsWith('IMG:') || validation.data.content.startsWith('📷')
+      ? '📷 صورة مرفقة'
       : validation.data.content.slice(0, 100);
 
     await prisma.notification.create({

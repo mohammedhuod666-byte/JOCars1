@@ -32,8 +32,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const body = await request.json();
   const allowedFields = [
-    'title', 'description', 'price', 'brandId', 'modelId', 'year', 'condition',
-    'partNumber', 'phone', 'whatsapp', 'cityId', 'slug', 'status',
+    'title', 'description', 'price', 'brandId', 'partType', 'condition',
+    'partNumber', 'oemNumber', 'originCountry', 'compatibleModels',
+    'phone', 'whatsapp', 'cityId', 'slug', 'status', 'isNegotiable',
+    'hasWarranty', 'warrantyPeriod', 'hasDelivery', 'deliveryFee',
   ];
   const safeData: Record<string, any> = {};
   for (const key of allowedFields) {

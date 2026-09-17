@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { chatCompletionJSON, type ChatMessage } from '@/ai/nvidia-client';
 import { successResponse, errorResponse } from '@/lib/api';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateRequest } from '@/lib/auth';
 
 interface CustomsResult {
   customsDuty: number;
@@ -22,8 +23,9 @@ interface CustomsResult {
 }
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  const rateLimit = checkRateLimit(`ai-customs:${ip}`, RATE_LIMITS.AI);
+  const user = await authenticateRequest(request);
+  if (!user) return errorResponse('تسجيل الدخول مطلوب لاستخدام التحليل الذكي', 401);
+  const rateLimit = checkRateLimit(`ai-customs:${user.id}`, RATE_LIMITS.AI);
   if (!rateLimit.allowed) return errorResponse('تم تجاوز الحد المسموح', 429);
 
   const body = await request.json();
@@ -65,28 +67,17 @@ function calculateLocal(
   let specialTax = 0;
 
   if (isEV) {
-    // EV Jordan Tariffs
-    specialTaxRate = 0.10; // 10% special tax for EV
+    // EV Jordan Tariffs — flat 27% special tax (amended June 2025)
+    specialTaxRate = 0.27;
     annualLicensing = 80;
   } else if (isHybrid) {
-    // Hybrid Jordan Tariffs
-    specialTaxRate = cc <= 2500 ? 0.55 : 0.70;
+    // Hybrid Jordan Tariffs — flat 39% special tax (amended June 2025)
+    specialTaxRate = 0.39;
     annualLicensing = cc <= 2000 ? 130 : 250;
   } else {
-    // Petrol / Diesel Jordan Tariffs
-    if (cc <= 1600) {
-      specialTaxRate = 0.65;
-      annualLicensing = 120;
-    } else if (cc <= 2000) {
-      specialTaxRate = 0.79;
-      annualLicensing = 180;
-    } else if (cc <= 3000) {
-      specialTaxRate = 0.91;
-      annualLicensing = 350;
-    } else {
-      specialTaxRate = 1.05;
-      annualLicensing = 550;
-    }
+    // Petrol / Diesel Jordan Tariffs — flat 51% special tax (amended June 2025)
+    specialTaxRate = 0.51;
+    annualLicensing = 120;
   }
 
   const customsDuty = Math.round(depreciatedValue * customsRate);

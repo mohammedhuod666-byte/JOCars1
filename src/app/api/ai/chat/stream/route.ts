@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateRequest } from '@/lib/auth';
 import { chatCompletionStream, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
 import { fetchOpenSooqListings } from '@/lib/opensooq-scrape';
 import { getCachedResponse, setCachedResponse } from '@/ai/chat-cache';
@@ -318,6 +319,8 @@ async function findSimilarCars(car: any) {
   });
 }
 
+// External market scrape is the slowest pre-LLM step: cap it at 4s so it
+// can never hold the reply hostage. Returns [] on timeout/error.
 async function fetchMarketListings(query: string) {
   try {
     const brand = extractBrand(query);
@@ -325,7 +328,10 @@ async function fetchMarketListings(query: string) {
     const model = modelMatch ? modelMatch[0] : '';
     const yearMatch = query.match(/(20\d{2})/);
     const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
-    const result = await fetchOpenSooqListings(brand || query.split(' ')[0] || '', model, year);
+    const result = await Promise.race([
+      fetchOpenSooqListings(brand || query.split(' ')[0] || '', model, year),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+    ]);
     return result?.listings || [];
   } catch { return []; }
 }
@@ -561,8 +567,9 @@ ${conversationContext}
 // ── SSE POST Handler ──
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`ai-chat-stream:${ip}`, RATE_LIMITS.AI_CHAT);
+    const user = await authenticateRequest(request);
+    if (!user) return Response.json({ success: false, error: 'تسجيل الدخول مطلوب لاستخدام المساعد الذكي' }, { status: 401 });
+    const rateLimit = checkRateLimit(`ai-chat-stream:${user.id}`, RATE_LIMITS.AI_CHAT);
     if (!rateLimit.allowed) {
       return Response.json({
         success: true,
@@ -584,11 +591,11 @@ export async function POST(request: NextRequest) {
     const normalizedQuery = normalizeDialect(query);
     const intent = detectIntent(normalizedQuery);
     const refCode = extractRefCode(query);
-    const sid = sessionId || `anon-${ip}`;
+    const sid = sessionId || `user-${user.id}`;
     const conversation = conversationStore.get(sid) || [];
     conversation.push({ role: 'user', content: query });
     if (conversation.length > MAX_CONVERSATION_LENGTH) conversation.shift();
-    const conversationContext = conversation.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
+    const conversationContext = conversation.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n');
 
     // Parse natural language query for search filters
     const nlParsed = parseNaturalLanguageQuery(query);
@@ -958,15 +965,20 @@ export async function POST(request: NextRequest) {
       return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
     }
 
+    // Greetings need no DB context — skip all fetches for an instant reply.
+    const isGreeting = /^(السلام عليكم|سلام عليكم|سلام|مرحبا|مرحباً|أهلا|اهلا|هلا|صباح الخير|مساء الخير|كيفك|شلونك)/i.test(normalizedQuery.trim());
+
     // ── Fetch data in parallel ──
-    const [cars, workshops, parts, marketListings] = await Promise.all([
+    const [cars, workshops, parts, marketListings] = isGreeting
+      ? [[], [], [], []]
+      : await Promise.all([
       intent === 'car_search' || intent === 'price_analysis' || intent === 'general' || intent === 'engine_sound'
         ? fetchCars(normalizedQuery) : Promise.resolve([]),
       intent === 'workshop' || intent === 'general'
         ? fetchWorkshops(normalizedQuery) : Promise.resolve([]),
       intent === 'parts' || intent === 'general'
         ? fetchParts(normalizedQuery) : Promise.resolve([]),
-      intent === 'price_analysis' || intent === 'car_search'
+      intent === 'price_analysis'
         ? fetchMarketListings(normalizedQuery) : Promise.resolve([]),
     ]);
 
@@ -974,9 +986,9 @@ export async function POST(request: NextRequest) {
     const city = parseCity(normalizedQuery);
     const brand = extractBrand(normalizedQuery);
 
-    // Build context strings
+    // Build context strings (trimmed for faster prefill)
     const carContext = cars.length > 0
-      ? cars.slice(0, 10).map((car: any, i: number) =>
+      ? cars.slice(0, 6).map((car: any, i: number) =>
         `${i + 1}. ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year} — ${car.price.toLocaleString()} د.أ | ${car.city?.nameAr || ''} | ${car.condition || ''} | ${car.kilometers.toLocaleString()} كم | refCode: ${car.refCode || 'N/A'}`
       ).join('\n') : 'لا توجد سيارات متاحة حالياً.';
 
@@ -1000,7 +1012,7 @@ export async function POST(request: NextRequest) {
     const marketMin = marketPrices.length > 0 ? Math.min(...marketPrices) : 0;
     const marketMax = marketPrices.length > 0 ? Math.max(...marketPrices) : 0;
 
-    const brandSummary = Object.entries(BRAND_PRICE_RANGES).slice(0, 15).map(
+    const brandSummary = Object.entries(BRAND_PRICE_RANGES).slice(0, 8).map(
       ([, data]) => `${data.nameAr}: ${data.min.toLocaleString()}-${data.max.toLocaleString()} د.أ`
     ).join('، ');
 
@@ -1017,7 +1029,7 @@ export async function POST(request: NextRequest) {
 
     const chatMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...conversation.slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...conversation.slice(-4).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
     // ── Check cache first ──
@@ -1075,8 +1087,7 @@ export async function POST(request: NextRequest) {
 
           for await (const chunk of chatCompletionStream(chatMessages, {
             temperature: 0.7,
-            maxTokens: 2048,
-            timeoutMs: 45000,
+            maxTokens: isGreeting ? 300 : 900,
             modelId,
           })) {
             lastChunkTime = Date.now();

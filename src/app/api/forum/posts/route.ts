@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   const rateLimit = checkRateLimit(`forum-post:${user.id}`, RATE_LIMITS.FORUM);
   if (!rateLimit.allowed) return Response.json({ error: 'تم تجاوز الحد المسموح' }, { status: 429 });
 
-  const { content, topicId } = await request.json();
+  const { content, topicId, images, replyToId, replyToUser, replyToContent } = await request.json();
   if (!content || !topicId) {
     return Response.json({ error: 'المحتوى والموضوع مطلوب' }, { status: 400 });
   }
@@ -25,7 +25,15 @@ export async function POST(request: NextRequest) {
   if (topic.isLocked) return Response.json({ error: 'الموضوع مغلق' }, { status: 400 });
 
   const post = await prisma.forumPost.create({
-    data: { content: sanitizeHtml(content), topicId, userId: user.id },
+    data: {
+      content: sanitizeHtml(content),
+      topicId,
+      userId: user.id,
+      images: Array.isArray(images) ? JSON.stringify(images) : (typeof images === 'string' ? images : '[]'),
+      replyToId: replyToId || null,
+      replyToUser: replyToUser || null,
+      replyToContent: replyToContent ? sanitizeHtml(replyToContent) : null,
+    },
     include: {
       user: { select: { id: true, name: true, image: true, dealerName: true, rating: true, ratingCount: true, role: true, badges: true } },
     },

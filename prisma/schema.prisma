@@ -64,6 +64,7 @@ model User {
   usedParts                   UsedPart[]
   forumTopics                 ForumTopic[]
   forumPosts                  ForumPost[]
+  forumPostLikes              ForumPostLike[]       @relation("ForumPostLikes")
   forumPostReports            ForumPostReport[]     @relation("ReportedBy")
   reportedInPosts             ForumPostReport[]     @relation("ReportedUser")
   forumBannedCommentUntil     DateTime?
@@ -112,6 +113,11 @@ model User {
   carReviewsReceived          CarReview[]           @relation("CarReviewTarget")
   traderVerifications         TraderVerification[]  @relation("TraderVerificationApplicant")
   traderVerificationsReviewed TraderVerification[]  @relation("TraderVerificationReviewer")
+  // Follow system (Instagram-style)
+  following                   Follow[]              @relation("FollowFollower")
+  followers                   Follow[]              @relation("FollowFollowing")
+  stories                     Story[]
+  pushSubscriptions           PushSubscription[]
 
   @@index([phone])
   @@index([role])
@@ -332,6 +338,14 @@ model Car {
   aiConditionReport String?
   conditionDetails  String?
   refCode           String?   @unique
+  soldPrice         Float? // actual transacted price (for sold archive accuracy)
+  // Certified inspection badge (فحص معتمد): dealer declares center/date,
+  // admin grants inspectionVerified after reviewing the report
+  inspectionVerified Boolean   @default(false)
+  inspectionCenter   String?
+  inspectionDate     DateTime?
+  // Wholesale (بيع جملة: تاجر → تاجر بسعر الجملة)
+  isWholesale       Boolean   @default(false)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   expiresAt         DateTime?
@@ -359,6 +373,7 @@ model Car {
   tagAssignments  CarTagAssignment[]
   premiumRequests PremiumRequest[]
   comments        CarComment[]
+  stories         Story[]
   reminders       CarReminder[]
   viewers         CarViewer[]
   soundRecordings CarSoundRecording[]
@@ -497,8 +512,11 @@ model Favorite {
 
 model Conversation {
   id        String      @id @default(cuid())
-  carId     String
-  car       Car         @relation(fields: [carId], references: [id], onDelete: Cascade)
+  // Nullable for direct user-to-user chats started from profiles (no car context).
+  // NOTE: the @@unique below does not dedupe NULL carIds in Postgres —
+  // general conversations are looked up with findFirst instead of findUnique.
+  carId     String?
+  car       Car?        @relation(fields: [carId], references: [id], onDelete: Cascade)
   buyerId   String
   buyer     User        @relation("BuyerConversations", fields: [buyerId], references: [id], onDelete: Cascade)
   sellerId  String
@@ -760,31 +778,38 @@ model TicketMessage {
 }
 
 model UsedPart {
-  id           String    @id @default(cuid())
-  slug         String    @unique
-  title        String
-  description  String?
-  partType     String
-  brandId      String?
-  partNumber   String?
-  condition    String    @default("USED")
-  price        Float
-  currency     String    @default("JOD")
-  quantity     Int       @default(1)
-  images       String    @default("[]")
-  coverImage   String?
-  phone        String
-  whatsapp     String?
-  cityId       String?
-  status       String    @default("PENDING")
-  isNegotiable Boolean   @default(false)
-  views        Int       @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  expiresAt    DateTime?
-  soldAt       DateTime?
-  deletedAt    DateTime?
-  deletedBy    String?
+  id               String    @id @default(cuid())
+  slug             String    @unique
+  title            String
+  description      String?
+  partType         String
+  brandId          String?
+  partNumber       String?
+  oemNumber        String?
+  originCountry    String?
+  compatibleModels String    @default("[]")
+  condition        String    @default("USED")
+  price            Float
+  currency         String    @default("JOD")
+  quantity         Int       @default(1)
+  images           String    @default("[]")
+  coverImage       String?
+  phone            String
+  whatsapp         String?
+  cityId           String?
+  status           String    @default("PENDING")
+  isNegotiable     Boolean   @default(false)
+  hasWarranty      Boolean   @default(false)
+  warrantyPeriod   String?
+  hasDelivery      Boolean   @default(false)
+  deliveryFee      Float?
+  views            Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  expiresAt        DateTime?
+  soldAt           DateTime?
+  deletedAt        DateTime?
+  deletedBy        String?
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -871,6 +896,9 @@ model ForumTopic {
   views      Int      @default(0)
   isPinned   Boolean  @default(false)
   isLocked   Boolean  @default(false)
+  isSolved   Boolean  @default(false)
+  images     String   @default("[]")
+  likeCount  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   lastPostAt DateTime @default(now())
@@ -891,10 +919,17 @@ model ForumTopic {
 }
 
 model ForumPost {
-  id        String   @id @default(cuid())
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  content        String
+  images         String   @default("[]")
+  replyToId      String?
+  replyToUser    String?
+  replyToContent String?
+  likeCount      Int      @default(0)
+  isAnswer       Boolean  @default(false)
+  isHidden       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   topicId String
   topic   ForumTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
@@ -904,10 +939,26 @@ model ForumPost {
 
   reports ForumPostReport[]
 
+  likes   ForumPostLike[]
+
   @@index([topicId])
   @@index([userId])
   @@index([createdAt])
   @@map("forum_posts")
+}
+
+model ForumPostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation("ForumPostLikes", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("forum_post_likes")
 }
 
 model ForumPostReport {
@@ -1355,6 +1406,18 @@ model Workshop {
   carFixedCount      Int       @default(0)
   recommendPercent   Float     @default(0)
   priceRange         String? // "cheap", "moderate", "expensive"
+  isMobileService    Boolean   @default(false)
+  hasTowingService   Boolean   @default(false)
+  hasWarranty        Boolean   @default(false)
+  warrantyPeriod     String?
+  hasWaitingArea     Boolean   @default(false)
+  offersSpareParts   Boolean   @default(false)
+  paymentMethods     String    @default("CASH")
+  specialties        String    @default("[]")
+  emergencyPhone     String?
+  socialLinks        String?
+  gallery            String    @default("[]")
+  discountOffer      String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -1725,4 +1788,70 @@ model CarReview {
   @@index([rating])
   @@index([createdAt])
   @@map("car_reviews")
+}
+
+model Backup {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  type         String   @default("MANUAL") // MANUAL | AUTO
+  status       String   @default("COMPLETED") // COMPLETED | FAILED
+  size         Int      @default(0)
+  tables       Int      @default(0)
+  rows         Int      @default(0)
+  emailSent    Boolean  @default(false)
+  emailError   String?
+  whatsappSent Boolean  @default(false)
+  error        String?
+  createdBy    String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+  @@map("backups")
+}
+
+model Story {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  caption   String?
+  carId     String?
+  car       Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
+  views     Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("stories")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

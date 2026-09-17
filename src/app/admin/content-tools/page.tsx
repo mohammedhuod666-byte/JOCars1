@@ -154,14 +154,22 @@ export default function AdminContentToolsPage() {
                   <span className="flex items-center gap-1 text-green-600"><CheckCircle className="w-4 h-4" /> لا توجد صور مكررة</span>
                 )}
               </div>
-              <p className="text-xs text-gray-500">إجمالي الصور: {(result as any).totalImages}</p>
+              <p className="text-xs text-gray-500">إجمالي الصور: {(result as any).totalImages} — المطابقة ببصمة محتوى الصورة (تتشابه حتى مع اختلاف الاسم أو الضغط)</p>
               {(result as any).results?.length > 0 && (
                 <div className="mt-2 space-y-2">
                   {(result as any).results.map((r: Record<string, unknown>, i: number) => (
                     <div key={i} className="p-2 rounded-lg bg-orange-50 dark:bg-orange-500/5">
                       <p className="text-xs text-gray-500 truncate font-mono">{r.image as string}</p>
                       {(r.duplicates as Record<string, unknown>[]).map((d: Record<string, unknown>, j: number) => (
-                        <p key={j} className="text-xs text-orange-600 mt-1">→ {d.carTitle as string}</p>
+                        <a key={j} href={`/cars/${(d.carSlug as string) || (d.carId as string)}`} target="_blank"
+                          className="flex items-center gap-2 mt-1.5 p-1.5 rounded-lg bg-white dark:bg-gray-800 hover:shadow transition-shadow">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={d.url as string} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-xs font-bold text-gray-800 dark:text-gray-200 truncate">→ {d.carTitle as string}</span>
+                            <span className="text-[11px] text-orange-600 font-bold">تشابه {d.similarity as number}%</span>
+                          </span>
+                        </a>
                       ))}
                     </div>
                   ))}

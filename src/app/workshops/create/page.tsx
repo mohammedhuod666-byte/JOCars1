@@ -63,13 +63,23 @@ export default function CreateWorkshopPage() {
     description: '',
     phone: '',
     whatsapp: '',
+    emergencyPhone: '',
     email: '',
     website: '',
     address: '',
     workingHours: '08:00-17:00',
-    workingDays: 'Sun-Thu',
+    workingDays: 'الأحد - الخميس',
     yearsOfExperience: 0,
     employeeCount: 1,
+    priceRange: 'moderate',
+    isMobileService: false,
+    hasTowingService: false,
+    hasWarranty: false,
+    warrantyPeriod: '6 أشهر',
+    hasWaitingArea: false,
+    offersSpareParts: false,
+    paymentMethods: 'CASH,CLIQ',
+    discountOffer: '',
     services: [] as string[],
     brands: [] as string[],
     prices: [] as { serviceName: string; minPrice: number; maxPrice: number }[],
@@ -463,14 +473,26 @@ export default function CreateWorkshopPage() {
                     type="tel"
                     value={form.whatsapp}
                     onChange={(e) => setForm((p) => ({ ...p, whatsapp: e.target.value }))}
-                    placeholder="9627XXXXXXXX"
+                    placeholder="07XXXXXXXX"
                     className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors"
                   />
                 </div>
               </div>
 
-              {/* Email & Website */}
+              {/* Emergency Phone & Email */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-amber-400 mb-1.5 flex items-center gap-1.5">
+                    🚨 رقم طوارئ / خدمة 24/7 (اختياري)
+                  </label>
+                  <input
+                    type="tel"
+                    value={form.emergencyPhone}
+                    onChange={(e) => setForm((p) => ({ ...p, emergencyPhone: e.target.value }))}
+                    placeholder="07XXXXXXXX"
+                    className="w-full rounded-xl border border-amber-500/30 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-amber-400 transition-colors"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1.5">البريد الإلكتروني</label>
                   <input
@@ -481,26 +503,16 @@ export default function CreateWorkshopPage() {
                     className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1.5">الموقع الإلكتروني</label>
-                  <input
-                    type="url"
-                    value={form.website}
-                    onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
-                    placeholder="https://..."
-                    className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors"
-                  />
-                </div>
               </div>
 
               {/* Address */}
               <div>
-                <label className="block text-sm text-gray-400 mb-1.5">العنوان</label>
+                <label className="block text-sm text-gray-400 mb-1.5">العنوان بالتفصيل</label>
                 <input
                   type="text"
                   value={form.address}
                   onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                  placeholder="المحافظة، المدينة، الشارع"
+                  placeholder="المحافظة، المنطقة، الشارع، بالقرب من..."
                   className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors"
                 />
               </div>
@@ -523,7 +535,7 @@ export default function CreateWorkshopPage() {
                     type="text"
                     value={form.workingDays}
                     onChange={(e) => setForm((p) => ({ ...p, workingDays: e.target.value }))}
-                    placeholder="Sun-Thu"
+                    placeholder="الأحد - الخميس"
                     className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors"
                   />
                 </div>
@@ -539,15 +551,44 @@ export default function CreateWorkshopPage() {
                 </div>
               </div>
 
-              {/* Employee count */}
+              {/* Extra Facilities & Toggles */}
+              <div className="pt-4 border-t border-gray-700/60">
+                <label className="block text-sm font-semibold text-white mb-3">مميزات وتسهيلات الورشة الخاصة 🌟</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.isMobileService ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
+                    <input type="checkbox" checked={form.isMobileService} onChange={(e) => setForm(p => ({ ...p, isMobileService: e.target.checked }))} className="hidden" />
+                    <span>🚚 خدمة صيانة متنقلة</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasTowingService ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
+                    <input type="checkbox" checked={form.hasTowingService} onChange={(e) => setForm(p => ({ ...p, hasTowingService: e.target.checked }))} className="hidden" />
+                    <span>🚨 خدمة سحب/ونش 24 ساعة</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasWarranty ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
+                    <input type="checkbox" checked={form.hasWarranty} onChange={(e) => setForm(p => ({ ...p, hasWarranty: e.target.checked }))} className="hidden" />
+                    <span>🛡️ كفالة وضمان على الإصلاح</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasWaitingArea ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
+                    <input type="checkbox" checked={form.hasWaitingArea} onChange={(e) => setForm(p => ({ ...p, hasWaitingArea: e.target.checked }))} className="hidden" />
+                    <span>☕ استراحة زبائن مكيفة</span>
+                  </label>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.offersSpareParts ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
+                    <input type="checkbox" checked={form.offersSpareParts} onChange={(e) => setForm(p => ({ ...p, offersSpareParts: e.target.checked }))} className="hidden" />
+                    <span>⚙️ توفير قطع غيار</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Discount Offer */}
               <div>
-                <label className="block text-sm text-gray-400 mb-1.5">عدد الموظفين</label>
+                <label className="block text-sm font-medium text-emerald-400 mb-1.5 flex items-center gap-1.5">
+                  🏷️ عرض خاص أو خصم لمستخدمي Cars JO (اختياري)
+                </label>
                 <input
-                  type="number"
-                  value={form.employeeCount}
-                  onChange={(e) => setForm((p) => ({ ...p, employeeCount: parseInt(e.target.value) || 1 }))}
-                  min={1}
-                  className="w-full rounded-xl border border-gray-700 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-[#0084ff] transition-colors md:w-1/3"
+                  type="text"
+                  value={form.discountOffer}
+                  onChange={(e) => setForm((p) => ({ ...p, discountOffer: e.target.value }))}
+                  placeholder="مثال: خصم 15% على فحص الكمبيوتر أو غسيل مجاني بعد الإصلاح"
+                  className="w-full rounded-xl border border-emerald-500/30 bg-[#0f3460] text-white px-4 py-3 text-sm outline-none focus:border-emerald-400 transition-colors"
                 />
               </div>
             </div>

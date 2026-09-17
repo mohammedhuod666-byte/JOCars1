@@ -1,0 +1,30 @@
+{
+  "extensions": {
+    "devdesk.simple": {
+      "defaultViews": [
+        "overview",
+        "today",
+        "list",
+        "board"
+      ],
+      "profile": "personal"
+    }
+  },
+  "format": "devdesk.workspace",
+  "knowledge": {
+    "okf": "detect",
+    "roots": [
+      "."
+    ]
+  },
+  "name": "JOCars",
+  "projectId": "68c4cf9a-e788-4d90-8b78-9b175b4ab1b1",
+  "root": ".",
+  "schemaVersion": 1,
+  "starterProfile": "personal",
+  "tools": {
+    "markdown": {
+      "enabled": true
+    }
+  }
+}

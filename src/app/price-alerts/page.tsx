@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Bell, Plus, X, Trash2, BellOff, Loader2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { PushBell } from '@/components/ui/PushBell';
 
 interface PriceAlert {
   id: string;
@@ -155,13 +156,16 @@ export default function PriceAlertsPage() {
               <p className="text-gray-500 text-sm">اشعارات عند توفر سيارة ضمن مواصفاتك</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:opacity-90 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            تنبيه جديد
-          </button>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <PushBell />
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:opacity-90 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              تنبيه جديد
+            </button>
+          </div>
         </div>
 
         {loading ? (

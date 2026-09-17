@@ -106,24 +106,44 @@ export async function POST(
         data: { appointmentCount: { increment: 1 } },
       });
 
-      // Send notification message to workshop owner
+      // Send notification message to workshop owner safely
       const bookingDate = new Date(date).toLocaleDateString('ar-JO', { year: 'numeric', month: 'long', day: 'numeric' });
-      const notificationContent = `موعد جديد: ${user.name} حجز موعداً في ${bookingDate} الساعة ${time} للخدمة: ${serviceType}${carMake ? ` - سيارة ${carMake} ${carModel || ''}${carYear ? ` ${carYear}` : ''}${plateNumber ? ` (${plateNumber})` : ''}` : ''}${isUrgent ? ` ⚡ طارئ` : ''}${budget ? `\nالميزانية: ${budget} د.أ` : ''}${description ? `\nالوصف: ${description}` : ''}`;
+      const notificationContent = `📅 موعد جديد: ${user.name} حجز موعداً في ${bookingDate} الساعة ${time}\nالخدمة: ${serviceType}${carMake ? `\nالسيارة: ${carMake} ${carModel || ''}${carYear ? ` (${carYear})` : ''}${plateNumber ? ` [${plateNumber}]` : ''}` : ''}${isUrgent ? `\n⚡ حجز طارئ` : ''}${budget ? `\nالميزانية المقدرة: ${budget} د.أ` : ''}${description ? `\nملاحظات: ${description}` : ''}`;
 
-      await tx.message.create({
-        data: {
-          content: notificationContent,
-          senderId: user.id,
-          receiverId: workshop.userId,
-          conversationId: `appointment-${newAppointment.id}`,
-        },
-      });
+      try {
+        let conv = await tx.conversation.findFirst({
+          where: {
+            OR: [
+              { buyerId: user.id, sellerId: workshop.userId },
+              { buyerId: workshop.userId, sellerId: user.id }
+            ]
+          },
+        });
 
-      // Update message count for workshop
-      await tx.workshop.update({
-        where: { id },
-        data: { messageCount: { increment: 1 } },
-      });
+        if (!conv) {
+          const sellerCar = await tx.car.findFirst({ where: { userId: workshop.userId }, select: { id: true } });
+          if (sellerCar) {
+            conv = await tx.conversation.create({
+              data: {
+                carId: sellerCar.id,
+                buyerId: user.id,
+                sellerId: workshop.userId,
+              },
+            });
+          }
+        }
+
+        await tx.message.create({
+          data: {
+            content: notificationContent,
+            senderId: user.id,
+            receiverId: workshop.userId,
+            conversationId: conv ? conv.id : null,
+          },
+        });
+      } catch (msgErr) {
+        console.warn('Notification message creation warning:', msgErr);
+      }
 
       return newAppointment;
     });

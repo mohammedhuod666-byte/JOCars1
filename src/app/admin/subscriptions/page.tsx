@@ -5,9 +5,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import {
   CreditCard, Loader2, Search, ChevronLeft, ChevronRight, Power, Trash2,
-  Clock, CheckCircle, Ban, AlertTriangle, X, Filter
+  Clock, CheckCircle, Ban, AlertTriangle, X, Filter, CalendarPlus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 
 interface SubscriptionEntry {
   id: string;
@@ -105,8 +106,24 @@ export default function AdminSubscriptionsPage() {
     } catch { toast.error('حدث خطأ'); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الاشتراك نهائياً؟')) return;
+  const handleExtend = async (sub: SubscriptionEntry) => {
+    const daysStr = prompt('تمديد الاشتراك بعدد أيام (مثال: 30):', '30');
+    if (!daysStr) return;
+    const days = parseInt(daysStr, 10);
+    if (isNaN(days) || days < 1 || days > 365) { toast.error('عدد أيام غير صالح (1-365)'); return; }
+    try {
+      const token = useAuth.getState().token;
+      const res = await fetch(`/api/admin/subscriptions/${sub.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ extendDays: days }),
+      });
+      if (res.ok) { toast.success(`تم تمديد الاشتراك ${days} يوم ✅`); loadSubscriptions(); }
+      else { toast.error('فشل التمديد'); }
+    } catch { toast.error('حدث خطأ'); }
+  };
+
+  const handleDelete = async (id: string) => {    if (!confirm('هل أنت متأكد من حذف هذا الاشتراك نهائياً؟')) return;
     try {
       const token = useAuth.getState().token;
       const res = await fetch(`/api/admin/subscriptions/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
@@ -231,20 +248,22 @@ export default function AdminSubscriptionsPage() {
                   <div key={sub.id} className={`card p-4 hover:shadow-md transition-shadow ${sub.status === 'CANCELLED' ? 'opacity-60' : ''}`}>
                     <div className="flex items-center gap-4">
                       {/* User Avatar */}
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                      <Link href={`/profile/${sub.user?.id}`} title="فحص الحساب"
+                        className="w-11 h-11 rounded-full bg-gradient-to-br from-rose-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden hover:ring-2 hover:ring-rose-400 transition-all">
                         {sub.user?.image ? (
                           <img src={sub.user.image} alt="" className="w-full h-full rounded-full object-cover" />
                         ) : (
                           sub.user?.name?.charAt(0) || '?'
                         )}
-                      </div>
+                      </Link>
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-gray-900 dark:text-white text-sm">
+                          <Link href={`/profile/${sub.user?.id}`} title="فحص الحساب"
+                            className="font-semibold text-gray-900 dark:text-white text-sm hover:text-rose-500 hover:underline">
                             {sub.user?.name || 'مستخدم محذوف'}
-                          </span>
+                          </Link>
                           <span className="text-xs text-gray-400">{sub.user?.email}</span>
                         </div>
                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -286,6 +305,13 @@ export default function AdminSubscriptionsPage() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => handleExtend(sub)}
+                          className="p-2 rounded-xl text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                          title="تمديد الاشتراك"
+                        >
+                          <CalendarPlus className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleToggleStatus(sub)}
                           className={`p-2 rounded-xl transition-colors ${

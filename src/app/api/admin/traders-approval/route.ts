@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { createAuditLog } from '@/lib/audit';
 
 /**
  * Admin trader-approval queue. Mirrors the premium-requests route structure
@@ -110,6 +111,13 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+
+    await createAuditLog({
+      action: action === 'APPROVE' ? 'TRADER_APPROVE' : 'TRADER_REJECT', actorId: user.id,
+      entityType: 'TRADER_VERIFICATION', entityId: requestId,
+      description: `${action === 'APPROVE' ? 'اعتماد تاجر' : 'رفض توثيق تاجر'}: ${verification.dealerName}${action === 'REJECT' && rejectReason ? ` (السبب: ${rejectReason})` : ''}`,
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+    });
 
     return successResponse({ success: true });
   } catch (error) {

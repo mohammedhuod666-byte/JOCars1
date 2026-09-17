@@ -128,6 +128,74 @@ export async function POST(request: NextRequest) {
     }
 
     if (!carId || !sellerId) {
+      // ── Direct user-to-user chat started from a profile (no car context) ──
+      if (!carId && sellerId) {
+        if (user.id === sellerId) {
+          return errorResponse('لا يمكنك مراسلة نفسك');
+        }
+        const peer = await prisma.user.findUnique({
+          where: { id: sellerId },
+          select: { id: true, name: true, image: true },
+        });
+        if (!peer) return errorResponse('المستخدم غير موجود', 404);
+
+        const dmInclude = {
+          buyer: { select: { id: true, name: true, image: true } },
+          seller: { select: { id: true, name: true, image: true } },
+        };
+
+        let conversation = await prisma.conversation.findFirst({
+          where: {
+            carId: null,
+            OR: [
+              { buyerId: user.id, sellerId },
+              { buyerId: sellerId, sellerId: user.id },
+            ],
+          },
+          include: dmInclude,
+        });
+
+        if (!conversation) {
+          conversation = await prisma.conversation.create({
+            data: { carId: null, buyerId: user.id, sellerId },
+            include: dmInclude,
+          });
+        }
+
+        if (content && content.trim()) {
+          const message = await prisma.message.create({
+            data: {
+              content: content.trim(),
+              senderId: user.id,
+              receiverId: sellerId,
+              carId: null,
+              conversationId: conversation.id,
+            },
+            include: {
+              sender: { select: { id: true, name: true, image: true } },
+            },
+          });
+
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { updatedAt: new Date() },
+          });
+
+          await prisma.notification.create({
+            data: {
+              type: 'NEW_MESSAGE',
+              title: 'رسالة جديدة',
+              message: `رسالة جديدة من ${user.name}`,
+              userId: sellerId,
+              link: `/messages?conversationId=${conversation.id}`,
+            },
+          });
+
+          return successResponse({ conversation, message }, 201);
+        }
+
+        return successResponse({ conversation, message: null });
+      }
       return errorResponse('معرّف السيارة والبائع مطلوبان');
     }
 

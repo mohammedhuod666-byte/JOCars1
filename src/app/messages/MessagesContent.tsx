@@ -34,7 +34,7 @@ const EMOJI_DATA: Record<string, string[]> = {
 };
 
 export default function MessagesContent() {
-  const { user, isAuthenticated, _hydrated } = useAuth();
+  const { user, token, isAuthenticated, _hydrated } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -62,20 +62,28 @@ export default function MessagesContent() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convIdParam = searchParams.get('conversationId');
+  const userIdParam = searchParams.get('userId');
   const initialDone = useRef(false);
+
+  const authHeaders = (json = false): HeadersInit => {
+    const h: Record<string, string> = {};
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  };
 
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await fetch('/api/conversations');
+      const res = await fetch('/api/conversations', { headers: authHeaders() });
       const data = await res.json();
       if (data.success) return data.data || [];
       return [];
     } catch { return []; }
-  }, []);
+  }, [token]);
 
   const fetchMessages = useCallback(async (convId: string) => {
     try {
-      const res = await fetch(`/api/conversations/${convId}/messages`);
+      const res = await fetch(`/api/conversations/${convId}/messages`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
         setMessages(data.data || []);
@@ -83,7 +91,7 @@ export default function MessagesContent() {
       }
       return false;
     } catch { return false; }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     if (_hydrated && !isAuthenticated) {
@@ -91,11 +99,40 @@ export default function MessagesContent() {
       return;
     }
     if (isAuthenticated) {
-      fetchConversations().then((convs: Conversation[]) => {
-        setConversations(convs);
+      fetchConversations().then(async (convs: Conversation[]) => {
+        let list = convs;
+        // Opened from a user profile (?userId=) — find or create a direct chat
+        if (!initialDone.current && userIdParam && userIdParam !== user?.id) {
+          try {
+            const res = await fetch('/api/conversations', {
+              method: 'POST',
+              headers: authHeaders(true),
+              body: JSON.stringify({ sellerId: userIdParam }),
+            });
+            const d = await res.json();
+            if (d.success && d.data?.conversation) {
+              const conv = d.data.conversation;
+              if (!list.find((c: Conversation) => c.id === conv.id)) {
+                list = [conv, ...list];
+              }
+              initialDone.current = true;
+              setConversations(list);
+              setLoading(false);
+              setActiveConv(conv);
+              setShowList(false);
+              fetchMessages(conv.id);
+              return;
+            } else if (!d.success) {
+              toast.error(d.error || 'تعذر بدء المحادثة');
+            }
+          } catch {
+            toast.error('تعذر بدء المحادثة');
+          }
+        }
+        setConversations(list);
         setLoading(false);
         if (!initialDone.current && convIdParam) {
-          const found = convs.find((c: Conversation) => c.id === convIdParam);
+          const found = list.find((c: Conversation) => c.id === convIdParam);
           if (found) {
             initialDone.current = true;
             setActiveConv(found);
@@ -105,7 +142,7 @@ export default function MessagesContent() {
         }
       });
     }
-  }, [isAuthenticated, _hydrated, router, fetchConversations, fetchMessages, convIdParam]);
+  }, [isAuthenticated, _hydrated, router, fetchConversations, fetchMessages, convIdParam, userIdParam, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -235,10 +272,23 @@ export default function MessagesContent() {
     try {
       const formData = new FormData();
       formData.append('file', selectedImageFile);
-      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      // إضافة Authorization header للمصادقة (الـ API تحتاج توكن)
+      const token = (() => {
+        try {
+          const stored = localStorage.getItem('jo-cars-auth');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            return parsed?.state?.token || parsed?.token || null;
+          }
+        } catch {}
+        return null;
+      })();
+      const headers: HeadersInit = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData, headers });
       const uploadData = await uploadRes.json();
       if (!uploadData.success) {
-        toast.error('فشل رفع الصورة');
+        toast.error(uploadData.error || 'فشل رفع الصورة');
         return;
       }
       const imageUrl = uploadData.data?.url;
@@ -265,7 +315,7 @@ export default function MessagesContent() {
     try {
       const res = await fetch('/api/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(true),
         body: JSON.stringify({
           content: finalContent,
           receiverId,

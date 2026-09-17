@@ -11,11 +11,11 @@ import type { ConditionItem } from '@/types';
 import { useDropzone } from 'react-dropzone';
 import {
   Car, Upload, Image as ImageIcon, X, Plus, Video, MapPin, ChevronDown,
-  Sparkles, Loader2, AlertCircle, Check, Camera, Star, Search
+  Sparkles, Loader2, AlertCircle, Check, Camera, Star, Search, ShieldCheck,
+  Zap, Fuel, Gauge, DollarSign, Tag, CheckCircle2, ChevronRight, ChevronLeft, FileText,
+  Info, RefreshCw, Layers
 } from 'lucide-react';
-import { PriceEvaluation } from '@/components/cars/PriceEvaluation';
 import { MapPicker } from '@/components/cars/MapPicker';
-import { CarPriceAnalysis } from '@/components/cars/CarPriceAnalysis';
 import { AIPriceEstimator } from '@/components/cars/AIPriceEstimator';
 import toast from 'react-hot-toast';
 
@@ -32,54 +32,100 @@ type CarFormData = {
   locationLat: string; locationLng: string; phone: string; whatsapp: string;
   isNegotiable: boolean; hasWarranty: boolean; hasServiceHistory: boolean;
   isDamaged: boolean; isPaintOriginal: boolean; ownerCount: number;
+  isWholesale: boolean; // بيع جملة تاجر → تاجر
   platesNumber: string; videoUrl: string;
+  // Jordanian Market Specific Features
+  customsStatus: string; // مجمركة بالكامل / حرة غير مجمركة / إعفاء / تكسي
+  batteryHealthSoh: string; // EV/Hybrid Battery SOH %
+  electricRangeKm: string; // EV Range KM
+  inspectionSummary: string; // فحص كامل 7 جيد / 4 جيد / دقة شاسي
+  tradeOption: string; // للبيع فقط / قابل للبدل
+  paymentMode: string; // كاش / أقساط
 };
 
 const initialForm: CarFormData = {
   brandId: '', modelId: '', year: new Date().getFullYear(), trim: '',
-  kilometers: 0, fuelType: '', transmission: '', color: '',
-  doors: 4, engineCapacity: '', cylinders: '', drivetrain: '',
-  condition: '', bodyType: '', lightingType: '', rimType: '',
+  kilometers: 0, fuelType: 'HYBRID', transmission: 'AUTOMATIC', color: 'أبيض',
+  doors: 4, engineCapacity: '2500', cylinders: '4', drivetrain: 'FWD',
+  condition: 'EXCELLENT', bodyType: 'SEDAN', lightingType: 'LED', rimType: 'ALLOY',
   vin: '', description: '', price: 0, cityId: '',
   locationLat: '', locationLng: '', phone: '', whatsapp: '',
-  isNegotiable: false, hasWarranty: false, hasServiceHistory: false,
+  isNegotiable: true, hasWarranty: true, hasServiceHistory: true,
   isDamaged: false, isPaintOriginal: true, ownerCount: 1,
+  isWholesale: false,
   platesNumber: '', videoUrl: '',
+  customsStatus: 'DUTY_PAID',
+  batteryHealthSoh: '95',
+  electricRangeKm: '400',
+  inspectionSummary: 'فحص كامل 7 جيد',
+  tradeOption: 'CASH_ONLY',
+  paymentMode: 'CASH',
 };
+
+const CUSTOMS_OPTIONS = [
+  { value: 'DUTY_PAID', label: 'مجمركة بالكامل ✅' },
+  { value: 'FREE_ZONE', label: 'منطقة حرة (غير مجمركة) 🚗' },
+  { value: 'DISABLED_EXEMPTION', label: 'إعفاء ذوي الإحتياجات ♿' },
+  { value: 'TAXI_SPECIAL', label: 'تكسي / تطبيقي مميز 🚕' },
+];
+
+const INSPECTION_OPTIONS = [
+  'فحص كامل 7 جيد ✨',
+  'فحص 4 جيد',
+  '3 جيد وضربة شاسي أمامي',
+  'قصعة دقة شاسي أمامي',
+  'ميكانيك وكهرباء وكالة (بحاجة بودي)',
+  'ملاحظات خفيفة بدون حوادث',
+];
+
+const TRADE_OPTIONS = [
+  { value: 'CASH_ONLY', label: 'للبيع كاش فقط 💵' },
+  { value: 'ALLOW_TRADE', label: 'قابل للبدل بسيارة أخرى 🔄' },
+  { value: 'INSTALLMENTS', label: 'إمكانية الأقساط بدفعة أولى 💳' },
+];
 
 export default function AddCarPage() {
   const router = useRouter();
-  const { isAuthenticated, _hydrated, token } = useAuth();
+  const { user, isAuthenticated, _hydrated, token } = useAuth();
+  
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
+  
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [coverImage, setCoverImage] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  
   const [form, setForm] = useState<CarFormData>(initialForm);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [aiLoading, setAiLoading] = useState({ price: false, description: false, specs: false });
+  const [aiLoading, setAiLoading] = useState({ price: false, description: false });
   const [vinInfo, setVinInfo] = useState<any>(null);
   const [vinHistory, setVinHistory] = useState<any[]>([]);
   const [conditionDetails, setConditionDetails] = useState<ConditionItem[]>([]);
 
   useEffect(() => {
-    if (_hydrated && !isAuthenticated) { router.push('/auth/login'); return; }
+    if (_hydrated && !isAuthenticated) {
+      router.push('/auth/login');
+      return;
+    }
     if (isAuthenticated) {
+      if (user?.phone) setForm(f => ({ ...f, phone: user.phone || '' }));
       fetch('/api/cars/brands').then(r => r.json()).then(d => setBrands(d.data || [])).catch(() => {});
       fetch('/api/cars/cities').then(r => r.json()).then(d => setCities(d.data || [])).catch(() => {});
     }
-  }, [isAuthenticated, _hydrated, router]);
+  }, [isAuthenticated, _hydrated, router, user]);
 
   useEffect(() => {
     if (form.brandId) {
       fetch(`/api/cars/models?brandId=${form.brandId}`)
         .then(r => r.json()).then(d => setModels(d.data || [])).catch(() => setModels([]));
-    } else { setModels([]); }
+    } else {
+      setModels([]);
+    }
   }, [form.brandId]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -89,8 +135,10 @@ export default function AddCarPage() {
   }, [images]);
 
   const { getRootProps, getInputProps } = useDropzone({
-    onDrop, accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
-    maxSize: 10485760, maxFiles: 20,
+    onDrop,
+    accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp'] },
+    maxSize: 10485760,
+    maxFiles: 20,
     useFsAccessApi: false,
   });
 
@@ -102,59 +150,69 @@ export default function AddCarPage() {
 
   const updateForm = (field: keyof CarFormData, value: unknown) => {
     setForm(prev => ({ ...prev, [field]: value }));
-    if (field === 'vin') { setVinInfo(null); setVinHistory([]); }
+    if (field === 'vin') {
+      setVinInfo(null);
+      setVinHistory([]);
+    }
   };
 
-  const handleAiPrice = async () => {
-    setAiLoading({ ...aiLoading, price: true });
+  const handleAiDescription = async () => {
+    if (!form.description || form.description.length < 15) {
+      toast.error('يرجى كتابة لمحة أو وصف بسيط أولاً ليتم تحسينه');
+      return;
+    }
+    setAiLoading(prev => ({ ...prev, description: true }));
     try {
-      const res = await fetch('/api/ai/price-estimate', {
+      const res = await fetch('/api/ai/description', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brandId: form.brandId, modelId: form.modelId, year: form.year,
-          kilometers: form.kilometers, condition: form.condition, cityId: form.cityId,
+          ...form,
+          customsText: CUSTOMS_OPTIONS.find(c => c.value === form.customsStatus)?.label,
+          inspectionText: form.inspectionSummary,
         }),
       });
       const data = await res.json();
       if (data.success && data.data) {
-        toast.success(`السعر المقترح: ${data.data.fairPrice?.toLocaleString()} دينار`);
-        updateForm('price', data.data.fairPrice || 0);
-      }
-    } catch { toast.error('تعذر الحصول على تقدير السعر'); }
-    finally { setAiLoading({ ...aiLoading, price: false }); }
-  };
-
-  const handleAiDescription = async () => {
-    if (!form.description || form.description.length < 20) {
-      toast.error('الرجاء كتابة وصف أساسي أولاً');
-      return;
-    }
-    setAiLoading({ ...aiLoading, description: true });
-    try {
-      const res = await fetch('/api/ai/description', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.success && data.data) {
         updateForm('description', data.data.description);
-        toast.success('تم تحسين الوصف');
+        toast.success('تم تحسين وتنسيق الوصف بالذكاء الاصطناعي ✨');
       }
-    } catch { toast.error('تعذر تحسين الوصف'); }
-    finally { setAiLoading({ ...aiLoading, description: false }); }
+    } catch {
+      toast.error('تعذر تحسين الوصف');
+    } finally {
+      setAiLoading(prev => ({ ...prev, description: false }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.brandId || !form.modelId || !form.year || !form.price || !form.phone || !form.cityId) {
+      toast.error('يرجى تعبئة كافة الحقول الأساسية (الشركة، الموديل، السنة، السعر، المحافظة، ورقم الهاتف)');
+      return;
+    }
+
     setLoading(true);
     setErrors({});
 
     try {
       const formData = new FormData();
-      Object.entries(form).forEach(([key, value]) => {
+
+      // Combine Jordanian custom attributes into description & conditionDetails
+      let enrichedDescription = form.description || '';
+      const customsLabel = CUSTOMS_OPTIONS.find(c => c.value === form.customsStatus)?.label || '';
+      const tradeLabel = TRADE_OPTIONS.find(t => t.value === form.tradeOption)?.label || '';
+
+      const jordanianSpecsText = `\n\n📌 **مواصفات السوق الأردني والفحص:**\n- الجمرك: ${customsLabel}\n- تقرير الفحص: ${form.inspectionSummary}\n- خيارات البيع: ${tradeLabel}\n` +
+        (form.fuelType === 'ELECTRIC' || form.fuelType === 'HYBRID' ? `- صحة البطارية (SOH): ${form.batteryHealthSoh}%\n- مدى الشحنة: ${form.electricRangeKm} كم\n` : '');
+
+      if (!enrichedDescription.includes('مواصفات السوق الأردني')) {
+        enrichedDescription += jordanianSpecsText;
+      }
+
+      Object.entries({ ...form, description: enrichedDescription }).forEach(([key, value]) => {
         if (value !== '' && value !== null) formData.append(key, String(value));
       });
+
       if (conditionDetails.length > 0) formData.append('conditionDetails', JSON.stringify(conditionDetails));
       images.forEach(img => formData.append('images', img));
       if (coverImage) formData.append('coverImage', coverImage);
@@ -169,447 +227,696 @@ export default function AddCarPage() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success('تم إضافة السيارة بنجاح! في انتظار المراجعة.');
+        toast.success('تمت إضافة السيارة بنجاح! الإعلان قيد التفعيل والمراجعة.');
         router.push(`/cars/${data.data.slug || data.data.id}`);
+      } else {
+        const errMap: Record<string, string> = {};
+        if (data.details && Array.isArray(data.details)) {
+          data.details.forEach((d: { field: string; message: string }) => { errMap[d.field] = d.message; });
+          setErrors(errMap);
+          toast.error('يرجى التحقق من الحقول المحددة');
         } else {
-          const errMap: Record<string, string> = {};
-          if (data.details && Array.isArray(data.details)) {
-            data.details.forEach((d: { field: string; message: string }) => { errMap[d.field] = d.message; });
-            setErrors(errMap);
-            toast.error('يوجد أخطاء في البيانات، الحقول الخطأ محددة بالأحمر', { duration: 5000 });
-          } else {
-            toast.error(data.error || 'فشل إضافة السيارة', { duration: 5000 });
-          }
+          toast.error(data.error || 'فشل إضافة السيارة');
         }
-    } catch { toast.error('حدث خطأ'); }
-    finally { setLoading(false); }
+      }
+    } catch {
+      toast.error('حدث خطأ أثناء الاتصال بالنظام');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const fieldError = (name: string) => errors[name] || '';
-
-  const fuelTypes = ['بنزين', 'ديزل', 'هايبرد', 'كهرباء', 'هايبرد بلق إن'].map((v, i) => ({ value: ['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC', 'PLUGIN_HYBRID'][i], label: v }));
-  const transmissions = ['يدوي', 'أوتوماتيك', 'CVT', 'DCT', 'نصف أوتوماتيك'].map((v, i) => ({ value: ['MANUAL', 'AUTOMATIC', 'CVT', 'DCT', 'SEMI_AUTOMATIC'][i], label: v }));
-  const drivetrains = ['دفع أمامي', 'دفع خلفي', 'دفع كلي', 'دفع رباعي'].map((v, i) => ({ value: ['FWD', 'RWD', 'AWD', 'FOUR_WD'][i], label: v }));
-  const conditions = ['ممتازة', 'ممتازة جداً', 'جيدة جداً', 'جيدة', 'تحتاج صيانة', 'تحتاج فحص شامل'].map((v, i) => ({ value: ['EXCELLENT', 'VERY_GOOD', 'GOOD', 'FAIR', 'NEEDS_MAINTENANCE', 'NEEDS_INSPECTION'][i], label: v }));
-  const bodyTypes = ['SUV', 'سيدان', 'هاتشباك', 'كوبيه', 'مكشوفة', 'ستيشن', 'بيك أب', 'فان', 'ميني فان', 'كروس أوفر', 'رياضية', 'فاخرة'].map((v, i) => ({ value: ['SUV', 'SEDAN', 'HATCHBACK', 'COUPE', 'CONVERTIBLE', 'WAGON', 'PICKUP', 'VAN', 'MINIVAN', 'CROSSOVER', 'SPORTS', 'LUXURY'][i], label: v }));
-
-  const SelectField = ({ label, value, onChange, options, placeholder, disabled, error }: {
-    label: string; value: string; onChange: (v: string) => void;
-    options: { value: string; label: string }[]; placeholder?: string; disabled?: boolean; error?: string;
-  }) => (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          disabled={disabled}
-          className={`w-full rounded-xl border bg-white dark:bg-gray-900/50 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 appearance-none cursor-pointer outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-            error ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-          }`}
-        >
-          <option value="">{placeholder || `اختر ${label}`}</option>
-          {options.map(o => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-      </div>
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-    </div>
-  );
-
-  const CitySelector = ({ value, onChange, error }: { value: string; onChange: (v: string) => void; error?: string }) => {
-    const [open, setOpen] = useState(false);
-    const [search, setSearch] = useState('');
-    const ref = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-      const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-      document.addEventListener('mousedown', handler);
-      return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    const selectedCity = cities.find(c => c.id === value);
-    const filtered = cities.filter(c => c.nameAr.includes(search));
-
-    return (
-      <div ref={ref} className="space-y-1.5 relative">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">المدينة</label>
-        <button type="button" onClick={() => { setOpen(!open); setSearch(''); setTimeout(() => inputRef.current?.focus(), 50); }}
-          className={`w-full rounded-xl border bg-white dark:bg-gray-900/50 px-4 py-3 text-sm text-right appearance-none cursor-pointer outline-none transition-all ${
-            error ? 'border-red-500 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-blue-500'
-          }`}>
-          <span className={value ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'}>{selectedCity?.nameAr || 'اختر المدينة'}</span>
-        </button>
-        <ChevronDown className="absolute left-3 bottom-3 w-4 h-4 text-gray-400 pointer-events-none" />
-        <AnimatePresence>
-          {open && (
-            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-              className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
-              <div className="p-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-                <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="ابحث عن مدينة..." className="flex-1 bg-transparent text-sm outline-none text-gray-900 dark:text-gray-100 placeholder:text-gray-400" />
-                {search && <button type="button" onClick={() => setSearch('')}><X className="w-3 h-3 text-gray-400" /></button>}
-              </div>
-              <div className="max-h-60 overflow-y-auto">
-                {filtered.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-gray-400 text-center">لا توجد نتائج</div>
-                ) : (
-                  filtered.map(c => (
-                    <button key={c.id} type="button" onClick={() => { onChange(c.id); setOpen(false); }}
-                      className={`w-full px-4 py-2 text-right text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${value === c.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {c.nameAr}
-                    </button>
-                  ))
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-      </div>
-    );
-  };
+  const selectedBrand = brands.find(b => b.id === form.brandId);
+  const selectedModel = models.find(m => m.id === form.modelId);
+  const isEVOrHybrid = form.fuelType === 'ELECTRIC' || form.fuelType === 'HYBRID' || form.fuelType === 'PLUGIN_HYBRID';
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="container-custom max-w-4xl">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="card p-8">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-400 flex items-center justify-center shadow-lg">
-                <Car className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24 py-8">
+      <div className="container-custom max-w-4xl space-y-6">
+        
+        {/* Header Title */}
+        <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-b from-emerald-950/40 via-slate-900 to-slate-950 border border-slate-800 space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-1/4 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
+                <Car className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إضافة سيارة جديدة</h1>
-                <p className="text-gray-500 text-sm">املأ جميع المعلومات المطلوبة لعرض سيارتك</p>
+                <h1 className="text-2xl md:text-3xl font-black text-white">إضافة إعلان سيارة للبيع</h1>
+                <p className="text-slate-400 text-xs mt-0.5">اعرض سيارتك لأكثر من 50,000 مشتري شهرياً في الأردن</p>
               </div>
             </div>
 
-            {/* Steps */}
-            <div className="flex items-center gap-2 mb-8 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
-              {[1, 2, 3, 4].map(s => (
-                <button key={s} onClick={() => setStep(s)}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    step === s ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' :
-                    step > s ? 'text-green-500' : 'text-gray-400'
-                  }`}
-                >
-                  {s === 1 && 'المعلومات الأساسية'}
-                  {s === 2 && 'المزيد من التفاصيل'}
-                  {s === 3 && 'الصور والفيديو'}
-                  {s === 4 && 'معلومات الاتصال'}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-emerald-400 text-xs font-bold">
+              <Sparkles className="w-4 h-4" />
+              <span>ميزات الذكاء الاصطناعي مفعلة</span>
             </div>
+          </div>
 
-            <form onSubmit={handleSubmit}>
-              {/* Step 1: Basic Info */}
-              {step === 1 && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <SelectField label="الشركة" value={form.brandId} onChange={v => { updateForm('brandId', v); updateForm('modelId', ''); }}
-                      options={brands.map(b => ({ value: b.id, label: b.nameAr }))} error={fieldError('brandId')} />
-                    <SelectField label="الموديل" value={form.modelId} onChange={v => updateForm('modelId', v)}
-                      options={models.map(m => ({ value: m.id, label: m.nameAr }))} disabled={!form.brandId} error={fieldError('modelId')} />
-                    <Input label="سنة الصنع" type="number" value={form.year} onChange={e => updateForm('year', parseInt(e.target.value))} error={fieldError('year')} />
-                    <Input label="الفئة" placeholder="مثلاً: GLX، فل أوبشن، بسيط..." value={form.trim} onChange={e => updateForm('trim', e.target.value)} error={fieldError('trim')} />
-                    <Input label="عدد الكيلومترات" type="number" value={form.kilometers} onChange={e => updateForm('kilometers', parseInt(e.target.value))} error={fieldError('kilometers')} />
-                    <SelectField label="نوع الوقود" value={form.fuelType} onChange={v => updateForm('fuelType', v)} options={fuelTypes} error={fieldError('fuelType')} />
-                    <SelectField label="ناقل الحركة" value={form.transmission} onChange={v => updateForm('transmission', v)} options={transmissions} error={fieldError('transmission')} />
-                    <Input label="لون السيارة" value={form.color} onChange={e => updateForm('color', e.target.value)} error={fieldError('color')} />
-                    <SelectField label="نوع الجر" value={form.drivetrain} onChange={v => updateForm('drivetrain', v)} options={drivetrains} error={fieldError('drivetrain')} />
-                    <SelectField label="حالة السيارة" value={form.condition} onChange={v => updateForm('condition', v)} options={conditions} error={fieldError('condition')} />
-                    <Input label="السعر (دينار)" type="number" value={form.price} onChange={e => updateForm('price', parseFloat(e.target.value))} error={fieldError('price')} />
-                  </div>
+          {/* Progress Steps Header */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-4 border-t border-slate-800/80">
+            {[
+              { num: 1, title: 'المعلومات الأساسية', icon: <Car className="w-4 h-4" /> },
+              { num: 2, title: 'الفحص والجمرك', icon: <ShieldCheck className="w-4 h-4" /> },
+              { num: 3, title: 'الصور والفيديو', icon: <Camera className="w-4 h-4" /> },
+              { num: 4, title: 'السعر والموقع', icon: <DollarSign className="w-4 h-4" /> },
+            ].map((s) => (
+              <button
+                key={s.num}
+                type="button"
+                onClick={() => setStep(s.num)}
+                className={`p-3 rounded-2xl border text-xs font-extrabold transition-all flex items-center gap-2 ${
+                  step === s.num
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                    : step > s.num
+                      ? 'bg-slate-900 border-slate-800 text-emerald-400'
+                      : 'bg-slate-950/60 border-slate-900 text-slate-500'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-lg flex items-center justify-center text-[11px] font-mono ${
+                  step === s.num ? 'bg-slate-950 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {s.num}
+                </div>
+                <span className="truncate">{s.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-                  <AIPriceEstimator
-                    brandId={form.brandId}
-                    modelId={form.modelId}
-                    year={form.year}
-                    trim={form.trim}
-                    kilometers={form.kilometers}
-                    condition={form.condition}
-                    cityId={form.cityId}
-                    fuelType={form.fuelType}
-                    transmission={form.transmission}
-                    engineCapacity={form.engineCapacity}
-                    bodyType={form.bodyType}
-                    color={form.color}
-                    ownerCount={form.ownerCount}
-                    isDamaged={form.isDamaged}
-                    hasWarranty={form.hasWarranty}
-                    hasServiceHistory={form.hasServiceHistory}
-                    isPaintOriginal={form.isPaintOriginal}
-                    currentPrice={form.price}
-                    onPriceSelect={(price) => updateForm('price', price)}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* STEP 1: Basic Info */}
+          {step === 1 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl">
+              
+              <div className="border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Car className="w-5 h-5 text-emerald-400" />
+                  البيانات الرئيسية للسيارة
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Brand */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">الشركة المصنعة (الماركة) *</label>
+                  <select
+                    value={form.brandId}
+                    onChange={e => { updateForm('brandId', e.target.value); updateForm('modelId', ''); }}
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
+                  >
+                    <option value="">اختر الشركة</option>
+                    {brands.map(b => <option key={b.id} value={b.id}>{b.nameAr}</option>)}
+                  </select>
+                </div>
+
+                {/* Model */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">الموديل (الطراز) *</label>
+                  <select
+                    value={form.modelId}
+                    disabled={!form.brandId}
+                    onChange={e => updateForm('modelId', e.target.value)}
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 disabled:opacity-50"
+                  >
+                    <option value="">{form.brandId ? 'اختر الموديل' : 'اختر الشركة أولاً'}</option>
+                    {models.map(m => <option key={m.id} value={m.id}>{m.nameAr}</option>)}
+                  </select>
+                </div>
+
+                {/* Year */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">سنة الصنع *</label>
+                  <input
+                    type="number"
+                    value={form.year}
+                    onChange={e => updateForm('year', parseInt(e.target.value) || new Date().getFullYear())}
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-bold"
                   />
-
-                  <div className="flex justify-between pt-4">
-                    <div />
-                    <Button type="button" onClick={() => setStep(2)}>التالي</Button>
-                  </div>
                 </div>
-              )}
 
-              {/* Step 2: Detailed Info */}
-              {step === 2 && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <Input label="عدد الأبواب" type="number" value={form.doors} onChange={e => updateForm('doors', parseInt(e.target.value))} error={fieldError('doors')} />
-                    <Input label="سعة المحرك (CC)" value={form.engineCapacity} onChange={e => updateForm('engineCapacity', e.target.value)} error={fieldError('engineCapacity')} />
-                    <Input label="عدد السلندرات" value={form.cylinders} onChange={e => updateForm('cylinders', e.target.value)} error={fieldError('cylinders')} />
-                    <SelectField label="نوع الهيكل" value={form.bodyType} onChange={v => updateForm('bodyType', v)} options={bodyTypes} placeholder="اختر" error={fieldError('bodyType')} />
-                    <SelectField label="نوع الإضاءة" value={form.lightingType} onChange={v => updateForm('lightingType', v)}
-                      options={['هالوجين', 'LED', 'زينون', 'ليزر', 'Matrix LED'].map((v, i) => ({ value: ['HALOGEN', 'LED', 'XENON', 'LASER', 'MATRIX_LED'][i], label: v }))} placeholder="اختر" error={fieldError('lightingType')} />
-                    <SelectField label="نوع الجنوط" value={form.rimType} onChange={v => updateForm('rimType', v)}
-                      options={['ستيل', 'ألمنيوم', 'كروم', 'فورجية'].map((v, i) => ({ value: ['STEEL', 'ALLOY', 'CHROME', 'FORGED'][i], label: v }))} placeholder="اختر" error={fieldError('rimType')} />
-                    <div className="relative">
-                      <Input label="رقم الهيكل (VIN)" value={form.vin} onChange={e => updateForm('vin', e.target.value.toUpperCase())} placeholder="17 حرف" error={fieldError('vin')} />
-                      {form.vin.length >= 11 && (
-                        <button type="button" onClick={async () => {
-                          try {
-                            const res = await fetch(`/api/car-history/decode/${form.vin}`);
-                            const d = await res.json();
-                            if (d.success) {
-                              setVinInfo(d.data);
-                              const hist = await fetch(`/api/car-history/${form.vin}`);
-                              const hd = await hist.json();
-                              if (hd.success) setVinHistory(hd.data.history || []);
-                            }
-                          } catch {}
-                        }} className="absolute left-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-500 text-xs font-medium hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors">
-                          فك
-                        </button>
-                      )}
-                    </div>
-                    <Input label="عدد المالكين" type="number" value={form.ownerCount} onChange={e => updateForm('ownerCount', parseInt(e.target.value))} error={fieldError('ownerCount')} />
-                    <Input label="رقم اللوحة" value={form.platesNumber} onChange={e => updateForm('platesNumber', e.target.value)} error={fieldError('platesNumber')} />
-                  </div>
+                {/* Kilometers */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">عداد الكيلومترات (الممشى) *</label>
+                  <input
+                    type="number"
+                    value={form.kilometers}
+                    onChange={e => updateForm('kilometers', parseInt(e.target.value) || 0)}
+                    placeholder="مثال: 85000"
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-bold"
+                  />
+                </div>
 
-                  {/* VIN Decode Result */}
-                  {vinInfo && (
-                    <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/5 dark:to-indigo-500/5 border border-blue-100 dark:border-blue-500/10">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">معلومات رقم الهيكل</h4>
-                        <button type="button" onClick={() => {
-                          const decoded = vinInfo;
-                          let desc = form.description;
-                          if (decoded.manufacturer) {
-                            const parts = [
-                              decoded.year ? `السيارة من موديل ${decoded.year}` : '',
-                              decoded.manufacturer ? `من شركة ${decoded.manufacturer}` : '',
-                              decoded.model ? `موديل ${decoded.model}` : '',
-                              decoded.trim ? `فئة ${decoded.trim}` : '',
-                              decoded.engine ? `، محرك ${decoded.engine}` : '',
-                              decoded.fuelType ? `، وقود ${decoded.fuelType}` : '',
-                              vinHistory.length > 0 ? `\n\nسجل السيارة: ${vinHistory.length} حدث مسجل` : '',
-                            ].filter(Boolean).join(' ');
-                            if (parts) updateForm('description', desc + (desc ? '\n\n' : '') + parts);
-                          }
-                        }} className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition-colors">
-                          إضافة للوصف
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                        {vinInfo.manufacturer && <div><span className="text-gray-500">الشركة:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.manufacturer}</p></div>}
-                        {vinInfo.model && <div><span className="text-gray-500">الموديل:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.model}</p></div>}
-                        {vinInfo.year && <div><span className="text-gray-500">السنة:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.year}</p></div>}
-                        {vinInfo.trim && <div><span className="text-gray-500">الفئة:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.trim}</p></div>}
-                        {vinInfo.engine && <div><span className="text-gray-500">المحرك:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.engine}</p></div>}
-                        {vinInfo.fuelType && <div><span className="text-gray-500">الوقود:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.fuelType}</p></div>}
-                        {vinInfo.drivetrain && <div><span className="text-gray-500">الجر:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.drivetrain}</p></div>}
-                        {vinInfo.bodyClass && <div><span className="text-gray-500">نوع الهيكل:</span><p className="font-medium text-gray-900 dark:text-white">{vinInfo.bodyClass}</p></div>}
-                      </div>
-                      {vinHistory.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-blue-100 dark:border-blue-500/10">
-                          <p className="text-xs text-gray-500 mb-2">سجل السيارة ({vinHistory.length} حدث):</p>
-                          <div className="flex flex-wrap gap-2">
-                            {vinHistory.slice(0, 5).map((h: any) => (
-                              <span key={h.id} className="px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 text-[10px] text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-                                {h.title}
-                              </span>
-                            ))}
-                            {vinHistory.length > 5 && <span className="text-[10px] text-gray-400">+{vinHistory.length - 5}</span>}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                {/* Trim */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">الفئة / الإضافات</label>
+                  <input
+                    type="text"
+                    value={form.trim}
+                    onChange={e => updateForm('trim', e.target.value)}
+                    placeholder="مثال: فل كامل سقف بانوراما، GLX"
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
+                  />
+                </div>
 
-                  <div className="flex flex-wrap gap-4">
-                    {[
-                      { key: 'isNegotiable' as const, label: 'قابل للتفاوض' },
-                      { key: 'hasWarranty' as const, label: 'يوجد ضمان' },
-                      { key: 'hasServiceHistory' as const, label: 'سجل صيانة' },
-                      { key: 'isDamaged' as const, label: 'مصدومة سابقاً' },
-                      { key: 'isPaintOriginal' as const, label: 'الدهان أصلي' },
-                    ].map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={form[key] as boolean} onChange={e => updateForm(key, e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                {/* Color */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">لون السيارة</label>
+                  <input
+                    type="text"
+                    value={form.color}
+                    onChange={e => updateForm('color', e.target.value)}
+                    placeholder="أبيض لؤلؤي، أسود ملكي..."
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
+                  />
+                </div>
 
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">الوصف</label>
-                    <textarea value={form.description} onChange={e => updateForm('description', e.target.value)}
-                      placeholder="اكتب وصفاً تفصيلياً للسيارة..."
-                      className={`w-full rounded-xl border bg-white dark:bg-gray-900/50 px-4 py-3 text-sm min-h-[150px] resize-y outline-none transition-all ${
-                        fieldError('description') ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-gray-200 dark:border-gray-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+              </div>
+
+              {/* Fuel Type Chips */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">نوع المحرك والوقود *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {[
+                    { id: 'HYBRID', label: 'هايبرد 🔋' },
+                    { id: 'ELECTRIC', label: 'كهرباء كاملة ⚡' },
+                    { id: 'PETROL', label: 'بنزين ⛽' },
+                    { id: 'DIESEL', label: 'ديزل 🚜' },
+                    { id: 'PLUGIN_HYBRID', label: 'بلق-إن 🔌' },
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => updateForm('fuelType', f.id)}
+                      className={`p-3 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer ${
+                        form.fuelType === f.id
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                       }`}
-                    />
-                    {fieldError('description') && <p className="text-xs text-red-500 mt-1">{fieldError('description')}</p>}
-                  </div>
-                  <Button type="button" variant="outline" onClick={handleAiDescription} loading={aiLoading.description}
-                    icon={<Sparkles className="w-4 h-4" />} className="w-full">
-                    تحسين الوصف بالذكاء الاصطناعي
-                  </Button>
-
-                  <ConditionEditor value={conditionDetails} onChange={setConditionDetails} />
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" variant="ghost" onClick={() => setStep(1)}>السابق</Button>
-                    <Button type="button" onClick={() => setStep(3)}>التالي</Button>
-                  </div>
+                    >
+                      {f.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
 
-              {/* Step 3: Images & Video */}
-              {step === 3 && (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">صورة الغلاف</label>
-                    <div className="relative border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer"
-                      onClick={() => document.getElementById('coverInput')?.click()}>
-                      {coverImage ? (
-                        <div className="relative w-full h-48 rounded-lg overflow-hidden">
-                          <img src={URL.createObjectURL(coverImage)} alt="Cover" className="w-full h-full object-cover" />
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
-                            className="absolute top-2 left-2 p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <Camera className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">اضغط لاختيار صورة الغلاف</p>
-                          <p className="text-xs text-gray-400 mt-1">أو التقط صورة بالكاميرا</p>
-                        </div>
-                      )}
+              {/* Transmission Chips */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">ناقل الحركة (الجير) *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'AUTOMATIC', label: 'أوتوماتيك ⚙️' },
+                    { id: 'MANUAL', label: 'عادي / يدوي 🕹️' },
+                    { id: 'CVT', label: 'CVT اقتصادي' },
+                    { id: 'DCT', label: 'دبل كلتش DCT' },
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => updateForm('transmission', t.id)}
+                      className={`p-3 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer ${
+                        form.transmission === t.id
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* EV / Hybrid Battery Specific Options */}
+              {isEVOrHybrid && (
+                <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
+                    <Zap className="w-4 h-4" />
+                    <span>مواصفات بطارية الهايبرد / الكهرباء (السوق الأردني):</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">صحة البطارية (SOH %)</label>
                       <input
-                        id="coverInput"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={e => setCoverImage(e.target.files?.[0] || null)}
-                        style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: 0 }}
+                        type="text"
+                        value={form.batteryHealthSoh}
+                        onChange={e => updateForm('batteryHealthSoh', e.target.value)}
+                        placeholder="مثال: 95%"
+                        className="w-full h-10 px-3 rounded-xl border border-slate-800 bg-slate-900 text-white text-xs outline-none focus:border-emerald-500 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">مدى الشحنة الواحدة (KM)</label>
+                      <input
+                        type="text"
+                        value={form.electricRangeKm}
+                        onChange={e => updateForm('electricRangeKm', e.target.value)}
+                        placeholder="مثال: 450 كم"
+                        className="w-full h-10 px-3 rounded-xl border border-slate-800 bg-slate-900 text-white text-xs outline-none focus:border-emerald-500 font-mono"
                       />
                     </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      صور السيارة ({images.length}/20)
-                    </label>
-                    <div {...getRootProps()} className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer active:bg-gray-50 dark:active:bg-gray-800/50">
-                      <input {...getInputProps()} />
-                      <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">اضغط هنا لاختيار الصور</p>
-                      <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP - حد أقصى 10MB لكل صورة</p>
-                      <p className="text-xs text-blue-500 mt-2 md:hidden">
-                        <Camera className="w-3 h-3 inline mr-1" />
-                        يمكنك التقط صور بالكاميرا مباشرة
-                      </p>
-                    </div>
-                    {imagePreviews.length > 0 && (
-                      <div className="grid grid-cols-4 md:grid-cols-6 gap-3 mt-4">
-                        {imagePreviews.map((preview, i) => (
-                          <div key={i} className="relative aspect-square rounded-xl overflow-hidden group">
-                            <img src={preview} alt={`صورة ${i + 1}`} className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => removeImage(i)}
-                              className="absolute top-1 left-1 p-1 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70">
-                              <X className="w-3 h-3" />
-                            </button>
-                            {i === 0 && (
-                              <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-blue-500 text-white text-[10px]">غلاف</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">فيديو (اختياري)</label>
-                    <div className="relative border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer"
-                      onClick={() => document.getElementById('videoInput')?.click()}>
-                      {videoFile ? (
-                        <div className="flex items-center justify-center gap-2 text-sm text-green-500">
-                          <Check className="w-4 h-4" />
-                          {videoFile.name}
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                          <Video className="w-5 h-5" />
-                          إضافة فيديو (YouTube أو MP4)
-                        </div>
-                      )}
-                      <input id="videoInput" type="file" accept="video/*" className="absolute w-0 h-0 opacity-0 overflow-hidden"
-                        onChange={e => setVideoFile(e.target.files?.[0] || null)} />
-                    </div>
-                    <Input label="أو رابط فيديو YouTube" value={form.videoUrl}
-                      onChange={e => updateForm('videoUrl', e.target.value)} placeholder="https://youtube.com/watch?v=..." />
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" variant="ghost" onClick={() => setStep(2)}>السابق</Button>
-                    <Button type="button" onClick={() => setStep(4)}>التالي</Button>
-                  </div>
                 </div>
               )}
 
-              {/* Step 4: Contact Info */}
-              {step === 4 && (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <CitySelector value={form.cityId} onChange={v => updateForm('cityId', v)} error={fieldError('cityId')} />
-                    <Input label="رقم الهاتف" value={form.phone} onChange={e => updateForm('phone', e.target.value)} placeholder="07XXXXXXXX" error={fieldError('phone')} />
-                    <Input label="رقم واتساب" value={form.whatsapp} onChange={e => updateForm('whatsapp', e.target.value)} placeholder="07XXXXXXXX" error={fieldError('whatsapp')} />
-                    <Input label="رابط الفيديو" value={form.videoUrl} onChange={e => updateForm('videoUrl', e.target.value)} error={fieldError('videoUrl')} />
-                  </div>
+              <div className="flex justify-end pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                >
+                  <span>التالي: الفحص والجمرك</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
 
-                  {/* Map Picker */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      <MapPin className="w-4 h-4 inline ml-1" />
-                      موقع السيارة على الخريطة
-                    </label>
-                    <MapPicker
-                      lat={form.locationLat ? parseFloat(form.locationLat) : null}
-                      lng={form.locationLng ? parseFloat(form.locationLng) : null}
-                      onChange={(lat, lng) => {
-                        updateForm('locationLat', lat.toString());
-                        updateForm('locationLng', lng.toString());
+            </motion.div>
+          )}
+
+          {/* STEP 2: Customs & Inspection */}
+          {step === 2 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl">
+              
+              <div className="border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  حالة الجمرك وفحص الشاسي والميكانيك
+                </h3>
+              </div>
+
+              {/* Customs Status */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">حالة الجمرك الأردني *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {CUSTOMS_OPTIONS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => updateForm('customsStatus', c.value)}
+                      className={`p-3.5 rounded-2xl border text-xs font-extrabold text-right transition-all flex items-center justify-between cursor-pointer ${
+                        form.customsStatus === c.value
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
+                      }`}
+                    >
+                      <span>{c.label}</span>
+                      {form.customsStatus === c.value && <CheckCircle2 className="w-4 h-4 text-slate-950" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Inspection Quick Select */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">ملخص نتيجة الفحص الفني (الشاسي والميكانيك)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {INSPECTION_OPTIONS.map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => updateForm('inspectionSummary', opt)}
+                      className={`p-3 rounded-xl border text-xs font-bold text-right transition-all cursor-pointer ${
+                        form.inspectionSummary === opt
+                          ? 'bg-blue-500/20 border-blue-500 text-blue-300'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* VIN Checker Helper */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-300">رقم الشاسي (VIN) - اختياري لفك الميزات والحوادث</label>
+                  {form.vin.length >= 11 && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/car-history/decode/${form.vin}`);
+                          const d = await res.json();
+                          if (d.success && d.data) {
+                            setVinInfo(d.data);
+                            toast.success('تم جلب بيانات ومواصفات الشاسي بنجاح!');
+                          }
+                        } catch {}
                       }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" variant="ghost" onClick={() => setStep(3)}>السابق</Button>
-                    <Button type="submit" loading={loading} icon={<Plus className="w-4 h-4" />}>
-                      إضافة السيارة
-                    </Button>
-                  </div>
+                      className="px-3 py-1 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-colors"
+                    >
+                      فك واستعلام الشاسي 🔍
+                    </button>
+                  )}
                 </div>
-              )}
-            </form>
-          </div>
-        </motion.div>
+
+                <input
+                  type="text"
+                  value={form.vin}
+                  onChange={e => updateForm('vin', e.target.value.toUpperCase())}
+                  placeholder="17 حرف/رقم رقم الشاسي..."
+                  className="w-full h-11 px-4 rounded-xl border border-slate-800 bg-slate-900 text-white text-xs outline-none focus:border-emerald-500 font-mono tracking-widest uppercase"
+                />
+
+                {vinInfo && (
+                  <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs space-y-1 text-slate-300">
+                    <p className="font-bold text-blue-400">بيانات الشاسي المكتشفة:</p>
+                    <p>المصنع: {vinInfo.manufacturer} | الموديل: {vinInfo.model} | سنة: {vinInfo.year}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Vehicle Condition Features Checks */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                {[
+                  { key: 'isNegotiable' as const, label: 'السعر قابل للتفاوض 💬' },
+                  { key: 'hasWarranty' as const, label: 'تحت الكفالة والضمان 🛡️' },
+                  { key: 'hasServiceHistory' as const, label: 'سجل صيانة بالوكالة 📖' },
+                  { key: 'isPaintOriginal' as const, label: 'دهان أصلي وكالة ✨' },
+                  { key: 'isDamaged' as const, label: 'مصدومة سابقاً ⚠️' },
+                  { key: 'isWholesale' as const, label: 'بيع جملة لتاجر 🏭' },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-2 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form[key] as boolean}
+                      onChange={e => updateForm(key, e.target.checked)}
+                      className="w-4 h-4 rounded-md accent-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-300">{label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-300">وصف وملاحظات إضافية عن السيارة</label>
+                  <button
+                    type="button"
+                    onClick={handleAiDescription}
+                    disabled={aiLoading.description}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition-all cursor-pointer"
+                  >
+                    {aiLoading.description ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>تحسين الوصف بالذكاء الاصطناعي</span>
+                  </button>
+                </div>
+
+                <textarea
+                  rows={5}
+                  value={form.description}
+                  onChange={e => updateForm('description', e.target.value)}
+                  placeholder="اكتب شرحاً عن الإضافات، الترخيص، سبب البيع..."
+                  className="w-full p-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="px-6 py-3 rounded-2xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition-colors"
+                >
+                  السابق
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                >
+                  <span>التالي: الصور والفيديو</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+            </motion.div>
+          )}
+
+          {/* STEP 3: Images & Video */}
+          {step === 3 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl">
+              
+              <div className="border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-emerald-400" />
+                  رفع صور وفيديو السيارة (حتى 20 صورة)
+                </h3>
+              </div>
+
+              {/* Cover Image Selection */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">صورة الغلاف الرئيسية الإبرازية</label>
+                <div
+                  onClick={() => document.getElementById('coverInput')?.click()}
+                  className="p-6 rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950 hover:border-emerald-500 transition-all text-center cursor-pointer relative"
+                >
+                  {coverImage ? (
+                    <div className="relative w-full h-48 rounded-xl overflow-hidden">
+                      <img src={URL.createObjectURL(coverImage)} alt="غلاف" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
+                        className="absolute top-2 right-2 p-1.5 bg-slate-950/80 rounded-full text-rose-400"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <Camera className="w-8 h-8 text-slate-500 mx-auto" />
+                      <p className="text-slate-300 text-xs font-bold">اضغط لاختيار صورة الغلاف المميزة</p>
+                    </div>
+                  )}
+                  <input
+                    id="coverInput"
+                    type="file"
+                    accept="image/*"
+                    onChange={e => setCoverImage(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Additional Photos Upload */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-slate-300">صور إضافية لجوانب السيارة والمقصورة ({images.length}/20)</label>
+                
+                <div
+                  {...getRootProps()}
+                  className="p-8 rounded-2xl border-2 border-dashed border-slate-800 bg-slate-950 hover:border-emerald-500 transition-all text-center cursor-pointer"
+                >
+                  <input {...getInputProps()} />
+                  <Upload className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-white text-sm font-bold">اضغط هنا أو اسحب الصور لرفعها</p>
+                  <p className="text-slate-500 text-xs mt-1">PNG, JPG, WEBP - يفضل صور عالية الجودة</p>
+                </div>
+
+                {imagePreviews.length > 0 && (
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 pt-2">
+                    {imagePreviews.map((preview, i) => (
+                      <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-800 group">
+                        <img src={preview} alt={`صورة ${i + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(i)}
+                          className="absolute top-1 right-1 p-1 bg-slate-950/80 rounded-full text-rose-400 opacity-90 hover:opacity-100"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Video URL */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">رابط فيديو للسيارة (YouTube أو MP4)</label>
+                <input
+                  type="text"
+                  value={form.videoUrl}
+                  onChange={e => updateForm('videoUrl', e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="px-6 py-3 rounded-2xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition-colors"
+                >
+                  السابق
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                >
+                  <span>التالي: السعر والموقع</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </div>
+
+            </motion.div>
+          )}
+
+          {/* STEP 4: Price & Contact */}
+          {step === 4 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl">
+              
+              <div className="border-b border-slate-800 pb-3">
+                <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-emerald-400" />
+                  السعر، طرق البيع، ومعلومات الاتصال
+                </h3>
+              </div>
+
+              {/* Trade & Payment Options */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">خيار البيع والبدل *</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {TRADE_OPTIONS.map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => updateForm('tradeOption', t.value)}
+                      className={`p-3.5 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer ${
+                        form.tradeOption === t.value
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price & AI Estimator */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">السعر المطلوب بالدينار الأردني (د.أ) *</label>
+                  <input
+                    type="number"
+                    value={form.price}
+                    onChange={e => updateForm('price', parseFloat(e.target.value) || 0)}
+                    placeholder="مثال: 14500"
+                    className="w-full h-14 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-emerald-400 font-black text-2xl outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <AIPriceEstimator
+                  brandId={form.brandId}
+                  modelId={form.modelId}
+                  year={form.year}
+                  trim={form.trim}
+                  kilometers={form.kilometers}
+                  condition={form.condition}
+                  cityId={form.cityId}
+                  fuelType={form.fuelType}
+                  transmission={form.transmission}
+                  engineCapacity={form.engineCapacity}
+                  bodyType={form.bodyType}
+                  color={form.color}
+                  ownerCount={form.ownerCount}
+                  isDamaged={form.isDamaged}
+                  hasWarranty={form.hasWarranty}
+                  hasServiceHistory={form.hasServiceHistory}
+                  isPaintOriginal={form.isPaintOriginal}
+                  currentPrice={form.price}
+                  onPriceSelect={(price) => updateForm('price', price)}
+                />
+              </div>
+
+              {/* Contact Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم الهاتف للاتصال *</label>
+                  <input
+                    type="text"
+                    value={form.phone}
+                    onChange={e => updateForm('phone', e.target.value)}
+                    placeholder="0791234567"
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم الواتساب</label>
+                  <input
+                    type="text"
+                    value={form.whatsapp}
+                    onChange={e => updateForm('whatsapp', e.target.value)}
+                    placeholder="0791234567"
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">المحافظة / المدينة *</label>
+                  <select
+                    value={form.cityId}
+                    onChange={e => updateForm('cityId', e.target.value)}
+                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
+                  >
+                    <option value="">اختر المحافظة</option>
+                    {cities.map(c => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Map Location */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-2">تحديد موقع معاينة السيارة على الخريطة</label>
+                <MapPicker
+                  lat={form.locationLat ? parseFloat(form.locationLat) : null}
+                  lng={form.locationLng ? parseFloat(form.locationLng) : null}
+                  onChange={(lat, lng) => {
+                    updateForm('locationLat', lat.toString());
+                    updateForm('locationLng', lng.toString());
+                  }}
+                />
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex justify-between items-center pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="px-6 py-3 rounded-2xl bg-slate-800 text-slate-300 font-bold text-xs hover:bg-slate-700 transition-colors"
+                >
+                  السابق
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading || !form.brandId || !form.modelId || !form.price || !form.phone || !form.cityId}
+                  className="px-10 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-base transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-xl shadow-emerald-500/20"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                  <span>نشر إعلان السيارة الآن 🚀</span>
+                </button>
+              </div>
+
+            </motion.div>
+          )}
+
+        </form>
+
       </div>
     </div>
   );

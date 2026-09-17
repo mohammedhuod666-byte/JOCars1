@@ -19,6 +19,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const allowedFields = [
       'title', 'description', 'price', 'status', 'featured', 'featuredUntil',
       'views', 'slug', 'refCode', 'deletedAt', 'deletedBy',
+      'inspectionVerified', 'inspectionCenter', 'inspectionDate',
     ];
     const safeData: Record<string, any> = {};
     for (const key of allowedFields) {

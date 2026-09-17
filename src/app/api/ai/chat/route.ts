@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateRequest } from '@/lib/auth';
 import { errorResponse } from '@/lib/api';
 import { chatCompletion, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
 import { fetchOpenSooqListings } from '@/lib/opensooq-scrape';
@@ -411,11 +412,14 @@ async function fetchMarketListings(query: string) {
     const yearMatch = query.match(/(20\d{2})/);
     const year = yearMatch ? parseInt(yearMatch[1]) : undefined;
 
-    const result = await fetchOpenSooqListings(
-      brand || query.split(' ')[0] || '',
-      model,
-      year
-    );
+    const result = await Promise.race([
+      fetchOpenSooqListings(
+        brand || query.split(' ')[0] || '',
+        model,
+        year
+      ),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+    ]);
 
     return result?.listings || [];
   } catch {
@@ -474,8 +478,18 @@ function generateSuggestions(intent: Intent, hasCars: boolean, hasWorkshops: boo
 // ── Main POST handler ──
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`ai-chat:${ip}`, RATE_LIMITS.AI_CHAT);
+    const user = await authenticateRequest(request);
+    if (!user) return Response.json({ success: false, error: 'تسجيل الدخول مطلوب لاستخدام المساعد الذكي' }, { status: 401 });
+    // Parse request body first
+    const body = await request.json();
+    const { messages, sessionId, model: requestedModel } = body;
+    const modelId: AIModelId = (requestedModel && ['glm', 'minimax', 'mistral', 'gpt-oss'].includes(requestedModel))
+      ? requestedModel : DEFAULT_MODEL;
+    const query = messages?.[messages.length - 1]?.content || '';
+    const userName = body.userName || '';
+    const userRole = body.userRole || 'USER';
+
+    const rateLimit = checkRateLimit(`ai-chat:${user.id}`, RATE_LIMITS.AI_CHAT);
     if (!rateLimit.allowed) {
       return Response.json({
         success: true,
@@ -489,12 +503,22 @@ export async function POST(request: NextRequest) {
       }, { status: 429 });
     }
 
-    const { messages, sessionId, model: requestedModel, userName, userRole } = await request.json();
-    const modelId: AIModelId = (requestedModel && ['glm', 'minimax', 'mistral', 'gpt-oss'].includes(requestedModel))
-      ? requestedModel : DEFAULT_MODEL;
-    const query = messages?.[messages.length - 1]?.content || '';
+    // Validate input
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return Response.json({ success: false, error: 'الرجاء إرسال رسالة صالحة' }, { status: 400 });
+    }
     if (!query.trim()) {
-      return Response.json({ success: false, error: 'الرجاء إرسال رسالة' }, { status: 400 });
+      return Response.json({ success: false, error: 'الرجاء إدخال نص السؤال' }, { status: 400 });
+    }
+
+    // Validate messages format
+    for (const msg of messages) {
+      if (!msg.role || !msg.content || typeof msg.role !== 'string' || typeof msg.content !== 'string') {
+        return Response.json({ success: false, error: 'صيغة الرسالة غير صالحة' }, { status: 400 });
+      }
+      if (!['system', 'user', 'assistant', 'function'].includes(msg.role)) {
+        return Response.json({ success: false, error: 'نوع الرسالة غير معروف' }, { status: 400 });
+      }
     }
 
     // Normalize dialect
@@ -506,14 +530,14 @@ export async function POST(request: NextRequest) {
     // Check for ref code
     const refCode = extractRefCode(query);
 
-    // Get or create conversation memory
-    const sid = sessionId || `anon-${ip}`;
+    // Get or create conversation memory (auth is required above, so scope to user)
+    const sid = sessionId || `user-${user.id}`;
     const conversation = conversationStore.get(sid) || [];
     conversation.push({ role: 'user', content: query });
     if (conversation.length > MAX_CONVERSATION_LENGTH) conversation.shift();
 
-    // Extract preferences from conversation history
-    const conversationContext = conversation.slice(-6).map(m => `${m.role}: ${m.content}`).join('\n');
+    // Extract preferences from conversation history (trimmed for speed)
+    const conversationContext = conversation.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n');
 
     // ── REF CODE LOOKUP: fast path ──
     if (intent === 'ref_code' && refCode) {
@@ -611,8 +635,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Greetings need no DB context — skip all fetches for an instant reply.
+    const isGreeting = /^(السلام عليكم|سلام عليكم|سلام|مرحبا|مرحباً|أهلا|اهلا|هلا|صباح الخير|مساء الخير|كيفك|شلونك)/i.test(normalizedQuery.trim());
+
     // Parallel data fetch based on intent
-    const [cars, workshops, parts, marketListings] = await Promise.all([
+    const [cars, workshops, parts, marketListings] = isGreeting
+      ? [[], [], [], []]
+      : await Promise.all([
       intent === 'car_search' || intent === 'price_analysis' || intent === 'general' || intent === 'engine_sound'
         ? fetchCars(normalizedQuery)
         : Promise.resolve([]),
@@ -622,7 +651,7 @@ export async function POST(request: NextRequest) {
       intent === 'parts' || intent === 'general'
         ? fetchParts(normalizedQuery)
         : Promise.resolve([]),
-      intent === 'price_analysis' || intent === 'car_search'
+      intent === 'price_analysis'
         ? fetchMarketListings(normalizedQuery)
         : Promise.resolve([]),
     ]);
@@ -631,9 +660,9 @@ export async function POST(request: NextRequest) {
     const city = parseCity(normalizedQuery);
     const brand = extractBrand(normalizedQuery);
 
-    // Build car context
+    // Build car context (trimmed for faster prefill)
     const carContext = cars.length > 0
-      ? cars.slice(0, 10).map((car: any, i: number) =>
+      ? cars.slice(0, 6).map((car: any, i: number) =>
         `${i + 1}. ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year} — ${car.price.toLocaleString()} د.أ | ${car.city?.nameAr || ''} | ${car.condition || ''} | ${car.kilometers.toLocaleString()} كم | refCode: ${car.refCode || 'N/A'} | ID: ${car.id}`
       ).join('\n')
       : 'لا توجد سيارات متاحة حالياً.';
@@ -665,8 +694,8 @@ export async function POST(request: NextRequest) {
     const marketMin = marketPrices.length > 0 ? Math.min(...marketPrices) : 0;
     const marketMax = marketPrices.length > 0 ? Math.max(...marketPrices) : 0;
 
-    // Build brand price summary
-    const brandSummary = Object.entries(BRAND_PRICE_RANGES).slice(0, 15).map(
+    // Build brand price summary (trimmed for faster prefill)
+    const brandSummary = Object.entries(BRAND_PRICE_RANGES).slice(0, 8).map(
       ([, data]) => `${data.nameAr}: ${data.min.toLocaleString()}-${data.max.toLocaleString()} د.أ`
     ).join('، ');
 
@@ -724,7 +753,7 @@ ${conversationContext}
 
     const chatMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
-      ...conversation.slice(-6).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      ...conversation.slice(-4).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
     // ── Check cache before calling NVIDIA API ──
@@ -737,9 +766,9 @@ ${conversationContext}
       try {
         aiResponse = await chatCompletion(chatMessages, {
           temperature: 0.7,
-          maxTokens: 2048,
-          timeoutMs: 20000,
-          retries: 2,
+          maxTokens: isGreeting ? 300 : 900,
+          timeoutMs: 10000,
+          retries: 1,
           modelId,
         });
         setCachedResponse(normalizedQuery, intent, aiResponse);

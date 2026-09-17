@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"enemy3_states",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"enemy3_states",
+  "parent":{
+    "name":"Scripts",
+    "path":"folders/Scripts.yy"
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0"
+}

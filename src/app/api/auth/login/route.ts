@@ -5,6 +5,7 @@ import { loginSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
 import { checkRateLimit, RATE_LIMITS, resetRateLimit } from '@/lib/rate-limit';
 import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
+import { createAuditLog } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,9 +31,24 @@ export async function POST(request: NextRequest) {
     const validation = loginSchema.safeParse(body);
     if (!validation.success) return validationErrorResponse(validation.error);
 
-    const { email, password } = validation.data;
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return errorResponse('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+    const { email: identifier, password } = validation.data;
+
+    // Email OR Jordanian phone login (الأردني يدخل برقمه غالباً)
+    let user = null;
+    const idTrimmed = identifier.trim();
+    if (idTrimmed.includes('@')) {
+      user = await prisma.user.findUnique({ where: { email: idTrimmed } });
+    } else {
+      const digits = idTrimmed.replace(/[^0-9+]/g, '');
+      let variants = [digits];
+      if (/^07[789]\d{7}$/.test(digits)) variants = [digits, '+962' + digits.slice(1), '962' + digits.slice(1)];
+      else if (/^9627[789]\d{7}$/.test(digits)) variants = [digits, '+' + digits, '0' + digits.slice(3)];
+      else if (/^\+9627[789]\d{7}$/.test(digits)) variants = [digits, digits.slice(1), '0' + digits.slice(4)];
+      user = await prisma.user.findFirst({
+        where: { OR: [{ phone: { in: variants } }, { whatsapp: { in: variants } }] },
+      });
+    }
+    if (!user) return errorResponse('بيانات الدخول غير صحيحة');
 
     if (!user.isActive) return errorResponse('الحساب موقوف', 403);
 
@@ -53,7 +69,7 @@ export async function POST(request: NextRequest) {
       }
 
       await prisma.user.update({ where: { id: user.id }, data: updateData });
-      return errorResponse('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      return errorResponse('بيانات الدخول غير صحيحة');
     }
 
     resetRateLimit(rateLimitKey);
@@ -77,6 +93,12 @@ export async function POST(request: NextRequest) {
       token,
     });
     setAuthCookie(response, token);
+    await createAuditLog({
+      action: 'LOGIN', actorId: user.id,
+      entityType: 'USER', entityId: user.id,
+      description: `تسجيل دخول: ${user.name}`,
+      ip: ip !== 'unknown' ? ip : undefined,
+    });
     return response;
   } catch (error) {
     console.error('Login error:', error);

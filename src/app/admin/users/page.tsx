@@ -24,6 +24,7 @@ export default function AdminUsersPage() {
   const [editPhone, setEditPhone] = useState('');
   const [editDealerName, setEditDealerName] = useState('');
   const [editRole, setEditRole] = useState('USER');
+  const [editPassword, setEditPassword] = useState('');
   const [badgeModal, setBadgeModal] = useState<{ user: User; open: boolean }>({ user: null as any, open: false });
   const [selectedBadges, setSelectedBadges] = useState<string[]>([]);
   const [availableBadges, setAvailableBadges] = useState<{ id: string; nameAr: string; icon: string }[]>([]);
@@ -104,22 +105,20 @@ export default function AdminUsersPage() {
 
   const openEditModal = (u: User) => {
     setEditName(u.name); setEditEmail(u.email); setEditPhone(u.phone || '');
-    setEditDealerName(u.dealerName || ''); setEditRole(u.role);
+    setEditDealerName(u.dealerName || ''); setEditRole(u.role); setEditPassword('');
     setEditModal({ user: u, open: true });
   };
 
   const handleEdit = async () => {
     if (!editName.trim() || !editEmail.trim()) { toast.error('الاسم والبريد مطلوبان'); return; }
+    if (editPassword && editPassword.length < 6) { toast.error('كلمة السر الجديدة قصيرة (6 أحرف على الأقل)'); return; }
     setSubmitting(true);
     const data: Record<string, unknown> = { name: editName, email: editEmail, role: editRole };
     if (editPhone) data.phone = editPhone;
+    if (editPassword) data.password = editPassword;
     data.dealerName = editDealerName || null;
-    // عند ترقية مستخدم إلى TRADER، يُفعّل dealerVerified=true فورًا
-    // ليحصل المستخدم على كل ميزات التاجر تلقائيًا (المستخدم يطلب:
-    // "ينعطى جميع ميزات تاجر للمستخدم بشكل طبيعي").
-    // وعند إرجاعه إلى USER، نُسحب التحقّق فلا يستقبل حجوزات على إعلاناته.
-    if (editRole === 'TRADER') data.dealerVerified = true;
-    else if (editRole === 'USER') data.dealerVerified = false;
+    // التوثيق (dealerVerified) لا يُمنح من هنا إطلاقاً — فقط عبر صفحة
+    // اعتماد التجار بعد أن يرسل التاجر طلب توثيق من لوحته.
     if (await updateUser(editModal.user.id, data)) {
       toast.success('تم تحديث البيانات');
       setEditModal({ ...editModal, open: false });
@@ -387,6 +386,12 @@ export default function AdminUsersPage() {
                   <input value={editDealerName} onChange={e => setEditDealerName(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2 text-sm outline-none focus:border-blue-500" /></div>
                 <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">كلمة سر جديدة (اتركها فارغة للإبقاء على الحالية)</p>
+                  <input value={editPassword} onChange={e => setEditPassword(e.target.value)} type="password" dir="ltr" placeholder="••••••"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <p className="text-[11px] text-gray-400 mt-1">تنطبق على جميع الحسابات بما فيها حسابات المدراء — 6 أحرف على الأقل</p>
+                </div>
+                <div>
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">نوع الحساب</p>
                   <div className="flex gap-2 flex-wrap">
                     {['USER', 'DEALER', 'TRADER', 'ADMIN'].map(r => (
@@ -405,7 +410,7 @@ export default function AdminUsersPage() {
                   </div>
                   {editRole === 'TRADER' && (
                     <p className="text-xs text-emerald-500 mt-2">
-                      عند الترقية إلى تاجر يُفعّل dealerVerified=true تلقائيًا — يحصل المستخدم على ميزات التاجر الكاملة فورًا.
+                      التوثيق لا يُمنح تلقائياً — على التاجر إرسال طلب توثيق من لوحته، والاعتماد يتم من صفحة اعتماد التجار.
                     </p>
                   )}
                 </div>

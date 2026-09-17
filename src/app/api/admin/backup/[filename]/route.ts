@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { errorResponse, unauthorizedResponse } from '@/lib/api';
+import prisma from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 
@@ -48,6 +49,8 @@ export async function DELETE(
     if (!fs.existsSync(filePath)) return errorResponse('الملف غير موجود', 404);
 
     fs.unlinkSync(filePath);
+    // Also drop its DB record so the list stays in sync
+    await prisma.backup.deleteMany({ where: { name: safeName } }).catch(() => {});
     return NextResponse.json({ success: true, message: 'تم حذف الملف بنجاح' });
   } catch (error) {
     return errorResponse('فشل حذف الملف', 500);

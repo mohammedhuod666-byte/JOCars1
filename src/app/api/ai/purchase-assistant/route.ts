@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { successResponse, errorResponse } from '@/lib/api';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { authenticateRequest } from '@/lib/auth';
 import { chatCompletion, type ChatMessage } from '@/ai/nvidia-client';
 import { getSystemPrompt, BRAND_PRICE_RANGES } from '@/ai/site-knowledge';
 
@@ -31,9 +32,10 @@ function parseNeeds(query: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const user = await authenticateRequest(request);
+  if (!user) return errorResponse('تسجيل الدخول مطلوب لاستخدام المساعد الذكي', 401);
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`ai-purchase:${ip}`, RATE_LIMITS.AI);
+    const rateLimit = checkRateLimit(`ai-purchase:${user.id}`, RATE_LIMITS.AI);
     if (!rateLimit.allowed) return errorResponse('تم تجاوز الحد المسموح', 429);
 
     const { query } = await request.json();

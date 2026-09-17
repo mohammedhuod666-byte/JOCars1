@@ -65,9 +65,11 @@ export async function PUT(
 
     const body = await request.json();
     const {
-      name, description, phone, whatsapp, email, website,
-      address, lat, lng, cityId, provinceId, logo, coverImage,
+      name, description, phone, whatsapp, email, website, emergencyPhone,
+      address, lat, lng, cityId, provinceId, logo, coverImage, gallery,
       workingHours, workingDays, yearsOfExperience, employeeCount,
+      priceRange, isMobileService, hasTowingService, hasWarranty, warrantyPeriod,
+      hasWaitingArea, offersSpareParts, paymentMethods, specialties, discountOffer,
       services, brands, prices,
     } = body;
 
@@ -81,6 +83,7 @@ export async function PUT(
           ...(whatsapp !== undefined && { whatsapp }),
           ...(email !== undefined && { email }),
           ...(website !== undefined && { website }),
+          ...(emergencyPhone !== undefined && { emergencyPhone }),
           ...(address !== undefined && { address }),
           ...(lat !== undefined && { lat }),
           ...(lng !== undefined && { lng }),
@@ -88,10 +91,21 @@ export async function PUT(
           ...(provinceId !== undefined && { provinceId }),
           ...(logo !== undefined && { logo }),
           ...(coverImage !== undefined && { coverImage }),
+          ...(gallery !== undefined && { gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : gallery }),
           ...(workingHours !== undefined && { workingHours }),
           ...(workingDays !== undefined && { workingDays }),
-          ...(yearsOfExperience !== undefined && { yearsOfExperience }),
-          ...(employeeCount !== undefined && { employeeCount }),
+          ...(yearsOfExperience !== undefined && { yearsOfExperience: Number(yearsOfExperience) }),
+          ...(employeeCount !== undefined && { employeeCount: Number(employeeCount) }),
+          ...(priceRange !== undefined && { priceRange }),
+          ...(isMobileService !== undefined && { isMobileService: Boolean(isMobileService) }),
+          ...(hasTowingService !== undefined && { hasTowingService: Boolean(hasTowingService) }),
+          ...(hasWarranty !== undefined && { hasWarranty: Boolean(hasWarranty) }),
+          ...(warrantyPeriod !== undefined && { warrantyPeriod }),
+          ...(hasWaitingArea !== undefined && { hasWaitingArea: Boolean(hasWaitingArea) }),
+          ...(offersSpareParts !== undefined && { offersSpareParts: Boolean(offersSpareParts) }),
+          ...(paymentMethods !== undefined && { paymentMethods }),
+          ...(specialties !== undefined && { specialties: Array.isArray(specialties) ? JSON.stringify(specialties) : specialties }),
+          ...(discountOffer !== undefined && { discountOffer }),
         },
       });
 

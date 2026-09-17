@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const next = require('next');
 const { Server } = require('socket.io');
+const { PrismaClient } = require('@prisma/client');
 
 const dev = false;
 const hostname = '0.0.0.0';
@@ -50,19 +51,9 @@ function log(level, msg, extra) {
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-// Run prisma db push on startup to ensure all tables exist.
-// --accept-data-loss lets us add the new @@unique([bookingId]) on conversations
-// safely (existing rows have NULL bookingId, which is allowed by Postgres
-// unique constraints, so nothing is actually dropped). Without this flag, the
-// non-interactive prompt errors out and blocks startup intermittently.
-const { execSync } = require('child_process');
-try {
-  log('INFO', 'Running safe prisma db push check...');
-  execSync('npx prisma db push --skip-generate', { stdio: 'inherit', timeout: 30000 });
-  log('INFO', 'Prisma db sync completed safely');
-} catch (e) {
-  log('WARN', 'Prisma db push check failed (non-fatal, database remains intact)', e.message);
-}
+// Schema changes are applied by the deployment migration step, never by a
+// running web server. This keeps application startup read-only and predictable.
+const prisma = new PrismaClient();
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -187,25 +178,51 @@ app.prepare().then(() => {
     onlineUsers.set(userId, { socketId: socket.id, joinedAt: Date.now() });
     io.emit('user-online', { userId });
 
-    socket.on('join-conversation', (id) => {
-      if (id && typeof id === 'string' && id.length < 100) socket.join(`conversation:${id}`);
+    const canAccessConversation = async (conversationId) => {
+      if (!conversationId || typeof conversationId !== 'string' || conversationId.length > 100) return false;
+      if (socket.userRole === 'ADMIN') return true;
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { buyerId: true, sellerId: true },
+      });
+      return Boolean(conversation && (conversation.buyerId === userId || conversation.sellerId === userId));
+    };
+
+    socket.on('join-conversation', async (id) => {
+      try {
+        if (await canAccessConversation(id)) socket.join(`conversation:${id}`);
+      } catch (err) {
+        log('WARN', 'Conversation authorization failed', err.message);
+      }
     });
     socket.on('leave-conversation', (id) => {
       if (id && typeof id === 'string' && id.length < 100) socket.leave(`conversation:${id}`);
     });
-    socket.on('new-message', (data) => {
-      if (data?.conversationId && typeof data.conversationId === 'string') {
+    socket.on('new-message', async (data) => {
+      try {
+        if (await canAccessConversation(data?.conversationId)) {
         socket.to(`conversation:${data.conversationId}`).emit('message-received', data);
+        }
+      } catch (err) {
+        log('WARN', 'Message event authorization failed', err.message);
       }
     });
-    socket.on('typing', (data) => {
-      if (data?.conversationId && data?.userId) {
-        socket.to(`conversation:${data.conversationId}`).emit('user-typing', { userId: data.userId });
+    socket.on('typing', async (data) => {
+      try {
+        if (await canAccessConversation(data?.conversationId)) {
+          socket.to(`conversation:${data.conversationId}`).emit('user-typing', { userId });
+        }
+      } catch (err) {
+        log('WARN', 'Typing event authorization failed', err.message);
       }
     });
-    socket.on('stop-typing', (data) => {
-      if (data?.conversationId) {
+    socket.on('stop-typing', async (data) => {
+      try {
+        if (await canAccessConversation(data?.conversationId)) {
         socket.to(`conversation:${data.conversationId}`).emit('user-stop-typing', {});
+        }
+      } catch (err) {
+        log('WARN', 'Typing event authorization failed', err.message);
       }
     });
     socket.on('check-online', (targetUserId) => {
@@ -229,13 +246,105 @@ app.prepare().then(() => {
     if (mem > 500 && global.gc) global.gc();
   }, 60000);
 
+  // ── Automatic Postgres backup every 5 hours ──
+  // Calls the internal cron endpoint (guarded by BACKUP_CRON_SECRET).
+  // The endpoint dumps all tables to backups/, records it in DB,
+  // emails it, and WhatsApps the admins. Set BACKUP_CRON_SECRET in
+  // env to enable; without it the scheduler stays idle (manual
+  // backups from /admin/backups still work).
+  const BACKUP_INTERVAL_MS = 5 * 60 * 60 * 1000;
+  async function triggerScheduledBackup(reason) {
+    if (!process.env.BACKUP_CRON_SECRET) {
+      log('WARN', 'Backup scheduler idle — BACKUP_CRON_SECRET is not set');
+      return;
+    }
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/backup`, {
+        method: 'POST',
+        headers: { 'x-cron-secret': process.env.BACKUP_CRON_SECRET },
+        signal: AbortSignal.timeout(1000 * 60 * 10),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data && data.success) {
+        log('INFO', `Scheduled backup (${reason}) completed: ${data.data?.name || ''} ${data.data?.sizeFormatted || ''} email=${data.data?.emailSent}`);
+      } else {
+        log('WARN', `Scheduled backup (${reason}) failed`, JSON.stringify(data).slice(0, 200));
+      }
+    } catch (e) {
+      log('WARN', `Scheduled backup (${reason}) error`, e.message);
+    }
+  }
+  setTimeout(() => triggerScheduledBackup('startup'), 2 * 60 * 1000);
+  setInterval(() => triggerScheduledBackup('interval'), BACKUP_INTERVAL_MS);
+
+  // ── Nightly fair-price recalculation (same scheduler secret) ──
+  const RECALC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  async function triggerRecalculation(reason) {
+    if (!process.env.BACKUP_CRON_SECRET) return; // scheduler disabled
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/recalculate`, {
+        method: 'POST',
+        headers: { 'x-cron-secret': process.env.BACKUP_CRON_SECRET },
+        signal: AbortSignal.timeout(1000 * 60 * 30),
+      });
+      const data = await res.json().catch(() => ({}));
+      log('INFO', `Fair-price recalculation (${reason}): ${data?.data?.recalculated ?? 'failed'}`);
+    } catch (e) {
+      log('WARN', `Fair-price recalculation (${reason}) error`, e.message);
+    }
+  }
+  setTimeout(() => triggerRecalculation('startup'), 10 * 60 * 1000);
+  setInterval(() => triggerRecalculation('interval'), RECALC_INTERVAL_MS);
+
+  // ── Weekly admin WhatsApp report (same scheduler secret) ──
+  const WEEKLY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+  async function triggerWeeklyReport(reason) {
+    if (!process.env.BACKUP_CRON_SECRET) return; // scheduler disabled
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/cron/weekly-report`, {
+        method: 'POST',
+        headers: { 'x-cron-secret': process.env.BACKUP_CRON_SECRET },
+        signal: AbortSignal.timeout(1000 * 60 * 5),
+      });
+      const data = await res.json().catch(() => ({}));
+      log('INFO', `Weekly report (${reason}): sent=${data?.data?.sent}`);
+    } catch (e) {
+      log('WARN', `Weekly report (${reason}) error`, e.message);
+    }
+  }
+  setTimeout(() => triggerWeeklyReport('startup'), 15 * 60 * 1000);
+  setInterval(() => triggerWeeklyReport('interval'), WEEKLY_INTERVAL_MS);
+
+  // ── Daily car-news auto-import (same scheduler secret) ──
+  const NEWS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  async function triggerNewsImport(reason) {
+    if (!process.env.BACKUP_CRON_SECRET) return; // scheduler disabled
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/admin/news-aggregator`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.BACKUP_CRON_SECRET },
+        body: JSON.stringify({ limit: 12 }),
+        signal: AbortSignal.timeout(1000 * 60 * 5),
+      });
+      const data = await res.json().catch(() => ({}));
+      log('INFO', `News auto-import (${reason}): ${data?.data?.message || 'failed'}`);
+    } catch (e) {
+      log('WARN', `News auto-import (${reason}) error`, e.message);
+    }
+  }
+  setTimeout(() => triggerNewsImport('startup'), 30 * 60 * 1000);
+  setInterval(() => triggerNewsImport('interval'), NEWS_INTERVAL_MS);
+
   httpServer.listen(port, hostname, () => {
     log('INFO', `Ready on http://${hostname}:${port} [production]`);
   });
 
   process.on('SIGTERM', () => {
     io.close();
-    httpServer.close(() => process.exit(0));
+    httpServer.close(async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
     setTimeout(() => process.exit(1), 5000);
   });
 });

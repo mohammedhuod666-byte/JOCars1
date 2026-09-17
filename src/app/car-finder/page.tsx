@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
-import { Car, Users, DollarSign, Zap, Fuel, ArrowRight, ArrowLeft, Loader2, MapPin, Gauge, Heart } from 'lucide-react';
+import { Car, Users, DollarSign, Zap, Fuel, ArrowRight, ArrowLeft, Loader2, MapPin, Gauge, Heart, Bell } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/navigation';
 
 interface Recommendation {
   id: string; brand: string; model: string; year: number; price: number;
@@ -62,6 +64,10 @@ export default function CarFinderPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Recommendation[] | null>(null);
   const [summary, setSummary] = useState<any>(null);
+  const [alertDone, setAlertDone] = useState(false);
+  const [alertBusy, setAlertBusy] = useState(false);
+  const { token, isAuthenticated } = useAuth();
+  const router = useRouter();
 
   const handleFind = async () => {
     setLoading(true);
@@ -205,7 +211,30 @@ export default function CarFinderPage() {
 
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">السيارات المقترحة لك</h2>
-                <Button variant="ghost" size="sm" onClick={() => { setStep(0); setResults(null); }}>إعادة الاختبار</Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost" size="sm"
+                    disabled={alertBusy}
+                    onClick={async () => {
+                      if (!isAuthenticated) { router.push('/auth/login'); return; }
+                      setAlertBusy(true);
+                      try {
+                        const res = await fetch('/api/price-alerts', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                          body: JSON.stringify({ maxPrice: parseInt(answers.budget) || undefined }),
+                        });
+                        const d = await res.json();
+                        if (d.success) setAlertDone(true);
+                      } catch {}
+                      setAlertBusy(false);
+                    }}
+                    icon={<Bell className="w-4 h-4" />}
+                  >
+                    {alertDone ? 'تم تفعيل التنبيه ✅' : 'نبّهني بسيارات بميزانيتي 🔔'}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => { setStep(0); setResults(null); setAlertDone(false); }}>إعادة الاختبار</Button>
+                </div>
               </div>
 
               {results.length === 0 ? (

@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const rateLimit = checkRateLimit(`forum-topic:${user.id}`, RATE_LIMITS.FORUM);
   if (!rateLimit.allowed) return Response.json({ error: 'تم تجاوز الحد المسموح' }, { status: 429 });
 
-  const { title, content, categoryId } = await request.json();
+  const { title, content, categoryId, images } = await request.json();
   if (!title || !content || !categoryId) {
     return Response.json({ error: 'العنوان، المحتوى، والقسم مطلوب' }, { status: 400 });
   }
@@ -54,16 +54,26 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'العنوان أو المحتوى طويل جداً' }, { status: 400 });
   }
 
-  const category = await prisma.forumCategory.findUnique({ where: { id: categoryId } });
+  let category = await prisma.forumCategory.findUnique({ where: { id: categoryId } });
+  if (!category) {
+    category = await prisma.forumCategory.findUnique({ where: { slug: categoryId } });
+  }
   if (!category) return Response.json({ error: 'القسم غير موجود' }, { status: 404 });
 
   const slug = `topic-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const topic = await prisma.forumTopic.create({
-    data: { title: sanitizePlainText(title), content: sanitizeHtml(content), slug, categoryId, userId: user.id },
+    data: {
+      title: sanitizePlainText(title),
+      content: sanitizeHtml(content),
+      slug,
+      categoryId: category.id,
+      userId: user.id,
+      images: Array.isArray(images) ? JSON.stringify(images) : (typeof images === 'string' ? images : '[]'),
+    },
     include: {
       user: { select: { id: true, name: true, image: true, dealerName: true } },
-      category: { select: { id: true, nameAr: true, slug: true } },
+      category: { select: { id: true, nameAr: true, nameEn: true, slug: true } },
     },
   });
 

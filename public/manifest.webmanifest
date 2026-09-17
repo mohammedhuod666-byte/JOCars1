@@ -1,0 +1,32 @@
+{
+  "name": "JO Cars — سوق السيارات الأردني",
+  "short_name": "JO Cars",
+  "description": "أفضل منصة أردنية لبيع وشراء السيارات الجديدة والمستعملة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/shield-logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ]
+}

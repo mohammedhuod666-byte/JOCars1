@@ -222,15 +222,19 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
         <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200">
             <Sparkles className="w-3.5 h-3.5" />
-            تحليل بالذكاء الاصطناعي Z.ai
+            تحليل بالذكاء الاصطناعي ✨
           </span>
-          {price.confidence !== undefined && (
+          {price.confidence !== undefined && price.confidence > 0 ? (
             <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
               price.confidence >= 80 ? 'bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-200' :
               price.confidence >= 60 ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200' :
               'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200'
             }`}>
               نسبة الثقة {price.confidence}%
+            </span>
+          ) : (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold border bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200">
+              بيانات السوق محدودة
             </span>
           )}
           {(price.sources || []).map((src, i) => (
@@ -265,14 +269,22 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap mb-4">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 ${getPricePositionColor(price.position)}`}>
-              {getPricePositionIcon(price.position)}
-              {getPricePositionLabel(price.position)}
-              {price.diffPercent > 0 && <span className="ml-1">({price.diffPercent}%)</span>}
-            </span>
-            <span className="px-3 py-1 rounded-full text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 border border-gray-200">
-              <BarChart3 className="w-3 h-3 inline mr-1" /> {price.similarCount} سيارة مشابهة في السوق
-            </span>
+            {price.similarCount > 0 ? (
+              <>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 ${getPricePositionColor(price.position)}`}>
+                  {getPricePositionIcon(price.position)}
+                  {getPricePositionLabel(price.position)}
+                  {price.diffPercent > 0 && <span className="ml-1">({price.diffPercent}%)</span>}
+                </span>
+                <span className="px-3 py-1 rounded-full text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 border border-gray-200">
+                  <BarChart3 className="w-3 h-3 inline mr-1" /> {price.similarCount} سيارة مشابهة في السوق
+                </span>
+              </>
+            ) : (
+              <span className="px-3 py-1 rounded-full text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 border border-gray-200">
+                <BarChart3 className="w-3 h-3 inline mr-1" /> لا توجد إعلانات مشابهة كافية للمقارنة — السعر تقديري
+              </span>
+            )}
           </div>
 
           {price.reasoning && (

@@ -26,6 +26,7 @@ export function getAdminNotifyLink(type: string, id?: string): string {
     case 'NEW_REPORT': return `/admin/reports`;
     case 'NEW_USER': return `/admin/users`;
     case 'NEW_TRADER': return `/admin/traders-approval`;
+    case 'TRADER_VERIFICATION': return `/admin/traders-approval`;
     case 'NEW_MESSAGE': return `/admin/messages`;
     case 'NEW_CAR': return `/admin/cars`;
     case 'NEW_TICKET': return `/admin/tickets`;

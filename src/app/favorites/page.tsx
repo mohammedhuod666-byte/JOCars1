@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { CarGrid } from '@/components/cars/CarGrid';
+import { PushBell } from '@/components/ui/PushBell';
 import { Heart } from 'lucide-react';
 import type { Car } from '@/types';
 
@@ -26,14 +27,17 @@ export default function FavoritesPage() {
   return (
     <div className="min-h-[80vh] py-8">
       <div className="container-custom">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center shadow-lg">
-            <Heart className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between gap-3 mb-8 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center shadow-lg">
+              <Heart className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">المفضلة</h1>
+              <p className="text-gray-500 text-sm">السيارات التي حفظتها — فعّل التنبيه ليصلك انخفاض أسعارها فوراً</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">المفضلة</h1>
-            <p className="text-gray-500 text-sm">السيارات التي حفظتها</p>
-          </div>
+          <PushBell />
         </div>
         <CarGrid cars={cars} loading={loading} emptyMessage="لم تقم بحفظ أي سيارة في المفضلة بعد" />
       </div>

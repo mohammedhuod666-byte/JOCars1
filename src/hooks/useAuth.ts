@@ -25,6 +25,7 @@ interface AuthState {
     dealerViewCount?: number | null;
     rating?: number;
     ratingCount?: number;
+    phoneVerified?: boolean;
   } | null;
   token: string | null;
   isAuthenticated: boolean;
@@ -81,6 +82,7 @@ export const useAuth = create<AuthState>()(
                 dealerBannerImage: d.data.dealerBannerImage,
                 dealerCommercialReg: d.data.dealerCommercialReg,
                 dealerViewCount: d.data.dealerViewCount,
+                phoneVerified: d.data.phoneVerified,
                 rating: d.data.rating,
                 ratingCount: d.data.ratingCount,
                 whatsappNotifications: d.data.whatsappNotifications,

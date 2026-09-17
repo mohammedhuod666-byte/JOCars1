@@ -3,8 +3,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendWhatsApp } from '@/lib/whatsapp';
 
-// Temporary memory store for OTP codes (phone -> { code, expiresAt })
-export const otpStore = new Map<string, { code: string; expiresAt: number }>();
+// Temporary memory store for OTP codes (phone -> { code, expiresAt, attempts })
+export const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,12 +40,13 @@ export async function POST(request: NextRequest) {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-    otpStore.set(formattedPhone, { code, expiresAt });
+    otpStore.set(formattedPhone, { code, expiresAt, attempts: 0 });
 
     const message = `🔒 *رمز التحقق الخاص بك في منصة JO Cars*\n\nالرمز: *${code}*\n\nينتهي خلال 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
     await sendWhatsApp(formattedPhone, message);
 
-    console.log(`[OTP] Sent OTP ${code} to ${formattedPhone}`);
+    // Never log the OTP code itself — server logs must not contain secrets
+    console.log(`[OTP] Sent OTP to ${formattedPhone}`);
 
     return NextResponse.json({
       success: true,
