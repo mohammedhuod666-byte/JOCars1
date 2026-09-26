@@ -354,24 +354,31 @@ export function ValuationReport({
                   }`}
                 >
                   <Scale className="w-5 h-5 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-black">موقف السعر المطلوب ({askingPrice.toLocaleString()} د.أ): </span>
-                    {pricePos.classification === 'FAIR' && (
-                      <span>السعر المطلوب ضمن النطاق العادل للقيمة السوقية.</span>
-                    )}
-                    {pricePos.classification === 'BELOW_MARKET' && (
-                      <span>
-                        السعر المطلوب أقل من القيمة السوقية العادلة بـ{' '}
-                        {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (
-                        {Math.abs(pricePos.differencePercent)}%) — يعتبر فرصة سعرية ممتازة.
-                      </span>
-                    )}
-                    {pricePos.classification === 'ABOVE_MARKET' && (
-                      <span>
-                        السعر المطلوب أعلى من القيمة السوقية العادلة بـ{' '}
-                        {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (+
-                        {pricePos.differencePercent}%) — السعر المطلوب خارج النطاق التقديري المبني على إعلانات السوق.
-                      </span>
+                  <div className="space-y-1">
+                    <div>
+                      <span className="font-black">موقف السعر المطلوب ({askingPrice.toLocaleString()} د.أ): </span>
+                      {pricePos.classification === 'FAIR' && (
+                        <span>السعر المطلوب ضمن النطاق العادل للقيمة السوقية.</span>
+                      )}
+                      {pricePos.classification === 'BELOW_MARKET' && (
+                        <span>
+                          السعر المطلوب أقل من القيمة السوقية العادلة بـ{' '}
+                          {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (
+                          {Math.abs(pricePos.differencePercent || 0)}%) — يعتبر فرصة سعرية ممتازة.
+                        </span>
+                      )}
+                      {pricePos.classification === 'ABOVE_MARKET' && (
+                        <span>
+                          السعر المطلوب أعلى من القيمة السوقية العادلة بـ{' '}
+                          {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (+
+                          {pricePos.differencePercent}%) — السعر المطلوب أعلى من تقدير السوق العادل.
+                        </span>
+                      )}
+                    </div>
+                    {pricePos.percentileLabel && (
+                      <div className="text-[11px] text-slate-300 font-medium bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-700/50 inline-block">
+                        {pricePos.percentileLabel}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -516,7 +523,7 @@ export function ValuationReport({
                                         ? 'Tier 2 (نفس الموديل والسنة)'
                                         : c.tier === 3
                                         ? 'Tier 3 (نفس الموديل مع فرق سنة ±1)'
-                                        : 'Tier 4 (مركبة مقارنة قريبة)'}
+                                        : 'Tier 4 (شواهد داعمة من نفس الموديل بسنوات أبعد)'}
                                     </strong>
                                   </span>
                                   <span>•</span>

@@ -32,6 +32,7 @@ export interface NormalizedListing {
   sourceLabel: string;
   externalId?: string | null;
   url?: string | null;
+  title?: string | null;
   brand: string;
   brandEn?: string | null;
   model: string;
@@ -79,8 +80,13 @@ export interface PriceStats {
   weightedAvg: number;
   median: number;
   p25: number;
+  p50: number;
   p75: number;
+  p85: number;
+  p90: number;
   iqr: number;
+  askingPricePercentile?: number | null;
+  askingPricePremiumPercent?: number | null;
 }
 
 export interface DataQualityReport {
@@ -212,6 +218,8 @@ export interface ValuationAuditTrace {
     rawPrice: number;
     normalizedPrice: number;
     tier: number;
+    tierLabel?: string;
+    identityStatus?: string;
     isPrimary: boolean;
     similarity: number;
     simBreakdown: Record<string, number>;

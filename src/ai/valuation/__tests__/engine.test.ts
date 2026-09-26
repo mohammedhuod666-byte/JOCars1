@@ -10,7 +10,7 @@ import { extractSpecsFromTitle } from '../spec-extract';
 import { assignTier, scoreSimilarity, isTargetCopy, checkListingIdentityConsistency } from '../similarity';
 import { dedupeExact, dedupeNear, iqrFences, flagOutliers, sanityCheck, detectTargetIdentityCluster } from '../outliers';
 import { adjustComparable, calibrate } from '../adjust';
-import { weightedMedian, weightedAvg, confidenceScore, computeWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut } from '../price';
+import { weightedMedian, weightedAvg, confidenceScore, computeWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut, priceStats } from '../price';
 import type { Comparable, VehicleSpec, NormalizedListing } from '../types';
 
 const spec: VehicleSpec = {
@@ -463,5 +463,91 @@ describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () =>
     assert.equal(cleanListings.length, 0);
     const validSources = new Set(cleanListings.map((l) => l.source)).size;
     assert.equal(validSources, 0, 'Cloned listings cannot count towards source diversity');
+  });
+
+  // Test 11: Cross-model contamination strictly banned (BMW 520, 730, 320, X1, X3 never admitted into any tier for X5)
+  it('11. Model Contamination Barrier: Other BMW models (5-Series, 7-Series, 3-Series, X3) are NEVER admitted into any tier for X5', () => {
+    const foreignModels: NormalizedListing[] = [
+      mkNorm({ source: 'ordonauto', brand: 'BMW', model: '520', year: 2018, price: 26000, priceJod: 26000 }),
+      mkNorm({ source: 'opensooq', brand: 'BMW', model: '730', year: 2018, price: 38000, priceJod: 38000 }),
+      mkNorm({ source: 'opensooq', brand: 'BMW', model: '320', year: 2018, price: 21000, priceJod: 21000 }),
+      mkNorm({ source: 'ordonauto', brand: 'BMW', model: 'X3', year: 2018, price: 24000, priceJod: 24000 }),
+      mkNorm({ source: 'opensooq', brand: 'BMW', model: 'X1', year: 2018, price: 18000, priceJod: 18000 }),
+      mkNorm({ source: 'opensooq', brand: 'BMW', model: '5-Series', year: 2018, price: 27000, priceJod: 27000 }),
+      mkNorm({ source: 'opensooq', brand: 'BMW', model: '7-Series', year: 2018, price: 39000, priceJod: 39000 }),
+    ];
+
+    for (const f of foreignModels) {
+      // Even with maximum expansion flags enabled, different models must return Tier 0 (disqualified)
+      const tierWithExpansion = assignTier(f, x5Spec, { allowPlus2: true, allowTier4: true, allowAnyYear: true });
+      assert.equal(tierWithExpansion, 0, `Model ${f.model} should be rejected (tier 0) for target BMW X5`);
+    }
+  });
+
+  // Test 12: Empirical percentiles strictly computed on eligible comparables
+  it('12. Empirical Percentiles: computes P25, P50, P75, P85, P90 strictly from eligible comps', () => {
+    const eligibleComps: Comparable[] = [
+      mkListing({ priceJod: 20000, weight: 1 }),
+      mkListing({ priceJod: 24000, weight: 1 }),
+      mkListing({ priceJod: 26000, weight: 1 }),
+      mkListing({ priceJod: 28000, weight: 1 }),
+      mkListing({ priceJod: 30000, weight: 1 }),
+      mkListing({ priceJod: 32000, weight: 1 }),
+      mkListing({ priceJod: 35000, weight: 1 }),
+    ];
+
+    const stats = priceStats(eligibleComps, 30000);
+    assert.equal(stats.median, 28000);
+    assert.equal(stats.p50, 28000);
+    assert.ok(stats.p25 && stats.p25 <= stats.p50);
+    assert.ok(stats.p75 && stats.p75 >= stats.p50);
+    assert.ok(stats.p85 && stats.p85 >= stats.p75);
+    assert.ok(stats.p90 && stats.p90 >= stats.p85);
+    assert.ok(stats.askingPricePercentile !== null && stats.askingPricePercentile !== undefined && stats.askingPricePercentile > 50);
+  });
+
+  // Test 13: Asking price premium vs market percentile separation
+  it('13. Separation of Asking Price Premium vs Market Percentile: Premium (+15.4%) does not equal Percentile rank', () => {
+    const eligibleComps: Comparable[] = [
+      mkListing({ priceJod: 25000, weight: 1 }),
+      mkListing({ priceJod: 26000, weight: 1 }),
+      mkListing({ priceJod: 27000, weight: 1 }),
+      mkListing({ priceJod: 28000, weight: 1 }),
+      mkListing({ priceJod: 29000, weight: 1 }),
+    ];
+    // Target asking 30,000 JD against weighted median 27,000 JD
+    const stats = priceStats(eligibleComps, 30000);
+    const premiumPct = stats.askingPricePremiumPercent;
+    const percentile = stats.askingPricePercentile;
+
+    assert.ok(premiumPct !== null && premiumPct !== undefined);
+    assert.ok(percentile !== null && percentile !== undefined);
+    // Premium should be ~11.1% ((30000 - 27000)/27000)
+    assert.equal(Math.round(premiumPct!), 11);
+    // Percentile rank in [25k..29k] is 100th percentile (higher than all 5 comps)
+    assert.equal(percentile, 100);
+    // Premium % and Percentile rank MUST NOT be conflated
+    assert.notEqual(premiumPct, percentile);
+  });
+
+  // Test 14: UNKNOWN specs are scored 0.5 (neutral missing evidence) and do not penalize similarity as a defect
+  it('14. Neutral UNKNOWN Spec Scoring: missing trim/fuel/transmission scores 0.5 neutral', () => {
+    const targetWithTrim: VehicleSpec = {
+      brand: 'BMW', brandEn: 'BMW', model: 'X5', modelEn: 'X5',
+      year: 2018, trim: 'xDrive40e', kilometers: 171000, fuelType: 'HYBRID',
+      transmission: 'AUTOMATIC', city: 'عمان',
+    };
+
+    const compWithUnknownSpecs: Comparable = mkListing({
+      brand: 'BMW', model: 'X5', year: 2018, trim: null, fuelType: null,
+      transmission: null, kilometers: 171000, tier: 2,
+    });
+
+    const scored = scoreSimilarity(compWithUnknownSpecs, targetWithTrim, 2);
+    // Breakdown for trim, fuel, and transmission should each be 50% (neutral 0.5, not 0)
+    assert.equal(scored.simBreakdown.trim, 50);
+    assert.equal(scored.simBreakdown.engineTrans, 50);
+    // Overall similarity should remain robust (>= 60) rather than plunging to 0
+    assert.ok(scored.similarity >= 60, `Similarity ${scored.similarity} should be >= 60`);
   });
 });

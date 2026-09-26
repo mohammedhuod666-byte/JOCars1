@@ -429,7 +429,7 @@ export async function runValuation(
     });
     const admitMore = (
       label: string,
-      ctx: { allowPlus2: boolean; allowTier4: boolean; allowAnyYear: boolean; allowSameBrand: boolean },
+      ctx: { allowPlus2: boolean; allowTier4: boolean; allowAnyYear: boolean },
     ) => {
       let added = 0;
       for (const l of matchPool) {
@@ -453,19 +453,16 @@ export async function runValuation(
     }
     // Expansion ladder: keep widening ONLY while quality comps < 5, and stop
     // the moment data is truly exhausted. Every stage is funnel-logged.
+    // Note: NEVER expand to different models of the same brand!
     let tiered = [...first];
     const expansionLog: string[] = [`أساسي 1-2 و±1: ${tiered.length}`];
     if (tiered.filter((c) => c.tier <= 2).length < 5) {
-      const n = admitMore('wide', { allowPlus2: true, allowTier4: true, allowAnyYear: false, allowSameBrand: false });
+      const n = admitMore('wide', { allowPlus2: true, allowTier4: true, allowAnyYear: false });
       expansionLog.push(`توسيع ±2 وقريب: +${n}`);
     }
     if (tiered.length < 5) {
-      const n = admitMore('anyyear', { allowPlus2: true, allowTier4: true, allowAnyYear: true, allowSameBrand: false });
+      const n = admitMore('anyyear', { allowPlus2: true, allowTier4: true, allowAnyYear: true });
       expansionLog.push(`توسيع نفس الموديل أي سنة (T4): +${n}`);
-    }
-    if (tiered.length < 5) {
-      const n = admitMore('brandkin', { allowPlus2: true, allowTier4: true, allowAnyYear: true, allowSameBrand: true });
-      expansionLog.push(`توسيع أقارب الماركة (T4): +${n}`);
     }
     const counts = [1, 2, 3, 4].map((t) => tiered.filter((c) => c.tier === t).length);
     // Expansion overflow guard: tier-4 is scaffolding, not foundation —
@@ -590,22 +587,22 @@ export async function runValuation(
     for (const c of adjusted) {
       c.weight = computeWeight(c, SOURCE_TRUST);
       (c as any).rawWeight = c.weight;
-      (c as any).isPrimary = c.tier <= 2 || c.yearDiff === 0;
+      (c as any).isPrimary = (c.tier === 1 || c.tier === 2) && c.yearDiff === 0;
     }
 
     // Balance primary and secondary sets (Requirement §2):
     // Primary set controls >= 85% of total weight when present.
     balancePrimarySecondaryWeights(adjusted);
 
-    const primaryComparables = adjusted.filter((c) => c.tier <= 2 || c.yearDiff === 0);
-    const secondaryComparables = adjusted.filter((c) => !(c.tier <= 2 || c.yearDiff === 0));
+    const primaryComparables = adjusted.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0);
+    const secondaryComparables = adjusted.filter((c) => !((c.tier === 1 || c.tier === 2) && c.yearDiff === 0));
     const hasPrimaryEvidence = primaryComparables.length > 0;
 
     stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod} (أساسي: ${primaryComparables.length} / ثانوي: ${secondaryComparables.length})`);
     t0 = Date.now();
 
     // 5) Price (spec §5): weighted median leads.
-    const stats = priceStats(adjusted);
+    const stats = priceStats(adjusted, opts.targetPrice);
     const estimated = stats.weightedMedian;
     const spread = Math.max(Math.round(stats.iqr / 2), Math.round(estimated * 0.03));
     const minPrice = Math.max(100, estimated - spread);
@@ -746,7 +743,12 @@ export async function runValuation(
         rawPrice: c.priceJod,
         normalizedPrice: c.adjustedPrice ?? c.priceJod,
         tier: c.tier,
-        isPrimary: c.tier <= 2 || c.yearDiff === 0,
+        tierLabel: c.tier === 1 ? 'أساسي (Tier 1 - تطابق فئة وسنة)' :
+                   c.tier === 2 ? 'أساسي (Tier 2 - نفس السنة وموديل)' :
+                   c.tier === 3 ? 'ثانوي (Tier 3 - نفس الموديل ±1 سنة)' :
+                   'داعم (Tier 4 - نفس الموديل بسنوات أبعد)',
+        identityStatus: 'ELIGIBLE_SAME_MODEL',
+        isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0,
         similarity: c.similarity,
         simBreakdown: c.simBreakdown,
         rawWeight: (c as any).rawWeight ?? c.weight,

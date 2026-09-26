@@ -41,8 +41,8 @@ export function computeWeight(c: Comparable, sourceTrust: Record<string, number>
  * (Requirement §2)
  */
 export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[] {
-  const primary = comps.filter((c) => c.tier <= 2 || c.yearDiff === 0);
-  const secondary = comps.filter((c) => c.tier > 2 && c.yearDiff > 0);
+  const primary = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0);
+  const secondary = comps.filter((c) => c.tier > 2 || c.yearDiff > 0);
 
   const primaryWeight = primary.reduce((sum, c) => sum + c.weight, 0);
   const secondaryWeight = secondary.reduce((sum, c) => sum + c.weight, 0);
@@ -129,16 +129,38 @@ export function weightedAvg(items: { price: number; weight: number }[]): number 
   return Math.round(items.reduce((x, y) => x + y.price * y.weight, 0) / tw);
 }
 
-export function priceStats(included: Comparable[]): PriceStats {
+export function priceStats(included: Comparable[], askingPrice?: number | null): PriceStats {
   const prices = included.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
   const items = included.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: c.weight }));
+  const wm = weightedMedian(items);
+
+  let askingPricePercentile: number | null = null;
+  let askingPricePremiumPercent: number | null = null;
+
+  if (askingPrice != null && askingPrice > 0) {
+    if (wm > 0) {
+      askingPricePremiumPercent = Math.round(((askingPrice - wm) / wm) * 1000) / 10;
+    }
+    if (prices.length > 0) {
+      // Calculate percentile rank strictly within eligible comparables
+      const countBelow = prices.filter((p) => p < askingPrice).length;
+      const countEqual = prices.filter((p) => p === askingPrice).length;
+      askingPricePercentile = Math.round(((countBelow + 0.5 * countEqual) / prices.length) * 100);
+    }
+  }
+
   return {
-    weightedMedian: weightedMedian(items),
+    weightedMedian: wm,
     weightedAvg: weightedAvg(items),
     median: Math.round(quantile(prices, 0.5)),
     p25: Math.round(quantile(prices, 0.25)),
+    p50: Math.round(quantile(prices, 0.5)),
     p75: Math.round(quantile(prices, 0.75)),
+    p85: Math.round(quantile(prices, 0.85)),
+    p90: Math.round(quantile(prices, 0.90)),
     iqr: Math.round(quantile(prices, 0.75) - quantile(prices, 0.25)),
+    askingPricePercentile,
+    askingPricePremiumPercent,
   };
 }
 

@@ -38,6 +38,9 @@ export interface Section24PricePosition {
   classification: 'BELOW_MARKET' | 'FAIR' | 'ABOVE_MARKET' | 'UNKNOWN';
   differenceAmount: number | null;
   differencePercent: number | null;
+  percentileRank?: number | null;
+  percentileLabel?: string | null;
+  premiumLabelAr?: string | null;
 }
 
 export interface Section24MarketEvidence {
@@ -47,6 +50,13 @@ export interface Section24MarketEvidence {
   excludedListings: number;
   sameYearShare: number;
   uniqueSources: number;
+  percentiles?: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p85: number;
+    p90: number;
+  };
 }
 
 export interface Section24ComparableUsed {
@@ -54,11 +64,15 @@ export interface Section24ComparableUsed {
   source: string;
   sourceUrl?: string | null;
   title: string;
+  make?: string;
+  model?: string;
   year: number | null;
   mileage: number | null;
   originalPrice: number;
   adjustedPrice: number | null;
   tier: number;
+  tierLabel?: string;
+  identityStatus?: string;
   similarity: number;
   weight: number;
   matchMatrix: MatchMatrixRow[];
@@ -192,6 +206,9 @@ export async function runIntelligenceValuation(
     classification: 'UNKNOWN',
     differenceAmount: null,
     differencePercent: null,
+    percentileRank: null,
+    percentileLabel: null,
+    premiumLabelAr: null,
   };
 
   const fmv = output.roundedDisplayPrice || output.estimatedPrice;
@@ -204,10 +221,24 @@ export async function runIntelligenceValuation(
     if (diffPercent <= -5) classification = 'BELOW_MARKET';
     else if (diffPercent >= 5) classification = 'ABOVE_MARKET';
 
+    const pRank = output.stats?.askingPricePercentile ?? null;
+    const premiumLabelAr = diffPercent > 0
+      ? `أعلى بـ ${Math.abs(diffPercent)}% عن السعر العادل`
+      : diffPercent < 0
+      ? `أقل بـ ${Math.abs(diffPercent)}% عن السعر العادل`
+      : 'مطابق للسعر العادل';
+
+    const percentileLabel = pRank !== null
+      ? `الشريحة السوقية: P${Math.round(pRank)} (${pRank >= 50 ? `أعلى من ${Math.round(pRank)}%` : `أقل من ${Math.round(100 - pRank)}%`} من عروض السوق المماثلة)`
+      : null;
+
     pricePosition = {
       classification,
       differenceAmount: diffAmount,
       differencePercent: diffPercent,
+      percentileRank: pRank,
+      percentileLabel,
+      premiumLabelAr,
     };
   }
 
@@ -226,6 +257,13 @@ export async function runIntelligenceValuation(
     excludedListings: totalMarketCount - usedComps.length,
     sameYearShare,
     uniqueSources,
+    percentiles: output.stats?.p50 !== undefined ? {
+      p25: output.stats.p25,
+      p50: output.stats.p50,
+      p75: output.stats.p75,
+      p85: output.stats.p85 ?? 0,
+      p90: output.stats.p90 ?? 0,
+    } : undefined,
   };
 
   // 4. Transform Comparables Used
@@ -234,6 +272,8 @@ export async function runIntelligenceValuation(
     source: c.source,
     sourceUrl: c.sourceUrl || null,
     title: `${c.make} ${c.model} ${c.year || ''} ${c.trim || ''}`.trim(),
+    make: c.make,
+    model: c.model,
     year: c.year,
     mileage: c.mileage ?? null,
     originalPrice: c.rawPrice,
@@ -241,6 +281,8 @@ export async function runIntelligenceValuation(
       ? c.rawPrice + c.priceAdjustments.reduce((sum, a) => sum + a.delta, 0)
       : c.normalizedPrice,
     tier: c.tier,
+    tierLabel: c.tierLabel || (c.tier === 1 ? 'أساسي (Tier 1)' : c.tier === 2 ? 'أساسي (Tier 2)' : c.tier === 3 ? 'ثانوي (Tier 3)' : 'داعم (Tier 4)'),
+    identityStatus: c.identityStatus || 'ELIGIBLE_SAME_MODEL',
     similarity: c.similarity,
     weight: Math.round(c.finalWeight * 1000) / 1000,
     matchMatrix: c.matchMatrix,
