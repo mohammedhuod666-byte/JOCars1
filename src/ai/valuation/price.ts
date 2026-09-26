@@ -3,7 +3,7 @@
  * Weighted median leads; plain average is never used alone.
  * Confidence is built from measurable indicators only — never vibes.
  */
-import type { Comparable, PriceStats, ConsensusBand, LeaveOneOutResult } from './types';
+import type { Comparable, PriceStats, ConsensusBand, LeaveOneOutResult, WeightBreakdown, VehicleSpec } from './types';
 import { MIN_INCLUDED_FOR_ESTIMATE, MIN_INCLUDED_FOR_RANGE_ONLY } from './types';
 
 function quantile(sorted: number[], q: number): number {
@@ -15,30 +15,110 @@ function quantile(sorted: number[], q: number): number {
 }
 
 /**
- * Weight = tier × yearProximityMultiplier × similarity × freshness × source trust.
- * (Requirement §2):
- * Same-year (Tier 1/2): 3.5x multiplier.
- * ±1 year (Tier 3): 1.5x multiplier.
- * ±2 years / Tier 4: 0.4x multiplier (supporting evidence only).
+ * Multi-factor decomposed comparable weight (Requirement §8 & §22):
+ * weight = identityWeight × yearWeight × technicalWeight × mileageWeight × completenessWeight × sourceQualityWeight × recencyWeight.
+ * Every single component is stored in weightBreakdown for full mathematical auditability.
  */
-export function computeWeight(c: Comparable, sourceTrust: Record<string, number>): number {
-  const tierW = c.tier === 1 ? 1 : c.tier === 2 ? 0.85 : c.tier === 3 ? (c.yearDiff <= 1 ? 0.7 : 0.5) : 0.3;
-  const yearMultiplier = (c.yearDiff === 0 || c.tier === 1 || c.tier === 2)
-    ? 3.5
-    : (c.yearDiff === 1)
-    ? 1.5
-    : 0.4;
-  const sim = c.similarity / 100;
-  const fresh = c.ageDays <= 7 ? 1 : c.ageDays <= 30 ? 0.85 : c.ageDays <= 90 ? 0.65 : 0.45;
-  const trust = sourceTrust[c.source] ?? 0.8;
-  return Math.max(0.05, tierW * yearMultiplier * sim * fresh * trust);
+export function computeDetailedWeight(
+  c: Comparable,
+  sourceTrust: Record<string, number>,
+  spec?: VehicleSpec
+): { weight: number; breakdown: WeightBreakdown } {
+  // 1. Identity weight: 1.0 (strict same-model prerequisite)
+  const identityWeight = 1.0;
+
+  // 2. Year weight:
+  // Same-year (Tier 1/2): 1.0
+  // ±1 year (Tier 3): 0.70
+  // ±2 years: 0.45
+  // Tier 4 (±3 to ±10 years): scales down with distance so distant years cannot hijack FMV
+  const yearDiff = c.yearDiff ?? (c.year && spec?.year ? Math.abs(c.year - spec.year) : 5);
+  let yearWeight: number;
+  if ((c.tier === 1 || c.tier === 2) && yearDiff === 0) {
+    yearWeight = 1.0;
+  } else if (yearDiff === 1) {
+    yearWeight = 0.70;
+  } else if (yearDiff === 2) {
+    yearWeight = 0.45;
+  } else {
+    // yearDiff >= 3: Tier 4 support evidence discounted by year distance
+    yearWeight = Math.max(0.10, Math.round((0.40 - (yearDiff - 2) * 0.05) * 100) / 100);
+  }
+
+  // 3. Technical weight: alignment of powertrain, trim, and specs
+  const simFraction = Math.max(0.35, Math.min(1.0, (c.similarity || 50) / 100));
+  const technicalWeight = Math.round(simFraction * 100) / 100;
+
+  // 4. Mileage weight: penalize extreme mileage discrepancies relative to target
+  let mileageWeight = 1.0;
+  if (c.kilometers != null && spec?.kilometers != null && spec.kilometers > 0) {
+    const kmRatio = Math.abs(c.kilometers - spec.kilometers) / spec.kilometers;
+    if (kmRatio <= 0.25) mileageWeight = 1.0;
+    else if (kmRatio <= 0.50) mileageWeight = 0.88;
+    else if (kmRatio <= 0.80) mileageWeight = 0.75;
+    else mileageWeight = 0.60;
+  }
+
+  // 5. Completeness weight: penalize missing attributes
+  let knownCount = 0;
+  const totalTracked = 5;
+  if (c.year != null) knownCount++;
+  if (c.kilometers != null) knownCount++;
+  if (c.trim != null) knownCount++;
+  if (c.fuelType != null) knownCount++;
+  if (c.transmission != null) knownCount++;
+  const completenessWeight = Math.round((0.60 + 0.40 * (knownCount / totalTracked)) * 100) / 100;
+
+  // 6. Source Quality weight
+  const sourceQualityWeight = sourceTrust[c.source] ?? 0.85;
+
+  // 7. Recency weight: freshness decay
+  const days = c.ageDays ?? 30;
+  const recencyWeight = days <= 7 ? 1.0 : days <= 30 ? 0.90 : days <= 90 ? 0.75 : 0.60;
+
+  const rawCompositeWeight = Math.round(
+    identityWeight *
+    yearWeight *
+    technicalWeight *
+    mileageWeight *
+    completenessWeight *
+    sourceQualityWeight *
+    recencyWeight * 1000
+  ) / 1000;
+
+  const finalWeight = Math.max(0.01, rawCompositeWeight);
+
+  const breakdown: WeightBreakdown = {
+    identityWeight,
+    yearWeight,
+    technicalWeight,
+    mileageWeight,
+    completenessWeight,
+    sourceQualityWeight,
+    recencyWeight,
+    rawCompositeWeight,
+    finalNormalizedWeight: finalWeight,
+  };
+
+  return { weight: finalWeight, breakdown };
+}
+
+export function computeWeight(
+  c: Comparable,
+  sourceTrust: Record<string, number>,
+  spec?: VehicleSpec
+): number {
+  const res = computeDetailedWeight(c, sourceTrust, spec);
+  c.weightBreakdown = res.breakdown;
+  return res.weight;
 }
 
 /**
  * Normalizes weights between Primary Set (Tiers 1 & 2 / same-year)
  * and Secondary Set (Tiers 3 & 4 / different years) so that Primary Set
  * controls at least 85% of total weight when present.
- * (Requirement §2)
+ * Also computes each comparable's mathematical contributionPercent to total weight.
+ * (Requirement §2 & §8)
  */
 export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[] {
   const primary = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0);
@@ -52,12 +132,23 @@ export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[
     const secondaryShare = secondaryWeight / totalWeight;
     // Secondary set can never exceed 15% of total weight when primary evidence exists
     if (secondaryShare > 0.15) {
-      const targetSecondaryWeight = (primaryWeight * 0.15) / 0.85;
+      const targetSecondaryWeight = (primaryWeight * 0.1495) / 0.8505;
       const scale = targetSecondaryWeight / secondaryWeight;
       for (const c of secondary) {
-        c.weight = Math.max(0.01, c.weight * scale);
+        c.weight = Math.max(0.001, Math.round(c.weight * scale * 10000) / 10000);
+        if (c.weightBreakdown) {
+          c.weightBreakdown.finalNormalizedWeight = c.weight;
+        }
       }
     }
+  }
+
+  // Calculate mathematical contribution percentage for each comparable
+  const finalTotalW = comps.reduce((sum, c) => sum + c.weight, 0);
+  for (const c of comps) {
+    c.contributionPercent = finalTotalW > 0
+      ? Math.round((c.weight / finalTotalW) * 1000) / 10
+      : 0;
   }
 
   return comps;
@@ -162,6 +253,30 @@ export function priceStats(included: Comparable[], askingPrice?: number | null):
     askingPricePercentile,
     askingPricePremiumPercent,
   };
+}
+
+export function calculateFMV(adjustedComps: Comparable[], askingPrice?: number | null): {
+  fmv: number;
+  minPrice: number;
+  maxPrice: number;
+  stats: PriceStats;
+  isWideRange: boolean;
+  rangeDisclaimerAr: string;
+} {
+  const stats = priceStats(adjustedComps, askingPrice);
+  const estimated = stats.weightedMedian;
+  const spread = Math.max(Math.round(stats.iqr / 2), Math.round(estimated * 0.03));
+  const minPrice = Math.max(100, estimated - spread);
+  const maxPrice = estimated + spread;
+  const hasDirectEvidence = adjustedComps.some((c) => c.tier <= 2 || (c.yearDiff !== undefined && c.yearDiff <= 1));
+  const isWideRange = !hasDirectEvidence || ((maxPrice - minPrice) > estimated * 0.35);
+  const rangeDisclaimerAr = !hasDirectEvidence
+    ? 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة والاعتماد على شواهد داعمة من سنوات أخرى'
+    : isWideRange
+    ? 'نطاق استرشادي واسع نظراً لتباين عروض السوق'
+    : 'النطاق السعري المتوقع وفق عروض السوق المتوافقة';
+
+  return { fmv: estimated, minPrice, maxPrice, stats, isWideRange, rangeDisclaimerAr };
 }
 
 export interface ConfidenceInput {

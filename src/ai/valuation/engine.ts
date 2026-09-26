@@ -25,7 +25,7 @@ export interface EngineResult {
   output: ValuationOutput | null;
   comparables: Comparable[];
   outcomes: SourceOutcome[];
-  status: 'RELIABLE' | 'LIMITED' | 'APPROXIMATE' | 'INSUFFICIENT' | 'FAILED';
+  status: 'RELIABLE' | 'LIMITED' | 'APPROXIMATE' | 'INSUFFICIENT' | 'FAILED' | 'INSUFFICIENT_DIRECT_EVIDENCE' | 'LIMITED_MARKET_EVIDENCE';
   insufficientReason?: string;
   dataQuality?: DataQualityReport;
   auditTrace?: ValuationAuditTrace;
@@ -585,7 +585,7 @@ export async function runValuation(
     const cal = calibrate(included);
     const adjusted = included.map((c) => adjustComparable(c, spec, cal));
     for (const c of adjusted) {
-      c.weight = computeWeight(c, SOURCE_TRUST);
+      c.weight = computeWeight(c, SOURCE_TRUST, spec);
       (c as any).rawWeight = c.weight;
       (c as any).isPrimary = (c.tier === 1 || c.tier === 2) && c.yearDiff === 0;
     }
@@ -718,53 +718,72 @@ export async function runValuation(
       consensusBand,
       leaveOneOutAnalysis,
       effectiveComparableWeight: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
-      comparablesAudit: matched.map((c) => ({
-        source: c.sourceLabel,
-        sourceUrl: c.url,
-        listingId: c.externalId,
-        year: c.year,
-        make: c.brandEn || c.brand,
-        model: c.modelEn || c.model,
-        trim: c.trim,
-        engine: (c as any).engineCc ? `${(c as any).engineCc} CC` : null,
-        engineCc: (c as any).engineCc,
-        horsepower: (c as any).horsepower,
-        cylinders: (c as any).cylinders,
-        fuel: c.fuelType,
-        transmission: c.transmission,
-        drivetrain: (c as any).drivetrain,
-        mileage: c.kilometers,
-        body: (c as any).bodyType,
-        condition: c.condition,
-        location: c.city,
-        color: (c as any).color,
-        doors: (c as any).doors,
-        features: c.specs,
-        rawPrice: c.priceJod,
-        normalizedPrice: c.adjustedPrice ?? c.priceJod,
-        tier: c.tier,
-        tierLabel: c.tier === 1 ? 'أساسي (Tier 1 - تطابق فئة وسنة)' :
-                   c.tier === 2 ? 'أساسي (Tier 2 - نفس السنة وموديل)' :
-                   c.tier === 3 ? 'ثانوي (Tier 3 - نفس الموديل ±1 سنة)' :
-                   'داعم (Tier 4 - نفس الموديل بسنوات أبعد)',
-        identityStatus: 'ELIGIBLE_SAME_MODEL',
-        isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0,
-        similarity: c.similarity,
-        simBreakdown: c.simBreakdown,
-        rawWeight: (c as any).rawWeight ?? c.weight,
-        finalWeight: Math.round(c.weight * 1000) / 1000,
-        priceAdjustments: c.adjustments,
-        included: c.included,
-        excludeReason: c.excludeReason,
-        matchMatrix: matchMatrix(spec, c),
-      })),
+      comparablesAudit: [...adjusted, ...matched.filter((c) => !c.included)].map((c) => {
+        const yearAdj = c.adjustments?.find((a) => a.factor === 'year')?.delta || 0;
+        const kmAdj = c.adjustments?.find((a) => a.factor === 'mileage')?.delta || 0;
+        const trimAdj = c.adjustments?.find((a) => a.factor === 'trim')?.delta || 0;
+        const condAdj = c.adjustments?.find((a) => a.factor === 'condition')?.delta || 0;
+        const marketAdj = c.adjustments?.find((a) => a.factor === 'market')?.delta || 0;
+        const totalAdj = (c.adjustments || []).reduce((sum, a) => sum + a.delta, 0);
+
+        return {
+          source: c.sourceLabel,
+          sourceUrl: c.url,
+          listingId: c.externalId,
+          year: c.year,
+          make: c.brandEn || c.brand,
+          model: c.modelEn || c.model,
+          trim: c.trim,
+          engine: (c as any).engineCc ? `${(c as any).engineCc} CC` : null,
+          engineCc: (c as any).engineCc,
+          horsepower: (c as any).horsepower,
+          cylinders: (c as any).cylinders,
+          fuel: c.fuelType,
+          transmission: c.transmission,
+          drivetrain: (c as any).drivetrain,
+          mileage: c.kilometers,
+          body: (c as any).bodyType,
+          condition: c.condition,
+          location: c.city,
+          color: (c as any).color,
+          doors: (c as any).doors,
+          features: c.specs,
+          rawPrice: c.priceJod,
+          normalizedPrice: c.adjustedPrice ?? c.priceJod,
+          tier: c.tier,
+          tierLabel: c.tier === 1 ? 'أساسي (Tier 1 - تطابق فئة وسنة)' :
+                     c.tier === 2 ? 'أساسي (Tier 2 - نفس السنة وموديل)' :
+                     c.tier === 3 ? 'ثانوي (Tier 3 - نفس الموديل ±1 سنة)' :
+                     'داعم (Tier 4 - نفس الموديل بسنوات أبعد)',
+          identityStatus: 'ELIGIBLE_SAME_MODEL',
+          isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0,
+          similarity: c.similarity,
+          simBreakdown: c.simBreakdown,
+          rawWeight: (c as any).rawWeight ?? c.weight,
+          finalWeight: Math.round(c.weight * 1000) / 1000,
+          weightBreakdown: c.weightBreakdown,
+          contributionPercent: c.contributionPercent ?? 0,
+          priceAdjustments: c.adjustments || [],
+          adjustmentBreakdown: {
+            year: yearAdj,
+            mileage: kmAdj,
+            technical: trimAdj,
+            condition: condAdj,
+            market: marketAdj,
+            total: totalAdj,
+          },
+          included: c.included,
+          excludeReason: c.excludeReason,
+          matchMatrix: matchMatrix(spec, c),
+        };
+      }),
       rawWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + ((c as any).rawWeight ?? c.weight), 0) * 1000) / 1000,
       finalWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
       robustStatistic: stats,
       finalFmv: estimated,
       displayFmv: roundedDisplayPrice,
       confidence: conf.score,
-      status: grade,
+      status: !hasPrimaryEvidence ? 'INSUFFICIENT_DIRECT_EVIDENCE' : grade,
       sensitivity: {
         baselineFmv: estimated,
         removals,
@@ -835,8 +854,14 @@ export async function runValuation(
       }
     } catch { /* best effort */ }
 
-    // Graduated status mirrors the grade: DONE never means "reliable" on its own.
-    const finalStatus = output.grade === 'full' ? 'RELIABLE' : output.grade === 'limited' ? 'LIMITED' : 'APPROXIMATE';
+    // Graduated status mirrors the evidence quality: Tier 4 alone cannot claim reliable/full status.
+    const finalStatus = !hasPrimaryEvidence
+      ? 'INSUFFICIENT_DIRECT_EVIDENCE'
+      : output.grade === 'full'
+      ? 'RELIABLE'
+      : output.grade === 'limited'
+      ? 'LIMITED'
+      : 'APPROXIMATE';
     await prisma.valuationRequest.update({ where: { id: request.id }, data: { status: finalStatus } }).catch(() => {});
     setStageListener(null);
     return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus, dataQuality, auditTrace };

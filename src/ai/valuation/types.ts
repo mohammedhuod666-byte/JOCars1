@@ -60,14 +60,40 @@ export interface NormalizedListing {
   scrapedAt: string;  // ISO
 }
 
+export type AdjustmentProvenance = 'MARKET_DERIVED' | 'MODEL_DERIVED' | 'EMPIRICAL_SEGMENT' | 'CONSERVATIVE_HEURISTIC';
+
+export interface PriceAdjustment {
+  factor: 'year' | 'mileage' | 'trim' | 'condition' | 'market';
+  factorAr: string;
+  delta: number;
+  provenance: AdjustmentProvenance;
+  method: string;
+  formula: string;
+  reason: string;
+}
+
+export interface WeightBreakdown {
+  identityWeight: number;
+  yearWeight: number;
+  technicalWeight: number;
+  mileageWeight: number;
+  completenessWeight: number;
+  sourceQualityWeight: number;
+  recencyWeight: number;
+  rawCompositeWeight: number;
+  finalNormalizedWeight: number;
+}
+
 export interface Comparable extends NormalizedListing {
   tier: 1 | 2 | 3 | 4;
   yearDiff: number; // |listing year - target year| (0 when unknown)
   similarity: number; // 0-100
   simBreakdown: Record<string, number>;
   adjustedPrice: number | null;
-  adjustments: { factor: string; factorAr: string; delta: number }[];
+  adjustments: PriceAdjustment[];
   weight: number;
+  weightBreakdown?: WeightBreakdown;
+  contributionPercent?: number;
   included: boolean;
   excludeReason?: string | null;
   ageDays: number;
@@ -225,7 +251,17 @@ export interface ValuationAuditTrace {
     simBreakdown: Record<string, number>;
     rawWeight: number;
     finalWeight: number;
-    priceAdjustments: { factor: string; factorAr: string; delta: number }[];
+    weightBreakdown?: WeightBreakdown;
+    contributionPercent?: number;
+    priceAdjustments: PriceAdjustment[];
+    adjustmentBreakdown?: {
+      year: number;
+      mileage: number;
+      technical: number;
+      condition: number;
+      market: number;
+      total: number;
+    };
     included: boolean;
     excludeReason?: string | null;
     matchMatrix: MatchMatrixRow[];

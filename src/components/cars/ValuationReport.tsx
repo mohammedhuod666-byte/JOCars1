@@ -17,6 +17,7 @@ import {
   Search,
   FilterX,
   FileCheck,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -184,19 +185,38 @@ export function ValuationReport({
   const status = section24?.status ?? (legacyReport?.grade?.toUpperCase() as any) ?? 'LIMITED';
 
   const statusLabel =
-    status === 'RELIABLE'
+    section24?.statusLabelAr ||
+    (status === 'RELIABLE'
       ? 'تقييم موثوق'
       : status === 'LIMITED'
       ? 'تقييم محدود'
+      : status === 'LIMITED_MARKET_EVIDENCE'
+      ? 'أدلة سوقية محدودة'
+      : status === 'INSUFFICIENT_DIRECT_EVIDENCE'
+      ? 'أدلة مباشرة غير كافية'
       : status === 'APPROXIMATE'
       ? 'تقدير تقريبي'
-      : 'بيانات غير كافية';
+      : 'بيانات غير كافية');
+
+  const isInsufficientDirect = status === 'INSUFFICIENT_DIRECT_EVIDENCE';
 
   const confColor =
-    confidence >= 70 ? 'text-emerald-400' : confidence >= 40 ? 'text-amber-400' : 'text-rose-400';
+    isInsufficientDirect || status === 'APPROXIMATE'
+      ? 'text-amber-400'
+      : confidence >= 70
+      ? 'text-emerald-400'
+      : confidence >= 40
+      ? 'text-amber-400'
+      : 'text-rose-400';
 
   const confBg =
-    confidence >= 70 ? 'bg-emerald-500/10 border-emerald-500/30' : confidence >= 40 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-rose-500/10 border-rose-500/30';
+    isInsufficientDirect || status === 'APPROXIMATE'
+      ? 'bg-amber-500/10 border-amber-500/30'
+      : confidence >= 70
+      ? 'bg-emerald-500/10 border-emerald-500/30'
+      : confidence >= 40
+      ? 'bg-amber-500/10 border-amber-500/30'
+      : 'bg-rose-500/10 border-rose-500/30';
 
   const compsUsed: Section24ComparableUsed[] = section24?.comparablesUsed || legacyReport?.comparables || [];
   const compsExcluded: Section24ComparableExcluded[] = section24?.comparablesExcluded || [];
@@ -310,10 +330,14 @@ export function ValuationReport({
 
               {/* Status Alert if not full reliable */}
               {status !== 'RELIABLE' && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
                   <span>
-                    {status === 'APPROXIMATE'
+                    {status === 'INSUFFICIENT_DIRECT_EVIDENCE'
+                      ? 'أدلة مباشرة غير كافية (غياب إعلانات لنفس سنة الصنع) — تم الاستناد إلى شواهد داعمة من سنوات أخرى بنطاق استرشادي واسع.'
+                      : status === 'LIMITED_MARKET_EVIDENCE'
+                      ? 'أدلة سوقية محدودة — استرشد بالنطاق السعري بحذر.'
+                      : status === 'APPROXIMATE'
                       ? 'تقدير تقريبي جداً (عدد قليل من المقارنات) — استرشد به بحذر شديد.'
                       : 'تقييم محدود — تمت الاستعانة بمقارنات أوسع نظراً لمحدودية المعروض المتطابق تماماً.'}
                   </span>
@@ -322,23 +346,29 @@ export function ValuationReport({
 
               {/* 3 Core Stats Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
                   <p className="text-[11px] text-slate-400 mb-1 font-semibold">القيمة السوقية العادلة</p>
                   <p className="text-2xl font-black text-white">
                     {fmv.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
                   </p>
                 </div>
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
                   <p className="text-[11px] text-slate-400 mb-1 font-semibold">النطاق السعري المتوقع</p>
                   <p className="text-base sm:text-lg font-black text-white mt-1">
                     {minPrice?.toLocaleString()} – {maxPrice?.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
                   </p>
+                  {section24?.rangeDisclaimerAr && (
+                    <p className="text-[10px] text-amber-400/90 mt-1 font-medium leading-tight">
+                      ⚠️ {section24.rangeDisclaimerAr}
+                    </p>
+                  )}
                 </div>
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm">
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
                   <p className="text-[11px] text-slate-400 mb-1 font-semibold">درجة الموثوقية</p>
                   <p className={`text-2xl font-black ${confColor}`}>
                     {confidence}%
                   </p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{statusLabel}</p>
                 </div>
               </div>
 
@@ -436,6 +466,70 @@ export function ValuationReport({
                 </div>
               )}
 
+              {/* GLM Intelligence Insights */}
+              {section24?.glmIntelligence && (
+                <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950/30 border border-indigo-500/20">
+                  <div className="flex items-center justify-between">
+                    <p className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-400" />
+                      <span>تحليل الذكاء الاصطناعي وتفسير السوق</span>
+                    </p>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+                      {section24.glmIntelligence.generatedBy === 'GLM_MODEL' ? 'GLM Intelligence' : 'تحليل رياضي مؤكد'}
+                    </span>
+                  </div>
+
+                  {section24.glmIntelligence.marketSummary && (
+                    <p className="text-xs text-slate-200 leading-relaxed bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                      {section24.glmIntelligence.marketSummary}
+                    </p>
+                  )}
+
+                  {section24.glmIntelligence.keyDrivers && section24.glmIntelligence.keyDrivers.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-bold text-slate-400">العوامل والمحركات الرئيسية للقيمة:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {section24.glmIntelligence.keyDrivers.map((driver, dIdx) => (
+                          <div key={dIdx} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-300 space-y-1">
+                            <p className="leading-relaxed">{driver.text}</p>
+                            {driver.evidence && (
+                              <div className="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
+                                <span>دليل:</span>
+                                <span>{driver.evidence.metric}</span>
+                                <span>=</span>
+                                <span className="font-bold">{String(driver.evidence.value)}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {section24.glmIntelligence.dataWarnings && section24.glmIntelligence.dataWarnings.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {section24.glmIntelligence.dataWarnings.map((dw, wIdx) => (
+                        <div key={wIdx} className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                          <span>{dw.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {section24.glmIntelligence.limitations && section24.glmIntelligence.limitations.length > 0 && (
+                    <div className="pt-1">
+                      <p className="text-[11px] font-bold text-slate-400 mb-1">محددات التقييم:</p>
+                      <ul className="list-disc list-inside text-[11px] text-slate-400 space-y-0.5">
+                        {section24.glmIntelligence.limitations.map((lim, lIdx) => (
+                          <li key={lIdx}>{lim}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Comparables Used Table with Match Matrix */}
               {compsUsed.length > 0 && (
                 <div className="overflow-x-auto space-y-2">
@@ -517,18 +611,23 @@ export function ValuationReport({
                                   <span>
                                     المستوى الهرمي:{' '}
                                     <strong className="text-white">
-                                      {c.tier === 1
+                                      {c.tierLabel || (c.tier === 1
                                         ? 'Tier 1 (نفس الموديل والسنة والفئة)'
                                         : c.tier === 2
                                         ? 'Tier 2 (نفس الموديل والسنة)'
                                         : c.tier === 3
                                         ? 'Tier 3 (نفس الموديل مع فرق سنة ±1)'
-                                        : 'Tier 4 (شواهد داعمة من نفس الموديل بسنوات أبعد)'}
+                                        : 'Tier 4 (شواهد داعمة من نفس الموديل بسنوات أبعد)')}
                                     </strong>
                                   </span>
                                   <span>•</span>
                                   <span>
-                                    الوزن الرياضي: <strong className="text-white">{c.weight}</strong>
+                                    الوزن الرياضي: <strong className="text-white">{typeof c.weight === 'number' ? c.weight.toFixed(3) : c.weight}</strong>
+                                    {c.contributionPercent !== undefined && (
+                                      <span className="text-emerald-400 font-bold mr-1">
+                                        ({c.contributionPercent}% من التقييم)
+                                      </span>
+                                    )}
                                   </span>
                                   {c.sourceUrl?.startsWith('http') && (
                                     <>
@@ -544,6 +643,73 @@ export function ValuationReport({
                                     </>
                                   )}
                                 </div>
+
+                                {/* Weight Breakdown Multi-Factor Chips */}
+                                {c.weightBreakdown && (
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] font-bold text-slate-400">تفكيك الوزن الرياضي (Multi-Factor Breakdown):</p>
+                                    <div className="flex flex-wrap gap-1.5 text-[10px]">
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        الهوية: <strong>{c.weightBreakdown.identityWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        السنة: <strong>{c.weightBreakdown.yearWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        المواصفات: <strong>{c.weightBreakdown.technicalWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        الممشى: <strong>{c.weightBreakdown.mileageWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        اكتمال البيانات: <strong>{c.weightBreakdown.completenessWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        جودة المصدر: <strong>{c.weightBreakdown.sourceQualityWeight}</strong>
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
+                                        الحداثة: <strong>{c.weightBreakdown.recencyWeight}</strong>
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Mathematical Traceable Adjustments */}
+                                {c.adjustmentsList && c.adjustmentsList.length > 0 && (
+                                  <div className="space-y-1.5 pt-1">
+                                    <p className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                                      <span>التعديلات السعرية القابلة للتدقيق (Traceable Adjustments):</span>
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        السعر الأصلي: {c.originalPrice?.toLocaleString()} د.أ ← المعدل: {c.adjustedPrice?.toLocaleString()} د.أ
+                                      </span>
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                      {c.adjustmentsList.map((adj, aIdx) => (
+                                        <div key={aIdx} className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[11px] space-y-1">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-bold text-slate-200">{adj.factorAr}</span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className={`font-mono font-bold ${adj.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {adj.delta > 0 ? `+${adj.delta.toLocaleString()}` : adj.delta.toLocaleString()} د.أ
+                                              </span>
+                                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                                                adj.provenance === 'MARKET_DERIVED'
+                                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                              }`}>
+                                                {adj.provenance === 'MARKET_DERIVED' ? 'سوقي مشتق' : 'معيار متحفظ'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          <p className="text-[10px] text-slate-400">{adj.reason}</p>
+                                          {adj.formula && (
+                                            <p className="text-[9px] font-mono text-slate-500 dir-ltr text-right">{adj.formula}</p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Detailed Match Matrix Grid */}
                                 {c.matchMatrix && c.matchMatrix.length > 0 && (

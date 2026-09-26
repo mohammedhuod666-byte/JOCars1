@@ -11,28 +11,19 @@
  */
 
 import prisma from '@/lib/prisma';
-import type { VehicleSpec, ValuationOutput, MatchMatrixRow, TargetIdentityCluster, ConsensusBand, LeaveOneOutResult } from './types';
+import type {
+  VehicleSpec,
+  ValuationOutput,
+  MatchMatrixRow,
+  TargetIdentityCluster,
+  ConsensusBand,
+  LeaveOneOutResult,
+  PriceAdjustment,
+  WeightBreakdown,
+} from './types';
 import { runValuation } from './engine';
 import { buildSpecFromBody } from './request';
-import { chatCompletion } from '../nvidia-client';
-
-export const FAIR_MARKET_VALUE_INTELLIGENCE_PROMPT = `أنت محرك تحليل وتقييم السيارات Fair Market Value Intelligence Engine لمنصة سيارات في الأردن.
-
-مهمتك هي تحليل بيانات السيارة المستهدفة وبيانات السوق الفعلية المقدمة لك، ثم إنتاج تقييم سوقي عادل قابل للتدقيق.
-
-أنت لا تخمّن.
-أنت لا تخترع أسعارًا.
-أنت لا تضيف بيانات غير موجودة.
-أنت لا تستخدم السعر المطلوب من المالك للتأثير على القيمة السوقية العادلة.
-
-القواعد الصارمة:
-1. AskingPrice هو سعر البائع، وليس القيمة السوقية. يجب عزله تماماً عن حساب FMV.
-2. لا تستخدم AskingPrice في أي حساب رياضي يؤدي إلى FMV.
-3. التقييم مبني على أسعار الإعلانات والعروض المتاحة، وليس بالضرورة أسعار البيع النهائية المنفذة.
-4. مصفوفة المطابقة وقواعد التدرج الهرمي (Tiers) هي الأساس الصارم لأوزان المقارنات.
-5. التحقق من سلامة الأسعار وحجر الإعلانات الصورية أو غير المخصصة لسيارات كاملة (مثل اللوحات أو القطع).
-6. العقد النهائي: أعد JSON صالحاً فقط، بدون أي نصوص تمهيدية أو علامات Markdown.
-`;
+import { runGlmIntelligence, type GlmIntelligenceOutput, type GlmInputPayload } from './glm-intelligence';
 
 export interface Section24PricePosition {
   classification: 'BELOW_MARKET' | 'FAIR' | 'ABOVE_MARKET' | 'UNKNOWN';
@@ -68,6 +59,7 @@ export interface Section24ComparableUsed {
   model?: string;
   year: number | null;
   mileage: number | null;
+  rawPrice: number;
   originalPrice: number;
   adjustedPrice: number | null;
   tier: number;
@@ -75,6 +67,9 @@ export interface Section24ComparableUsed {
   identityStatus?: string;
   similarity: number;
   weight: number;
+  weightBreakdown?: WeightBreakdown;
+  contributionPercent?: number;
+  adjustmentsList?: PriceAdjustment[];
   matchMatrix: MatchMatrixRow[];
 }
 
@@ -105,15 +100,27 @@ export interface Section24Sensitivity {
   stabilityScore: number;
 }
 
+export type Section24ContractStatus =
+  | 'RELIABLE'
+  | 'LIMITED'
+  | 'LIMITED_MARKET_EVIDENCE'
+  | 'INSUFFICIENT_DIRECT_EVIDENCE'
+  | 'APPROXIMATE'
+  | 'INSUFFICIENT_DATA';
+
 export interface Section24OutputContract {
-  status: 'RELIABLE' | 'LIMITED' | 'APPROXIMATE' | 'INSUFFICIENT_DATA';
+  status: Section24ContractStatus;
+  statusLabelAr?: string;
   fairMarketValue: number | null;
   currency: 'JOD';
   range: {
     low: number | null;
     high: number | null;
   };
+  isWideRange?: boolean;
+  rangeDisclaimerAr?: string;
   confidence: number;
+  confidenceLabel?: string;
   askingPrice: number | null;
   pricePosition: Section24PricePosition;
   marketEvidence: Section24MarketEvidence;
@@ -125,6 +132,7 @@ export interface Section24OutputContract {
   targetCluster?: TargetIdentityCluster;
   consensusBand?: ConsensusBand;
   leaveOneOut?: LeaveOneOutResult[];
+  glmIntelligence?: GlmIntelligenceOutput;
   marketInsights: string[];
   warnings: string[];
   reasoning: string[];
@@ -276,15 +284,17 @@ export async function runIntelligenceValuation(
     model: c.model,
     year: c.year,
     mileage: c.mileage ?? null,
+    rawPrice: c.rawPrice,
     originalPrice: c.rawPrice,
-    adjustedPrice: c.priceAdjustments && c.priceAdjustments.length > 0
-      ? c.rawPrice + c.priceAdjustments.reduce((sum, a) => sum + a.delta, 0)
-      : c.normalizedPrice,
+    adjustedPrice: c.normalizedPrice,
     tier: c.tier,
     tierLabel: c.tierLabel || (c.tier === 1 ? 'أساسي (Tier 1)' : c.tier === 2 ? 'أساسي (Tier 2)' : c.tier === 3 ? 'ثانوي (Tier 3)' : 'داعم (Tier 4)'),
     identityStatus: c.identityStatus || 'ELIGIBLE_SAME_MODEL',
     similarity: c.similarity,
     weight: Math.round(c.finalWeight * 1000) / 1000,
+    weightBreakdown: c.weightBreakdown,
+    contributionPercent: c.contributionPercent ?? 0,
+    adjustmentsList: c.priceAdjustments,
     matchMatrix: c.matchMatrix,
   }));
 
@@ -451,21 +461,144 @@ export async function runIntelligenceValuation(
     `Uncertainty display price rounded to ${fmv} JOD (confidence: ${output.confidence}%).`,
   ];
 
-  // 12. Map engine status to contract status
-  const contractStatus: Section24OutputContract['status'] =
-    output.confidence >= 65 ? 'RELIABLE' :
-    output.confidence >= 35 ? 'LIMITED' :
-    output.confidence > 0 ? 'APPROXIMATE' : 'INSUFFICIENT_DATA';
+  // 12. Map engine status to contract status (Requirement §10)
+  const hasPrimaryComps = usedComps.some(c => (c.tier === 1 || c.tier === 2) && c.year === spec.year);
+  const contractStatus: Section24ContractStatus =
+    audit?.status === 'INSUFFICIENT_DIRECT_EVIDENCE' || !hasPrimaryComps
+      ? 'INSUFFICIENT_DIRECT_EVIDENCE'
+      : output.confidence >= 65
+      ? 'RELIABLE'
+      : output.confidence >= 35
+      ? 'LIMITED'
+      : output.confidence > 0
+      ? 'APPROXIMATE'
+      : 'INSUFFICIENT_DATA';
+
+  const statusLabelAr =
+    contractStatus === 'RELIABLE'
+      ? 'تقييم موثوق'
+      : contractStatus === 'LIMITED'
+      ? 'تقييم محدود'
+      : contractStatus === 'INSUFFICIENT_DIRECT_EVIDENCE'
+      ? 'شواهد داعمة فقط (غياب مقارنات مباشرة)'
+      : contractStatus === 'APPROXIMATE'
+      ? 'تقدير تقريبي'
+      : 'بيانات غير كافية';
+
+  const isWideRange = (output.maxPrice - output.minPrice) > fmv * 0.50;
+  const rangeDisclaimerAr = isWideRange
+    ? 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة وتباين أسعار المقارنات'
+    : 'النطاق السعري المتوقع وفق عروض السوق المتوافقة';
+
+  // 13. Exclusions count for GLM payload
+  const exclusionsCountByReason: Record<string, number> = {};
+  for (const ex of comparablesExcluded) {
+    exclusionsCountByReason[ex.reasonCategory] = (exclusionsCountByReason[ex.reasonCategory] || 0) + 1;
+  }
+
+  // 14. Execute GLM Intelligence & Explanation Layer (Requirement §2, §3, §13, §14, §15)
+  const glmPayload: GlmInputPayload = {
+    target: {
+      brand: spec.brandEn || spec.brand,
+      model: spec.modelEn || spec.model,
+      year: spec.year,
+      mileage: spec.kilometers ?? null,
+      trim: spec.trim ?? null,
+      fuelType: spec.fuelType ?? null,
+      transmission: spec.transmission ?? null,
+      askingPrice: effectiveAskingPrice,
+    },
+    evidenceQuality: {
+      totalAdsChecked: totalMarketCount,
+      eligibleComparables: usedComps.length,
+      sameYearComparables: sameYearCount,
+      plusMinusOneYearComparables: usedComps.filter(c => Math.abs((c.year || 0) - spec.year) === 1).length,
+      supportComparables: usedComps.filter(c => Math.abs((c.year || 0) - spec.year) >= 2).length,
+      excludedAds: comparablesExcluded.length,
+      independentSources: uniqueSources,
+      targetClusterExcluded: audit?.targetCluster?.totalClusterCount || 0,
+      confidence: output.confidence,
+      confidenceLabel: output.confidenceLabel,
+      status: contractStatus,
+    },
+    pricingResults: {
+      fairMarketValue: fmv,
+      range: { low: output.minPrice, high: output.maxPrice },
+      isWideRange,
+      rangeDisclaimerAr,
+      rawMedian: output.stats.median,
+      adjustedMedian: output.stats.median,
+      weightedMedian: output.stats.weightedMedian,
+      percentiles: {
+        p25: output.stats.p25,
+        p50: output.stats.p50,
+        p75: output.stats.p75,
+        p85: output.stats.p85 ?? 0,
+        p90: output.stats.p90 ?? 0,
+      },
+      askingPricePremiumPercent: pricePosition.differencePercent,
+      askingPricePercentile: pricePosition.percentileRank ?? null,
+      pricePositionClassification: pricePosition.classification,
+    },
+    consensusBand: audit?.consensusBand,
+    comparables: comparablesUsed.map(c => ({
+      id: c.id,
+      title: c.title,
+      source: c.source,
+      year: c.year,
+      mileage: c.mileage,
+      rawPrice: c.rawPrice,
+      adjustedPrice: c.adjustedPrice ?? c.rawPrice,
+      tier: c.tier,
+      tierLabel: c.tierLabel || `Tier ${c.tier}`,
+      similarity: c.similarity,
+      weight: c.weight,
+      contributionPercent: c.contributionPercent ?? 0,
+      adjustments: (c.adjustmentsList || []).map(a => ({
+        factor: a.factor,
+        factorAr: a.factorAr,
+        delta: a.delta,
+        provenance: a.provenance,
+        method: a.method,
+        formula: a.formula,
+        reason: a.reason,
+      })),
+    })),
+    exclusionsSummary: exclusionsCountByReason,
+    leaveOneOut: audit?.leaveOneOutAnalysis ? {
+      dominantComparableFound: audit.sensitivity?.removals.some(r => Math.abs(r.deltaPct) > 10) ?? false,
+      stabilityScore: Math.round(100 - (Math.max(...audit.sensitivity?.removals.map(r => Math.abs(r.deltaPct)) || [0]) * 1.5)),
+      maxShiftPercent: Math.max(...audit.sensitivity?.removals.map(r => Math.abs(r.deltaPct)) || [0]),
+    } : undefined,
+  };
+
+  const glmIntelligence = await runGlmIntelligence(glmPayload, {
+    enabled: options.useAiSynthesis !== false,
+  });
+
+  // Enrich narrative without mutating numerical calculations
+  if (glmIntelligence.marketSummary) {
+    marketInsights.unshift(glmIntelligence.marketSummary);
+  }
+  for (const warn of glmIntelligence.dataWarnings) {
+    if (!warnings.includes(warn.text)) {
+      warnings.push(warn.text);
+    }
+  }
 
   const contractResult: Section24OutputContract = {
     status: contractStatus,
+    statusLabelAr,
     fairMarketValue: fmv,
     currency: 'JOD',
     range: {
       low: output.minPrice,
       high: output.maxPrice,
     },
+    isWideRange,
+    rangeDisclaimerAr,
     confidence: output.confidence,
+    confidenceLabel: output.confidenceLabel,
     askingPrice: effectiveAskingPrice,
     pricePosition,
     marketEvidence,
@@ -477,39 +610,12 @@ export async function runIntelligenceValuation(
     targetCluster: audit?.targetCluster,
     consensusBand: audit?.consensusBand,
     leaveOneOut: audit?.leaveOneOutAnalysis,
+    glmIntelligence,
     marketInsights,
     warnings,
     reasoning,
     auditTrail,
   };
-
-  // Optional: Enhance insights with LLM (Z-AI GLM 5.3) if requested, without altering any calculation numbers
-  if (options.useAiSynthesis) {
-    try {
-      const promptText = `قم بصياغة تقرير تحليلي موجز باللغة العربية للسوق الأردني بناءً على بيانات التقييم التالية حصراً دون أي اختراع لأرقام:\n${JSON.stringify({
-        car: `${spec.brand} ${spec.model} ${spec.year}`,
-        fmv,
-        range: contractResult.range,
-        askingPrice: effectiveAskingPrice,
-        pricePosition: contractResult.pricePosition,
-        compsCount: usedComps.length,
-      })}`;
-
-      const aiText = await chatCompletion([
-        { role: 'system', content: FAIR_MARKET_VALUE_INTELLIGENCE_PROMPT },
-        { role: 'user', content: promptText },
-      ], {
-        modelId: 'glm',
-        timeoutMs: 15000,
-      });
-
-      if (aiText && aiText.trim().length > 20 && !aiText.includes('وعليكم السلام')) {
-        contractResult.marketInsights.unshift(aiText.slice(0, 300));
-      }
-    } catch {
-      // Fallback cleanly, keep mathematical insights
-    }
-  }
 
   return contractResult;
 }

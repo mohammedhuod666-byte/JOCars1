@@ -10,7 +10,8 @@ import { extractSpecsFromTitle } from '../spec-extract';
 import { assignTier, scoreSimilarity, isTargetCopy, checkListingIdentityConsistency } from '../similarity';
 import { dedupeExact, dedupeNear, iqrFences, flagOutliers, sanityCheck, detectTargetIdentityCluster } from '../outliers';
 import { adjustComparable, calibrate } from '../adjust';
-import { weightedMedian, weightedAvg, confidenceScore, computeWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut, priceStats } from '../price';
+import { weightedMedian, weightedAvg, confidenceScore, computeWeight, computeDetailedWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut, priceStats, calculateFMV } from '../price';
+import { generateDeterministicExplanation } from '../glm-intelligence';
 import type { Comparable, VehicleSpec, NormalizedListing } from '../types';
 
 const spec: VehicleSpec = {
@@ -136,7 +137,7 @@ describe('dedupe + outliers', () => {
 
 describe('adjustments', () => {
   it('year delta sign: newer comp subtracts', () => {
-    const cal = { perYearJod: 700, per10kKmJod: 180, calibrated: false };
+    const cal = { perYearJod: 700, per10kKmJod: 180, calibrated: false, provenance: 'CONSERVATIVE_HEURISTIC' as const, sampleSize: 2 };
     const newer = adjustComparable(mkListing({ year: 2024, priceJod: 15000, kilometers: 80000 }), spec, cal);
     const older = adjustComparable(mkListing({ year: 2020, priceJod: 11000, kilometers: 80000 }), spec, cal);
     assert.ok(newer.adjustedPrice! < 15000);
@@ -144,7 +145,7 @@ describe('adjustments', () => {
     assert.ok(newer.adjustments.some((a) => a.factor === 'year'));
   });
   it('higher-km comp gets wear added back', () => {
-    const cal = { perYearJod: 700, per10kKmJod: 180, calibrated: false };
+    const cal = { perYearJod: 700, per10kKmJod: 180, calibrated: false, provenance: 'CONSERVATIVE_HEURISTIC' as const, sampleSize: 2 };
     const worn = adjustComparable(mkListing({ kilometers: 130000, priceJod: 11000, year: 2022 }), spec, cal);
     assert.ok(worn.adjustedPrice! > 11000);
   });
@@ -549,5 +550,99 @@ describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () =>
     assert.equal(scored.simBreakdown.engineTrans, 50);
     // Overall similarity should remain robust (>= 60) rather than plunging to 0
     assert.ok(scored.similarity >= 60, `Similarity ${scored.similarity} should be >= 60`);
+  });
+
+  // Test 15: Mathematical Traceability: adjustedPrice = rawPrice + sum(adjustments) with valid provenance
+  it('15. Traceable Adjustments: adjustedPrice equals rawPrice + sum(adjustments) with valid provenance and formula', () => {
+    const cal = { perYearJod: 800, per10kKmJod: 150, calibrated: true, provenance: 'MARKET_DERIVED' as const, sampleSize: 10 };
+    const rawComp = mkListing({ year: 2020, priceJod: 20000, kilometers: 120000, trim: 'LE' });
+    const adjusted = adjustComparable(rawComp, spec, cal);
+
+    assert.ok(adjusted.adjustments.length > 0);
+    const sumAdjustments = adjusted.adjustments.reduce((sum, a) => sum + a.delta, 0);
+    assert.equal(adjusted.adjustedPrice, rawComp.priceJod + sumAdjustments);
+
+    for (const adj of adjusted.adjustments) {
+      assert.ok(['MARKET_DERIVED', 'CONSERVATIVE_HEURISTIC', 'EMPIRICAL_SEGMENT'].includes(adj.provenance));
+      assert.ok(adj.formula && adj.formula.length > 0);
+      assert.ok(adj.reason && adj.reason.length > 0);
+    }
+  });
+
+  // Test 16: Multi-Factor Weight Decomposition: differentiated weights (Tier 1 > Tier 4)
+  it('16. Multi-Factor Weight Decomposition: Tier 1 weight is substantially higher than Tier 4', () => {
+    const tier1Comp = mkListing({ tier: 1, yearDiff: 0, similarity: 92, ageDays: 5, source: 'jocars' });
+    const tier4Comp = mkListing({ tier: 4, yearDiff: 5, similarity: 60, ageDays: 45, source: 'opensooq' });
+    const trust = { jocars: 1.0, opensooq: 0.85 };
+
+    const { breakdown: w1 } = computeDetailedWeight(tier1Comp, trust, spec);
+    const { breakdown: w4 } = computeDetailedWeight(tier4Comp, trust, spec);
+
+    assert.equal(w1.identityWeight, 1.0);
+    assert.equal(w4.identityWeight, 1.0);
+    assert.ok(w1.yearWeight > w4.yearWeight, 'Tier 1 year weight must exceed Tier 4');
+    assert.ok(w1.rawCompositeWeight > w4.rawCompositeWeight * 2.5, 'Tier 1 composite weight must be > 2.5x Tier 4');
+  });
+
+  // Test 17: Target Price Invariance across multiple asking prices
+  it('17. Target Price Invariance: Asking prices across 20k, 25k, 30k, 35k yield identical FMV and weights', () => {
+    const comps = [
+      mkListing({ priceJod: 27000, tier: 2, yearDiff: 0, similarity: 85 }),
+      mkListing({ priceJod: 28500, tier: 2, yearDiff: 0, similarity: 88 }),
+      mkListing({ priceJod: 29000, tier: 1, yearDiff: 0, similarity: 94 }),
+      mkListing({ priceJod: 31000, tier: 2, yearDiff: 0, similarity: 82 }),
+    ];
+
+    const fmv20k = calculateFMV(comps, 20000);
+    const fmv25k = calculateFMV(comps, 25000);
+    const fmv30k = calculateFMV(comps, 30000);
+    const fmv35k = calculateFMV(comps, 35000);
+
+    assert.equal(fmv20k.fmv, fmv30k.fmv);
+    assert.equal(fmv25k.fmv, fmv35k.fmv);
+    assert.equal(fmv20k.minPrice, fmv35k.minPrice);
+    assert.equal(fmv20k.maxPrice, fmv35k.maxPrice);
+  });
+
+  // Test 18: GLM Deterministic Fallback: Resilient and zero-hallucination
+  it('18. GLM Deterministic Fallback: Generates grounded claims, warnings, and limitations without hallucination', () => {
+    const payload = {
+      target: { brand: 'BMW', model: 'X5', year: 2018, mileage: 171000, trim: 'xDrive40e', fuelType: 'HYBRID', transmission: 'AUTOMATIC', askingPrice: 30000 },
+      evidenceQuality: {
+        totalAdsChecked: 27, eligibleComparables: 5, sameYearComparables: 0, plusMinusOneYearComparables: 0,
+        supportComparables: 5, excludedAds: 22, independentSources: 2, targetClusterExcluded: 3,
+        confidence: 40, confidenceLabel: 'منخفض', status: 'INSUFFICIENT_DIRECT_EVIDENCE',
+      },
+      pricingResults: {
+        fairMarketValue: 26000, range: { low: 20000, high: 33000 }, isWideRange: true,
+        rangeDisclaimerAr: 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة',
+        rawMedian: 17000, adjustedMedian: 26000, weightedMedian: 26000,
+        percentiles: { p25: 22000, p50: 26000, p75: 31000, p85: 32000, p90: 33000 },
+        askingPricePremiumPercent: 15, askingPricePercentile: 72, pricePositionClassification: 'ABOVE_MARKET',
+      },
+      comparables: [
+        { title: 'BMW X5 2014', rawPrice: 17000, adjustedPrice: 25000, tier: 4, weight: 0.15, contributionPercent: 30, similarity: 65, adjustments: [{ factor: 'year', delta: 8000, formula: 'test', reason: 'year adj' }] },
+      ],
+      leaveOneOut: [],
+    };
+
+    const explanation = generateDeterministicExplanation(payload as any);
+    assert.equal(explanation.generatedBy, 'DETERMINISTIC_FALLBACK');
+    assert.ok(explanation.marketSummary.includes('BMW X5'));
+    assert.ok(explanation.keyDrivers.length > 0);
+    assert.ok(explanation.dataWarnings.length > 0);
+    assert.ok(explanation.limitations.length > 0);
+  });
+
+  // Test 19: Wide Range Marking on Insufficient Direct Evidence
+  it('19. Wide Range Marking: When same-year count is 0 and only Tier 4 exists, isWideRange is true', () => {
+    const tier4Comps = [
+      mkListing({ year: 2014, tier: 4, yearDiff: 4, adjustedPrice: 24000, weight: 0.1 }),
+      mkListing({ year: 2015, tier: 4, yearDiff: 3, adjustedPrice: 26000, weight: 0.15 }),
+      mkListing({ year: 2013, tier: 4, yearDiff: 5, adjustedPrice: 22000, weight: 0.08 }),
+    ];
+    const res = calculateFMV(tier4Comps, 30000);
+    assert.equal(res.isWideRange, true);
+    assert.ok(res.rangeDisclaimerAr && res.rangeDisclaimerAr.includes('محدودية الأدلة المباشرة'));
   });
 });
