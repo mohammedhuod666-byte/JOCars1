@@ -46,6 +46,8 @@ export interface OpenSooqResult {
   stats: { min: number; max: number; avg: number; median: number; count: number } | null;
   /** Listings that match brand+model (the ones used for `stats`). */
   matchedListings: OpenSooqListing[];
+  /** ALL same-brand listings (full set for the valuation engine tiers). */
+  brandMatchedListings: OpenSooqListing[];
   /** Total fetched before filtering (for telemetry / reasoning). */
   totalFetched: number;
   /** Why no stats were computed, when stats is null. */
@@ -181,16 +183,51 @@ const DESKTOP_USER_AGENTS = [
 ];
 
 async function fetchSerpHtml(brand: string, model: string, year?: number): Promise<string | null> {
-  const params = new URLSearchParams();
-  params.set('brand', normalizeBrand(brand));
-  if (model) params.set('model', normalizeModel(model));
-  if (year) {
-    params.set('year_from', String(year - 2));
-    params.set('year_to', String(year + 2));
+  const pages: string[] = [];
+  
+  async function getPage(yFrom: number, yTo: number, page: number): Promise<boolean> {
+    const params = new URLSearchParams();
+    params.set('brand', normalizeBrand(brand));
+    if (model) params.set('model', normalizeModel(model));
+    params.set('year_from', String(yFrom));
+    params.set('year_to', String(yTo));
+    if (page > 1) params.set('page', String(page));
+    const url = `https://jo.opensooq.com/en/cars?${params.toString()}`;
+    const html = await fetchOnePage(url);
+    if (html) {
+      pages.push(html);
+      return true;
+    }
+    return false;
   }
-  const url = `https://jo.opensooq.com/en/cars?${params.toString()}`;
 
-  // Try up to 2 times with different User-Agents
+  if (!year) {
+    await getPage(1990, new Date().getFullYear(), 1);
+    await getPage(1990, new Date().getFullYear(), 2);
+    return pages.length > 0 ? pages.join('\n<!--page-->\n') : null;
+  }
+
+  // 1. Exact year (Page 1)
+  let ok = await getPage(year, year, 1);
+  if (ok && parseRawListings(pages[0]).length >= 15) {
+    // We have enough exact year matches
+    return pages.join('\n<!--page-->\n');
+  }
+
+  // 2. Exact year (Page 2) if not enough
+  if (ok) await getPage(year, year, 2);
+
+  // 3. Wide window if we still have few
+  let totalRaw = 0;
+  for (const html of pages) totalRaw += parseRawListings(html).length;
+  if (totalRaw < 10) {
+    await getPage(year - 2, year + 2, 1);
+  }
+  
+  return pages.length > 0 ? pages.join('\n<!--page-->\n') : null;
+}
+
+async function fetchOnePage(url: string): Promise<string | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ua = DESKTOP_USER_AGENTS[attempt % DESKTOP_USER_AGENTS.length];
@@ -223,18 +260,28 @@ async function fetchSerpHtml(brand: string, model: string, year?: number): Promi
 
 /**
  * Pull raw featured listings (unfiltered) from the opensooq SERP HTML.
- * We parse only `pageProps.serpApiResponse.listings.items[].`
+ * Multi-page bodies contain one __NEXT_DATA__ script per page — parse all
+ * and dedupe by post_url.
  */
 function parseRawListings(html: string): Array<Record<string, unknown>> {
-  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!m) return [];
-  try {
-    const data = JSON.parse(m[1]);
-    const items = data?.props?.pageProps?.serpApiResponse?.listings?.items;
-    return Array.isArray(items) ? items : [];
-  } catch {
-    return [];
+  const out: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  const re = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    try {
+      const data = JSON.parse(m[1]);
+      const items = data?.props?.pageProps?.serpApiResponse?.listings?.items;
+      if (!Array.isArray(items)) continue;
+      for (const it of items) {
+        const key = String((it as any)?.post_url || (it as any)?.id || Math.random());
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(it as Record<string, unknown>);
+      }
+    } catch { /* skip malformed page */ }
   }
+  return out;
 }
 
 function toListing(item: Record<string, unknown>): OpenSooqListing {
@@ -366,6 +413,7 @@ export async function fetchOpenSooqListings(brand: string, model: string, year?:
     listings: uiListings.slice(0, 10),
     stats,
     matchedListings: matched,
+    brandMatchedListings: brandMatched,
     totalFetched: sane.length,
     note,
     source: 'السوق المفتوح (مباشر)',
