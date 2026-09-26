@@ -195,24 +195,48 @@ export function isTargetCopy(
   l: NormalizedListing,
   target: TargetIdentity,
 ): { hit: boolean; via: string } {
-  if (target.carId && l.source === 'jocars' && l.externalId === `jo-${target.carId}`) {
+  // 1) Direct Internal ID or URL match
+  if (target.carId && (l.externalId === `jo-${target.carId}` || (l.url && l.url.includes(target.carId)))) {
     return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (internal ID)' };
   }
   if (l.url && (target as any).targetUrls?.includes(l.url)) {
     return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (same URL)' };
   }
-  if (!target.askingPrice || target.askingPrice <= 0) return { hit: false, via: '' };
+
+  // 2) VIN match (if available)
+  if (target.spec.vin && (l as any).vin && norm((l as any).vin) === norm(target.spec.vin)) {
+    return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (matching VIN)' };
+  }
+
+  // 3) Model + Year prerequisite for any fingerprint check
   const lm = norm(l.modelEn || l.model);
   const sm = norm(target.spec.modelEn || target.spec.model);
   const modelOk = !!lm && !!sm && (lm === sm || lm.includes(sm) || sm.includes(lm));
-  if (!modelOk) return { hit: false, via: '' };
-  if (l.year !== target.spec.year) return { hit: false, via: '' };
-  const kmOk = l.kilometers != null && (target.spec.kilometers || 0) > 0 &&
-    Math.abs(l.kilometers - target.spec.kilometers) / target.spec.kilometers <= 0.01;
-  const priceOk = Math.abs(l.priceJod - target.askingPrice) <= Math.max(1, target.askingPrice * 0.005);
-  if (kmOk && priceOk) {
-    return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (fingerprint: model+year+km±1%+price)' };
+  if (!modelOk || l.year !== target.spec.year) return { hit: false, via: '' };
+
+  const targetKm = target.spec.kilometers || 0;
+  if (targetKm <= 0 || l.kilometers == null) return { hit: false, via: '' };
+
+  const absKmDiff = Math.abs(l.kilometers - targetKm);
+  const relKmDiff = absKmDiff / targetKm;
+
+  // 4) Exact same vehicle fingerprint (Strictly Price-Agnostic):
+  // If mileage is within 100 km or 0.2% of target on the same model & year,
+  // it is an identical vehicle clone/mirror across portals.
+  // We NEVER look at asking price here, ensuring target asking price cannot leak.
+  if (absKmDiff <= 100 || relKmDiff <= 0.002) {
+    return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (unique vehicle fingerprint: model+year+km)' };
   }
+
+  // 5) Close mileage (within 0.5% or 300 km) with same city or same trim
+  if (absKmDiff <= 300 || relKmDiff <= 0.005) {
+    const cityMatch = !!(target.spec.city && l.city && norm(target.spec.city) === norm(l.city));
+    const trimMatch = !!(target.spec.trim && l.trim && norm(target.spec.trim) === norm(l.trim));
+    if (cityMatch || trimMatch) {
+      return { hit: true, via: 'TARGET LISTING EXCLUDED FROM COMPARABLES (fingerprint: model+year+km+city/trim)' };
+    }
+  }
+
   return { hit: false, via: '' };
 }
 

@@ -103,15 +103,16 @@ async function collectJoCars(spec: VehicleSpec, timeoutMs: number): Promise<Norm
       };
 
       // 1. Same Year
-      let cars = await prisma.car.findMany({
+      let cars: any[] = await prisma.car.findMany({
         where: { ...baseWhere, year: spec.year },
         take: 60, orderBy: { createdAt: 'desc' }, select: selectClause as any,
       });
 
       // 2. +/- 1 Year
       if (cars.length < 5) {
-        const more = await prisma.car.findMany({
-          where: { ...baseWhere, year: { in: [spec.year - 1, spec.year + 1] }, id: { notIn: cars.map(c => c.id) } },
+        const existingIds: string[] = cars.map((c: any) => String(c.id));
+        const more: any[] = await prisma.car.findMany({
+          where: { ...baseWhere, year: { in: [spec.year - 1, spec.year + 1] }, id: { notIn: existingIds } },
           take: 60, orderBy: { createdAt: 'desc' }, select: selectClause as any,
         });
         cars = [...cars, ...more];
@@ -119,8 +120,9 @@ async function collectJoCars(spec: VehicleSpec, timeoutMs: number): Promise<Norm
 
       // 3. +/- 2 Years
       if (cars.length < 5) {
-        const more = await prisma.car.findMany({
-          where: { ...baseWhere, year: { in: [spec.year - 2, spec.year + 2] }, id: { notIn: cars.map(c => c.id) } },
+        const existingIds: string[] = cars.map((c: any) => String(c.id));
+        const more: any[] = await prisma.car.findMany({
+          where: { ...baseWhere, year: { in: [spec.year - 2, spec.year + 2] }, id: { notIn: existingIds } },
           take: 60, orderBy: { createdAt: 'desc' }, select: selectClause as any,
         });
         cars = [...cars, ...more];

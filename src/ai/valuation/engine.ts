@@ -5,9 +5,9 @@
  * Numbers come ONLY from here. The LLM only writes the explanation.
  */
 import prisma from '@/lib/prisma';
-import type { Comparable, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec } from './types';
+import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec } from './types';
 import { collectAll, type SourceOutcome } from './sources';
-import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy } from './similarity';
+import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix } from './similarity';
 import { dedupeExact, dedupeNear, flagOutliers, iqrFences, sanityCheck } from './outliers';
 import { adjustComparable, calibrate } from './adjust';
 import { computeWeight, confidenceScore, priceStats } from './price';
@@ -26,6 +26,102 @@ export interface EngineResult {
   outcomes: SourceOutcome[];
   status: 'RELIABLE' | 'LIMITED' | 'APPROXIMATE' | 'INSUFFICIENT' | 'FAILED';
   insufficientReason?: string;
+  dataQuality?: DataQualityReport;
+}
+
+export function buildTargetSnapshot(
+  spec: VehicleSpec,
+  opts: { carId?: string | null; targetPrice?: number | null },
+) {
+  const fmt = (v: any) => (v !== null && v !== undefined && v !== '' ? v : 'UNKNOWN');
+  return {
+    make: fmt(spec.brandEn || spec.brand),
+    makeAr: fmt(spec.brand),
+    model: fmt(spec.modelEn || spec.model),
+    modelAr: fmt(spec.model),
+    year: fmt(spec.year),
+    trim: fmt(spec.trim),
+    engineCc: fmt(spec.engineCapacity),
+    horsepower: fmt(spec.horsepower),
+    cylinders: fmt(spec.cylinders),
+    fuelType: fmt(spec.fuelType),
+    transmission: fmt(spec.transmission),
+    drivetrain: fmt(spec.drivetrain),
+    mileageKm: fmt(spec.kilometers),
+    bodyType: fmt(spec.bodyType),
+    condition: fmt(spec.condition),
+    location: fmt(spec.city),
+    color: fmt(spec.color),
+    doors: fmt(spec.doors),
+    featuresCount: (spec.specs || []).length,
+    features: spec.specs || [],
+    askingPriceJod: opts.targetPrice ?? spec.askingPrice ?? 'UNKNOWN',
+    vin: fmt(spec.vin),
+    carId: opts.carId || 'NONE',
+    collectedAt: new Date().toISOString(),
+  };
+}
+
+export function evaluateDataQuality(spec: VehicleSpec): DataQualityReport {
+  const currentYear = new Date().getFullYear();
+  const checks: DataQualityReport['checks'] = [];
+
+  // Check 1: Brand
+  if (spec.brand && String(spec.brand).trim().length > 0) {
+    checks.push({ field: 'brand', labelAr: 'الشركة الصانعة', status: 'VALID' });
+  } else {
+    checks.push({ field: 'brand', labelAr: 'الشركة الصانعة', status: 'INVALID', detail: 'اسم الشركة مفقود' });
+  }
+
+  // Check 2: Model
+  if (spec.model && String(spec.model).trim().length > 0) {
+    checks.push({ field: 'model', labelAr: 'الموديل', status: 'VALID' });
+  } else {
+    checks.push({ field: 'model', labelAr: 'الموديل', status: 'INVALID', detail: 'اسم الموديل مفقود' });
+  }
+
+  // Check 3: Year
+  const yr = Number(spec.year);
+  if (Number.isInteger(yr) && yr >= 1970 && yr <= currentYear + 1) {
+    checks.push({ field: 'year', labelAr: 'سنة الصنع', status: 'VALID' });
+  } else {
+    checks.push({ field: 'year', labelAr: 'سنة الصنع', status: 'INVALID', detail: `سنة صنع غير صالحة (${spec.year})` });
+  }
+
+  // Check 4: Mileage (Kilometers)
+  const km = Number(spec.kilometers);
+  if (Number.isFinite(km) && km >= 0 && km <= 1500000) {
+    checks.push({ field: 'kilometers', labelAr: 'عداد المسافة', status: 'VALID' });
+  } else {
+    checks.push({ field: 'kilometers', labelAr: 'عداد المسافة', status: 'INVALID', detail: 'عداد المسافة غير صالح أو سالب' });
+  }
+
+  // Check 5: Powertrain consistency (electric vs engine specs)
+  const fuelNorm = String(spec.fuelType || '').toLowerCase();
+  const isElectric = fuelNorm.includes('electric') || fuelNorm === 'ev' || fuelNorm.includes('كهربا');
+  if (isElectric && ((spec.engineCapacity && Number(spec.engineCapacity) > 0) || (spec.cylinders && Number(spec.cylinders) > 0))) {
+    checks.push({ field: 'powertrain', labelAr: 'تناسق المحرك والوقود', status: 'INVALID', detail: 'سيارة كهربائية ولكن مسجل لها محرك وقود أو سلندرات' });
+  } else {
+    checks.push({ field: 'powertrain', labelAr: 'تناسق المحرك والوقود', status: spec.fuelType ? 'VALID' : 'MISSING' });
+  }
+
+  // Optional specs
+  checks.push({ field: 'transmission', labelAr: 'ناقل الحركة', status: spec.transmission ? 'VALID' : 'MISSING' });
+  checks.push({ field: 'drivetrain', labelAr: 'نوع الدفع', status: spec.drivetrain ? 'VALID' : 'MISSING' });
+  checks.push({ field: 'condition', labelAr: 'حالة المركبة', status: spec.condition ? 'VALID' : 'MISSING' });
+  checks.push({ field: 'location', labelAr: 'الموقع/المدينة', status: spec.city ? 'VALID' : 'MISSING' });
+  checks.push({ field: 'engineCapacity', labelAr: 'سعة المحرك', status: spec.engineCapacity ? 'VALID' : 'MISSING' });
+  checks.push({ field: 'horsepower', labelAr: 'القوة الحصانية', status: spec.horsepower ? 'VALID' : 'MISSING' });
+
+  const invalidCrucial = checks.filter((c) => c.status === 'INVALID');
+  const validCount = checks.filter((c) => c.status === 'VALID').length;
+  const score = Math.round((validCount / checks.length) * 100);
+
+  return {
+    passed: invalidCrucial.length === 0,
+    score,
+    checks,
+  };
 }
 
 function stage(pipeline: ValuationOutput['pipeline'], stage: string, stageAr: string, t0: number, detail: string) {
@@ -79,19 +175,43 @@ export async function runValuation(
   const pipeline: ValuationOutput['pipeline'] = [];
   let t0 = Date.now();
 
+  const fullSnapshot = buildTargetSnapshot(spec, opts);
+  const dataQuality = evaluateDataQuality(spec);
+
   const request = await prisma.valuationRequest.create({
     data: {
       carId: opts.carId || null,
       userId: opts.userId || null,
       input: JSON.stringify(spec),
-      targetSnapshot: JSON.stringify({ spec, collectedAt: new Date().toISOString() }),
+      targetSnapshot: JSON.stringify(fullSnapshot),
       status: 'RUNNING',
     },
   });
-  // Progress fan-out for SSE streams. Note: shared slot — under rare
-  // concurrent runs a stage tick may reach the wrong stream; final
-  // payloads always return on their own request, so this stays cosmetic.
+  // Progress fan-out for SSE streams.
   setStageListener(onStage || null);
+
+  // Early Data Quality Gate refusal if vital identification data is corrupt/missing
+  if (!dataQuality.passed) {
+    const invalidDetails = dataQuality.checks
+      .filter((c) => c.status === 'INVALID')
+      .map((c) => `${c.labelAr}: ${c.detail || 'غير صالح'}`)
+      .join(' • ');
+    const reason = `فحص جودة البيانات (Data Quality Gate): ${invalidDetails} — تم إيقاف التقييم منعاً للأرقام المضللة.`;
+    await prisma.valuationRequest.update({
+      where: { id: request.id },
+      data: { status: 'INSUFFICIENT', error: reason },
+    });
+    setStageListener(null);
+    return {
+      requestId: request.id,
+      output: null,
+      comparables: [],
+      outcomes: [],
+      status: 'INSUFFICIENT',
+      insufficientReason: reason,
+      dataQuality,
+    };
+  }
 
   try {
     const tuning = await getTuning();
@@ -509,8 +629,14 @@ export async function runValuation(
       ? Math.round(((opts.targetPrice - estimated) / estimated) * 1000) / 10
       : null;
 
+    // Attach matchMatrix to all adjusted comps
+    for (const c of adjusted) {
+      c.matrix = matchMatrix(spec, c);
+    }
+
     const output: ValuationOutput = {
       estimatedPrice: estimated, minPrice, maxPrice, grade, funnel, profile,
+      dataQuality,
       priceBasis: {
         sold: adjusted.filter((c) => c.priceType === 'sold').length,
         asking: adjusted.filter((c) => c.priceType !== 'sold').length,
@@ -541,6 +667,14 @@ export async function runValuation(
     });
     void saved;
 
+    // Sync fairPriceEstimate to the Car model (spec §13)
+    if (opts.carId && estimated > 0) {
+      await prisma.car.update({
+        where: { id: opts.carId },
+        data: { fairPriceEstimate: estimated },
+      }).catch(() => {});
+    }
+
     // Attach final adjusted prices/weights to stored comparables (best effort).
     try {
       const stored = await prisma.valuationComparable.findMany({ where: { requestId: request.id }, select: { id: true, snapshot: true } });
@@ -553,7 +687,7 @@ export async function runValuation(
           await prisma.valuationComparable.update({
             where: { id: s.id },
             data: {
-              snapshot: JSON.stringify({ ...live, adjustments: [], weight: 0 }),
+              snapshot: JSON.stringify({ ...live, adjustments: [], weight: 0, matrix: matchMatrix(spec, live) }),
               adjustedPrice: live.adjustedPrice, adjustments: JSON.stringify(live.adjustments),
               weight: Math.round(live.weight * 1000) / 1000,
             },
@@ -566,7 +700,7 @@ export async function runValuation(
     const finalStatus = output.grade === 'full' ? 'RELIABLE' : output.grade === 'limited' ? 'LIMITED' : 'APPROXIMATE';
     await prisma.valuationRequest.update({ where: { id: request.id }, data: { status: finalStatus } }).catch(() => {});
     setStageListener(null);
-    return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus };
+    return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus, dataQuality };
   } catch (e: any) {
     await prisma.valuationRequest.update({
       where: { id: request.id },
@@ -582,9 +716,45 @@ export async function latestResultForCar(carId: string) {
   const req = await prisma.valuationRequest.findFirst({
     where: { carId, status: { in: ['RELIABLE', 'LIMITED', 'APPROXIMATE'] } },
     orderBy: { createdAt: 'desc' },
-    include: { result: true },
+    include: {
+      result: true,
+      comparables: {
+        where: { included: true },
+        take: 12,
+        orderBy: { similarity: 'desc' },
+      },
+    },
   });
-  return req?.result || null;
+  if (!req?.result) return null;
+
+  const comps = (req.comparables || []).map((c) => {
+    let snap: any = {};
+    try { snap = JSON.parse(c.snapshot); } catch {}
+    let adjs: any[] = [];
+    try { adjs = JSON.parse(c.adjustments || '[]'); } catch {}
+    return {
+      source: snap.source || 'jocars',
+      sourceLabel: snap.sourceLabel || snap.source || 'سوق JO Cars',
+      url: snap.url,
+      title: `${snap.brand || ''} ${snap.model || ''} ${snap.year ?? ''}`.trim(),
+      year: snap.year,
+      kilometers: snap.kilometers,
+      price: snap.priceJod || snap.price,
+      adjustedPrice: c.adjustedPrice,
+      similarity: c.similarity,
+      tier: c.tier,
+      yearDiff: snap.yearDiff,
+      weight: c.weight,
+      adjustments: adjs,
+      ageDays: snap.ageDays,
+      matrix: snap.matrix || [],
+    };
+  });
+
+  return {
+    ...req.result,
+    comparables: comps,
+  };
 }
 
 /** Price history for the graph (spec §15): all DONE results for a car. */

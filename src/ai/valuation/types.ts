@@ -19,6 +19,11 @@ export interface VehicleSpec {
   engineCapacity?: number | null; // cc
   horsepower?: number | null; // HP
   cylinders?: number | null;
+  color?: string | null;
+  doors?: number | null;
+  bodyType?: string | null;
+  vin?: string | null;
+  askingPrice?: number | null;
   specs?: string[];   // extras: sunroof, leather, ...
 }
 
@@ -66,6 +71,7 @@ export interface Comparable extends NormalizedListing {
   excludeReason?: string | null;
   ageDays: number;
   isDuplicateOf?: string | null;
+  matrix?: { factor: string; factorAr: string; target: string; comp: string; verdict: 'EXACT' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN' }[];
 }
 
 export interface PriceStats {
@@ -77,13 +83,24 @@ export interface PriceStats {
   iqr: number;
 }
 
+export interface DataQualityReport {
+  passed: boolean;
+  score: number; // 0-100
+  checks: { field: string; labelAr: string; status: 'VALID' | 'MISSING' | 'INVALID'; detail?: string }[];
+}
+
 export interface ValuationOutput {
   estimatedPrice: number;
   minPrice: number;
   maxPrice: number;
   grade: 'approximate' | 'limited' | 'full';
   funnel: FunnelStep[];
-  profile: { spec: VehicleSpec; missingFields: string[]; provenance: Record<string, 'USER_PROVIDED' | 'UNKNOWN'> };
+  profile: {
+    spec: VehicleSpec;
+    missingFields: string[];
+    provenance: Record<string, 'USER_PROVIDED' | 'SOURCE_VERIFIED' | 'SOURCE_DERIVED' | 'UNKNOWN'>;
+  };
+  dataQuality?: DataQualityReport;
   priceBasis: { sold: number; asking: number };
   confidence: number; // 0-100
   confidenceLabel: 'مرتفع' | 'متوسط' | 'منخفض';

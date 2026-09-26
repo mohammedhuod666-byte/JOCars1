@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -13,10 +13,11 @@ import {
   Shield, CheckCircle, AlertTriangle, BarChart3, Bot, Sparkles, Eye,
   Clock, Building2, Palette, DoorOpen, Cpu, Bike, Loader2, GitCompare, ChevronDown,
   RotateCcw, Trash2, Crown, Send, Car as CarIcon, X, RefreshCw, CalendarCheck, ShieldCheck, Zap,
-  MessageSquare, Compass, Handshake
+  MessageSquare, Compass, Handshake, Pencil
 } from 'lucide-react';
 import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, getConditionLabel, formatDate } from '@/lib/utils';
-import { AiAnalysisContent } from '@/components/cars/AiAnalysisContent';
+import { CarDriveLoader } from '@/components/cars/CarDriveLoader';
+import { getCachedCarDetail, setCachedCarDetail } from '@/lib/car-detail-cache';
 import { CustomsCalculator } from '@/components/cars/CustomsCalculator';
 import { ConditionDetails } from '@/components/cars/ConditionDetails';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +35,8 @@ import toast from 'react-hot-toast';
 import { sanitizePlainText } from '@/lib/sanitize';
 import WhatsAppShareButton from '@/components/ui/WhatsAppShareButton';
 import JordanianInspectionReport from '@/components/cars/JordanianInspectionReport';
+import { ValuationReport } from '@/components/cars/ValuationReport';
+import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/car-features';
 
 const AuctionSection = lazy(() => import('@/components/auctions/AuctionSection').then(m => ({ default: m.AuctionSection })));
 const CarHistorySection = lazy(() => import('@/components/cars/CarHistorySection').then(m => ({ default: m.CarHistorySection })));
@@ -59,9 +62,10 @@ export default function CarDetailPage() {
   const [similarCars, setSimilarCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const sawLoader = useRef(false);
   const [currentImage, setCurrentImage] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
-  const [showAI, setShowAI] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [ratingOpen, setRatingOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -70,19 +74,40 @@ export default function CarDetailPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [hasMoreImages, setHasMoreImages] = useState(false);
   const [loadingMoreImages, setLoadingMoreImages] = useState(false);
+  const [liveFairPrice, setLiveFairPrice] = useState<number | null>(null);
+
+  const applyCarData = (data: any) => {
+    setCar(data);
+    setLiveFairPrice(data.fairPriceEstimate ?? null);
+    setIsSaved(data.isFavorited || false);
+    setHasMoreImages(data.hasMoreImages || false);
+    document.title = `${data.brand?.nameAr || ''} ${data.model?.nameAr || ''} ${data.year} | كارس جو JO Cars`;
+  };
 
   const loadCar = (carId: string, trackView: boolean) => {
+    // Instant path: serve a fresh cached copy, refresh silently in background.
+    const cached = getCachedCarDetail(carId) as any;
+    if (cached) {
+      setLoadError(false);
+      applyCarData(cached);
+      setLoading(false);
+      fetchWithRetry<{ success: boolean; data?: any }>(`/api/cars/${carId}`)
+        .then((data) => {
+          if (data?.success && data.data) setCachedCarDetail(carId, data.data);
+        })
+        .catch(() => {});
+      return;
+    }
     setLoading(true);
+    setLeaving(false);
     setLoadError(false);
     fetchWithRetry<{ success: boolean; data?: any; error?: string }>(
       `/api/cars/${carId}${trackView ? '?trackView=true' : ''}`
     )
       .then((data) => {
         if (data?.success && data.data) {
-          setCar(data.data);
-          setIsSaved(data.data.isFavorited || false);
-          setHasMoreImages(data.data.hasMoreImages || false);
-          document.title = `${data.data.brand?.nameAr || ''} ${data.data.model?.nameAr || ''} ${data.data.year} | كارس جو JO Cars`;
+          applyCarData(data.data);
+          setCachedCarDetail(carId, data.data);
         } else {
           toast.error(data?.error || 'السيارة غير موجودة');
           router.push('/cars');
@@ -106,6 +131,25 @@ export default function CarDetailPage() {
     loadCar(carId, !alreadyViewed);
   }, [params.id]);
 
+  // Mark when the loader was actually shown, so cached (instant) opens
+  // skip the drive-away animation entirely.
+  useEffect(() => {
+    if (loading) sawLoader.current = true;
+  }, [loading]);
+
+  // Drive-away exit: when the ad finishes loading, jump to the top of the
+  // page and let the loader car speed off-screen before revealing the ad.
+  useEffect(() => {
+    if (!loading && car) {
+      window.scrollTo(0, 0);
+      if (!sawLoader.current) return;
+      sawLoader.current = false;
+      setLeaving(true);
+      const t = setTimeout(() => setLeaving(false), 750);
+      return () => clearTimeout(t);
+    }
+  }, [loading, car]);
+
   useEffect(() => {
     if (car) {
       const t = setTimeout(() => {
@@ -127,7 +171,29 @@ export default function CarDetailPage() {
       navigator.share({ title: `${car?.brand?.nameAr} ${car?.model?.nameAr}`, url: window.location.href });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      toast.success('تم نسخ رابط الإعلان 🔗');
+      toast.success('تم نسخ رابط الإعلان');
+    }
+  };
+
+  const isOwner = !!currentUser && !!car && (currentUser.id === (car as any).userId);
+
+  const handleDeleteCar = async () => {
+    if (!car) return;
+    if (!confirm('هل أنت متأكد من حذف هذا الإعلان نهائياً؟')) return;
+    try {
+      const res = await fetch(`/api/cars/${car.id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        toast.success('تم حذف الإعلان');
+        router.push('/my-cars');
+      } else {
+        toast.error(data?.error || 'فشل حذف الإعلان');
+      }
+    } catch {
+      toast.error('تعذر حذف الإعلان');
     }
   };
 
@@ -172,7 +238,7 @@ export default function CarDetailPage() {
       });
       const data = await res.json();
       if (data.success && data.data?.conversation?.id) {
-        toast.success('جاري توجيهك للمحادثة مع البائع... 💬');
+        toast.success('جاري توجيهك للمحادثة مع البائع...');
         router.push(`/messages?conversationId=${data.data.conversation.id}`);
       } else {
         toast.error(data.error || 'تعذر فتح صفحة المحادثات');
@@ -206,12 +272,12 @@ export default function CarDetailPage() {
         body: JSON.stringify({
           carId: car.id,
           sellerId: car.user.id,
-          content: `مرحباً، أعجبتني سيارتك (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}) المعروضة بسعر ${priceTxt} د.أ. هل السعر نهائي أم يوجد مجال للتفاوض؟ 🤝`,
+          content: `مرحباً، أعجبتني سيارتك (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}) المعروضة بسعر ${priceTxt} د.أ. هل السعر نهائي أم يوجد مجال للتفاوض؟ `,
         }),
       });
       const data = await res.json();
       if (data.success && data.data?.conversation?.id) {
-        toast.success('فتحنا لك محادثة التفاوض مع البائع 🤝');
+        toast.success('فتحنا لك محادثة التفاوض مع البائع');
         router.push(`/messages?conversationId=${data.data.conversation.id}`);
       } else {
         toast.error(data.error || 'تعذر فتح المحادثة');
@@ -242,12 +308,12 @@ export default function CarDetailPage() {
         body: JSON.stringify({
           carId: car.id,
           sellerId: car.user.id,
-          content: `🚗 **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
+          content: ` **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
         }),
       });
       const data = await res.json();
       if (data.success && data.data?.conversation?.id) {
-        toast.success('تم إرسال طلب اختبار القيادة للبائع بنجاح! جاري التوجيه للمحادثة... 🚗');
+        toast.success('تم إرسال طلب اختبار القيادة للبائع بنجاح! جاري التوجيه للمحادثة...');
         router.push(`/messages?conversationId=${data.data.conversation.id}`);
       } else {
         toast.error(data.error || 'تعذر إرسال الطلب');
@@ -257,13 +323,8 @@ export default function CarDetailPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-400" />
-        <p className="text-slate-400 text-sm font-semibold">جاري تحميل تفاصيل السيارة...</p>
-      </div>
-    );
+  if (loading || (leaving && car)) {
+    return <CarDriveLoader leaving={!loading} />;
   }
 
   if (loadError || !car) {
@@ -271,7 +332,7 @@ export default function CarDetailPage() {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
         <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl">
           <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto text-3xl">
-            🚗
+            
           </div>
           <h2 className="text-xl font-bold text-white">تعذر تحميل الإعلان</h2>
           <p className="text-slate-400 text-xs leading-relaxed">
@@ -302,6 +363,8 @@ export default function CarDetailPage() {
     { icon: Palette, label: 'اللون', value: car.color },
     { icon: DoorOpen, label: 'عدد الأبواب', value: car.doors },
     { icon: Cpu, label: 'سعة المحرك', value: car.engineCapacity ? `${car.engineCapacity} CC` : 'غير محدد' },
+    { icon: Zap, label: 'القدرة', value: (car as any).horsepower ? `${(car as any).horsepower} HP` : 'غير محدد' },
+    { icon: Gauge, label: 'التسارع 0-100', value: (car as any).acceleration ? `${(car as any).acceleration} ثانية` : 'غير محدد' },
     { icon: Bike, label: 'نوع الدفع', value: getDrivetrainLabel(car.drivetrain) },
     { icon: MapPin, label: 'المحافظة', value: car.city?.nameAr || 'غير محدد' },
     { icon: Building2, label: 'الشركة', value: car.brand?.nameAr },
@@ -335,17 +398,17 @@ export default function CarDetailPage() {
                   <div className="flex items-center gap-2">
                     {car.featured && (
                       <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 text-xs font-black shadow-lg">
-                        ⭐ إعلان مميز
+                         إعلان مميز
                       </span>
                     )}
                     {car.hasWarranty && (
                       <span className="px-3 py-1.5 rounded-xl bg-emerald-500/90 text-slate-950 text-xs font-black backdrop-blur-md">
-                        🛡️ تحت الكفالة
+                         تحت الكفالة
                       </span>
                     )}
                     {(car as any).inspectionVerified && (
                       <span className="px-3 py-1.5 rounded-xl bg-blue-500/90 text-white text-xs font-black backdrop-blur-md" title={(car as any).inspectionCenter || ''}>
-                        ✅ فحص معتمد{(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}
+                         فحص معتمد{(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}
                       </span>
                     )}
                   </div>
@@ -387,7 +450,7 @@ export default function CarDetailPage() {
                 <div className="absolute top-16 right-1/2 translate-x-1/2 z-10">
                   <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-slate-300 text-xs backdrop-blur-md font-bold">
                     <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>انقر لتكبير الصور ملء الشاشة 🔍</span>
+                    <span>انقر لتكبير الصور ملء الشاشة </span>
                   </div>
                 </div>
 
@@ -470,10 +533,10 @@ export default function CarDetailPage() {
                     {formatPrice(car.price)}
                   </div>
                   <div className="flex items-center justify-start sm:justify-end gap-2 mt-1">
-                    <PriceFairnessIndicator price={car.price} fairPriceEstimate={(car as any).fairPriceEstimate ?? null} size="md" />
+                    <PriceFairnessIndicator price={car.price} fairPriceEstimate={liveFairPrice} size="md" />
                     {car.isNegotiable && (
                       <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold">
-                        قابل للتفاوض 💬
+                        قابل للتفاوض 
                       </span>
                     )}
                   </div>
@@ -494,48 +557,39 @@ export default function CarDetailPage() {
                 )}
 
                 <Button variant="ghost" icon={<MessageSquare className="w-4 h-4 text-emerald-400" />} onClick={handleSendMessage}>
-                  إرسال رسالة عبر الموقع 💬
+                  إرسال رسالة عبر الموقع 
                 </Button>
 
                 <Button variant="ghost" icon={<CarIcon className="w-4 h-4 text-amber-400" />} onClick={handleTestDriveRequest}>
-                  طلب اختبار قيادة 🚗
+                  طلب اختبار قيادة 
                 </Button>
 
                 <Button variant="ghost" icon={<Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />} onClick={toggleFavorite}>
-                  {isSaved ? 'محفوظة ❤️' : 'حفظ'}
+                  {isSaved ? 'محفوظة ' : 'حفظ'}
                 </Button>
 
                 <Button variant="ghost" icon={<Share2 className="w-4 h-4" />} onClick={handleShare}>
                   مشاركة
                 </Button>
+
+                {isOwner && (
+                  <>
+                    <Link href={`/cars/${car?.id}/edit`}>
+                      <Button variant="ghost" icon={<Pencil className="w-4 h-4 text-blue-400" />}>
+                        تعديل الإعلان
+                      </Button>
+                    </Link>
+                    <Button variant="ghost" icon={<Trash2 className="w-4 h-4 text-rose-400" />} onClick={handleDeleteCar}>
+                      حذف الإعلان
+                    </Button>
+                  </>
+                )}
               </div>
 
             </div>
 
-            {/* AI Analysis Accordion Box */}
-            <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
-              <button
-                onClick={() => setShowAI(!showAI)}
-                className="w-full p-5 flex items-center justify-between text-right hover:bg-slate-800/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-bold shadow-md">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-white text-sm sm:text-base">تحليل وتقييم الذكاء الاصطناعي ✨</h3>
-                    <p className="text-slate-400 text-xs">تقدير قيمة السعر العادل، حالة البودي، ونقاط القوة</p>
-                  </div>
-                </div>
-                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${showAI ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showAI && (
-                <div className="p-6 border-t border-slate-800 bg-slate-950/60">
-                  <AiAnalysisContent carId={car.id} />
-                </div>
-              )}
-            </div>
+            {/* Unified Fair Market Valuation & AI Analysis Engine */}
+            <ValuationReport carId={car.id} askingPrice={car.price} onValuationLoaded={setLiveFairPrice} />
 
             {/* Specifications Matrix Grid */}
             <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
@@ -561,6 +615,24 @@ export default function CarDetailPage() {
 
             {/* Jordanian Inspection Report Component */}
             <JordanianInspectionReport score={(car as any).aiConditionReport || '7 جيد'} />
+
+            {/* Features */}
+            {(() => {
+              const feats = sanitizeFeatures((car as any).features);
+              if (!feats.length) return null;
+              return (
+                <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-3 shadow-xl">
+                  <h3 className="font-black text-white text-base border-b border-slate-800 pb-3">المواصفات والمزايا ({feats.length})</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {feats.map((f: string) => (
+                      <span key={f} className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
+                        {CAR_FEATURES_AR[f] || f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Customs Calculator */}
             <CustomsCalculator year={car.year} engineCapacity={car.engineCapacity ?? null} price={car.price} fuelType={car.fuelType} />
@@ -629,7 +701,7 @@ export default function CarDetailPage() {
                   className="w-full h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-500/20 cursor-pointer"
                 >
                   <Handshake className="w-4.5 h-4.5" />
-                  <span>تفاوض على السعر 🤝</span>
+                  <span>تفاوض على السعر </span>
                 </button>
 
                 {/* Send Message on Website */}
@@ -639,7 +711,7 @@ export default function CarDetailPage() {
                   className="w-full h-12 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <MessageSquare className="w-4.5 h-4.5" />
-                  <span>إرسال رسالة عبر الموقع 💬</span>
+                  <span>إرسال رسالة عبر الموقع </span>
                 </button>
 
                 {/* Request Test Drive */}
@@ -649,7 +721,7 @@ export default function CarDetailPage() {
                   className="w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
                 >
                   <CarIcon className="w-4.5 h-4.5" />
-                  <span>طلب اختبار قيادة 🚗</span>
+                  <span>طلب اختبار قيادة </span>
                 </button>
               </div>
 
@@ -660,7 +732,7 @@ export default function CarDetailPage() {
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black text-xs hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <CalendarCheck className="w-4 h-4" />
-                  <span>طلب معاينة / حجز فحص 📅</span>
+                  <span>طلب معاينة / حجز فحص </span>
                 </button>
               )}
 
@@ -687,13 +759,13 @@ export default function CarDetailPage() {
         {/* Similar Cars Section */}
         {similarCars.length > 0 && (
           <section className="mt-16 space-y-6">
-            <h2 className="text-2xl font-black text-white">سيارات مشابهة قد تهمك 🚗</h2>
+            <h2 className="text-2xl font-black text-white">سيارات مشابهة قد تهمك </h2>
             <CarGrid cars={similarCars} columns={4} />
           </section>
         )}
       </div>
 
-      {/* 📱 Sticky Mobile Bottom Floating Contact Bar (فقط للهواتف) */}
+      {/*  Sticky Mobile Bottom Floating Contact Bar (فقط للهواتف) */}
       <div className="fixed bottom-0 left-0 right-0 z-50 p-2.5 bg-slate-950/95 backdrop-blur-2xl border-t border-slate-800 md:hidden shadow-2xl">
         <div className="grid grid-cols-4 gap-1.5">
           

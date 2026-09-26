@@ -69,7 +69,7 @@ describe('matching + similarity', () => {
     assert.equal(assignTier(mkListing({ fuelType: 'HYBRID' }), spec), 2);
     assert.equal(assignTier(mkListing({ year: 2021 }), spec), 3);
     assert.equal(assignTier(mkListing({ year: 2020 }), spec, { allowPlus2: false, allowTier4: false }), 0);
-    assert.equal(assignTier(mkListing({ year: 2020 }), spec), 3);
+    assert.equal(assignTier(mkListing({ year: 2020 }), spec), 4);
     assert.equal(assignTier(mkListing({ year: 2015 }), spec), 0);
     assert.equal(assignTier(mkListing({ modelEn: 'corolla', model: 'كورولا' }), spec), 0);
     assert.equal(assignTier(mkListing({ brandEn: 'honda', brand: 'هوندا' }), spec), 0);
