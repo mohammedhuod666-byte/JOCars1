@@ -3,7 +3,7 @@
  * Weighted median leads; plain average is never used alone.
  * Confidence is built from measurable indicators only — never vibes.
  */
-import type { Comparable, PriceStats } from './types';
+import type { Comparable, PriceStats, ConsensusBand, LeaveOneOutResult } from './types';
 import { MIN_INCLUDED_FOR_ESTIMATE, MIN_INCLUDED_FOR_RANGE_ONLY } from './types';
 
 function quantile(sorted: number[], q: number): number {
@@ -14,13 +14,101 @@ function quantile(sorted: number[], q: number): number {
   return sorted[base] + (sorted[base + 1] !== undefined ? rest * (sorted[base + 1] - sorted[base]) : 0);
 }
 
-/** Weight = tier × similarity × freshness × source trust. */
+/**
+ * Weight = tier × yearProximityMultiplier × similarity × freshness × source trust.
+ * (Requirement §2):
+ * Same-year (Tier 1/2): 3.5x multiplier.
+ * ±1 year (Tier 3): 1.5x multiplier.
+ * ±2 years / Tier 4: 0.4x multiplier (supporting evidence only).
+ */
 export function computeWeight(c: Comparable, sourceTrust: Record<string, number>): number {
   const tierW = c.tier === 1 ? 1 : c.tier === 2 ? 0.85 : c.tier === 3 ? (c.yearDiff <= 1 ? 0.7 : 0.5) : 0.3;
+  const yearMultiplier = (c.yearDiff === 0 || c.tier === 1 || c.tier === 2)
+    ? 3.5
+    : (c.yearDiff === 1)
+    ? 1.5
+    : 0.4;
   const sim = c.similarity / 100;
   const fresh = c.ageDays <= 7 ? 1 : c.ageDays <= 30 ? 0.85 : c.ageDays <= 90 ? 0.65 : 0.45;
   const trust = sourceTrust[c.source] ?? 0.8;
-  return Math.max(0.05, tierW * sim * fresh * trust);
+  return Math.max(0.05, tierW * yearMultiplier * sim * fresh * trust);
+}
+
+/**
+ * Normalizes weights between Primary Set (Tiers 1 & 2 / same-year)
+ * and Secondary Set (Tiers 3 & 4 / different years) so that Primary Set
+ * controls at least 85% of total weight when present.
+ * (Requirement §2)
+ */
+export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[] {
+  const primary = comps.filter((c) => c.tier <= 2 || c.yearDiff === 0);
+  const secondary = comps.filter((c) => c.tier > 2 && c.yearDiff > 0);
+
+  const primaryWeight = primary.reduce((sum, c) => sum + c.weight, 0);
+  const secondaryWeight = secondary.reduce((sum, c) => sum + c.weight, 0);
+  const totalWeight = primaryWeight + secondaryWeight;
+
+  if (primaryWeight > 0 && secondaryWeight > 0 && totalWeight > 0) {
+    const secondaryShare = secondaryWeight / totalWeight;
+    // Secondary set can never exceed 15% of total weight when primary evidence exists
+    if (secondaryShare > 0.15) {
+      const targetSecondaryWeight = (primaryWeight * 0.15) / 0.85;
+      const scale = targetSecondaryWeight / secondaryWeight;
+      for (const c of secondary) {
+        c.weight = Math.max(0.01, c.weight * scale);
+      }
+    }
+  }
+
+  return comps;
+}
+
+/**
+ * Market Consensus Band (Requirement §4):
+ * Calculates the pricing consensus from primary market comparables.
+ */
+export function buildMarketConsensusBand(comps: Comparable[]): ConsensusBand {
+  if (comps.length === 0) {
+    return { low: 0, high: 0, median: 0, count: 0, spread: 0 };
+  }
+  const prices = comps.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
+  const low = prices[0];
+  const high = prices[prices.length - 1];
+  const median = Math.round(quantile(prices, 0.5));
+  const spread = high - low;
+  return { low, high, median, count: comps.length, spread };
+}
+
+/**
+ * Leave-One-Out Sensitivity Analysis (Requirement §4):
+ * Systematically removes each comparable to verify that no single listing dictates the FMV.
+ */
+export function computeLeaveOneOut(comps: Comparable[], baseFmv: number): LeaveOneOutResult[] {
+  if (comps.length < 2 || baseFmv <= 0) return [];
+  const results: LeaveOneOutResult[] = [];
+
+  for (let i = 0; i < comps.length; i++) {
+    const c = comps[i];
+    const subset = comps.filter((_, idx) => idx !== i);
+    const subItems = subset.map((item) => ({ price: item.adjustedPrice ?? item.priceJod, weight: item.weight }));
+    const subFmv = weightedMedian(subItems);
+    const absoluteShift = subFmv - baseFmv;
+    const percentShift = baseFmv > 0 ? Math.round((absoluteShift / baseFmv) * 1000) / 10 : 0;
+    const isDominant = Math.abs(percentShift) > 10 || Math.abs(absoluteShift) > 1500;
+
+    results.push({
+      comparableId: c.externalId || c.url || `comp-${i + 1}`,
+      comparableTitle: `${c.brand} ${c.model} ${c.year || ''} (${c.sourceLabel})`.trim(),
+      price: c.adjustedPrice ?? c.priceJod,
+      weight: Math.round(c.weight * 1000) / 1000,
+      fmvWithout: subFmv,
+      absoluteShift,
+      percentShift,
+      isDominant,
+    });
+  }
+
+  return results;
 }
 
 export function weightedMedian(items: { price: number; weight: number }[]): number {

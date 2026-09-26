@@ -129,15 +129,64 @@ export interface MatchMatrixRow {
   verdict: 'MATCH' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN';
 }
 
+export interface TargetIdentityCluster {
+  targetFingerprint: string;
+  listings: {
+    id?: string;
+    source: string;
+    url?: string | null;
+    title?: string;
+    price: number;
+    kilometers?: number | null;
+    year?: number | null;
+    reason: string;
+  }[];
+  totalClusterCount: number;
+  sourcesInCluster: string[];
+}
+
+export interface ConsensusBand {
+  low: number;
+  high: number;
+  median: number;
+  count: number;
+  spread: number;
+}
+
+export interface LeaveOneOutResult {
+  comparableId: string;
+  comparableTitle: string;
+  price: number;
+  weight: number;
+  fmvWithout: number;
+  absoluteShift: number;
+  percentShift: number;
+  isDominant: boolean;
+}
+
+export interface IdentityCheckResult {
+  consistent: boolean;
+  reason?: string;
+  detectedModel?: string;
+  detectedBrand?: string;
+}
+
 export interface ValuationAuditTrace {
   targetSnapshot: Record<string, any>;
   dataQuality: DataQualityReport;
+  targetCluster?: TargetIdentityCluster;
+  identityConflictExclusions?: { title: string; source: string; reason: string }[];
   marketSearchResults: { total: number; sources: { source: string; count: number }[] };
   yearDistribution: Record<string, number>;
   targetExclusions: string[];
   suspiciousPriceExclusions: { title: string; price: number; reason: string }[];
   duplicateExclusions: string[];
   tierAssignments: { tier1: number; tier2: number; tier3: number; tier4: number };
+  primaryComparablesCount: number;
+  secondaryComparablesCount: number;
+  consensusBand?: ConsensusBand;
+  leaveOneOutAnalysis?: LeaveOneOutResult[];
+  effectiveComparableWeight: number;
   comparablesAudit: {
     source: string;
     sourceUrl?: string | null;
@@ -163,6 +212,7 @@ export interface ValuationAuditTrace {
     rawPrice: number;
     normalizedPrice: number;
     tier: number;
+    isPrimary: boolean;
     similarity: number;
     simBreakdown: Record<string, number>;
     rawWeight: number;

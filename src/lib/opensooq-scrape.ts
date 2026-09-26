@@ -184,46 +184,36 @@ const DESKTOP_USER_AGENTS = [
 
 async function fetchSerpHtml(brand: string, model: string, year?: number): Promise<string | null> {
   const pages: string[] = [];
-  
-  async function getPage(yFrom: number, yTo: number, page: number): Promise<boolean> {
-    const params = new URLSearchParams();
-    params.set('brand', normalizeBrand(brand));
-    if (model) params.set('model', normalizeModel(model));
-    params.set('year_from', String(yFrom));
-    params.set('year_to', String(yTo));
-    if (page > 1) params.set('page', String(page));
-    const url = `https://jo.opensooq.com/en/cars?${params.toString()}`;
-    const html = await fetchOnePage(url);
-    if (html) {
-      pages.push(html);
-      return true;
+  const b = normalizeBrand(brand);
+  const m = normalizeModel(model);
+  const query = `${b} ${m}`.trim();
+
+  // 1. Direct targeted OpenSooq search using find?term= (Returns 200 with real listings)
+  if (query) {
+    if (year) {
+      const urlYear = `https://jo.opensooq.com/en/find?term=${encodeURIComponent(`${query} ${year}`)}`;
+      const htmlYear = await fetchOnePage(urlYear);
+      if (htmlYear) pages.push(htmlYear);
     }
-    return false;
+    const urlModel = `https://jo.opensooq.com/en/find?term=${encodeURIComponent(query)}`;
+    const htmlModel = await fetchOnePage(urlModel);
+    if (htmlModel) pages.push(htmlModel);
   }
 
-  if (!year) {
-    await getPage(1990, new Date().getFullYear(), 1);
-    await getPage(1990, new Date().getFullYear(), 2);
-    return pages.length > 0 ? pages.join('\n<!--page-->\n') : null;
+  // 2. Fallback to cars category if needed
+  if (pages.length === 0) {
+    const params = new URLSearchParams();
+    params.set('brand', b);
+    if (m) params.set('model', m);
+    if (year) {
+      params.set('year_from', String(year - 1));
+      params.set('year_to', String(year + 1));
+    }
+    const urlCategory = `https://jo.opensooq.com/en/cars?${params.toString()}`;
+    const htmlCat = await fetchOnePage(urlCategory);
+    if (htmlCat) pages.push(htmlCat);
   }
 
-  // 1. Exact year (Page 1)
-  let ok = await getPage(year, year, 1);
-  if (ok && parseRawListings(pages[0]).length >= 15) {
-    // We have enough exact year matches
-    return pages.join('\n<!--page-->\n');
-  }
-
-  // 2. Exact year (Page 2) if not enough
-  if (ok) await getPage(year, year, 2);
-
-  // 3. Wide window if we still have few
-  let totalRaw = 0;
-  for (const html of pages) totalRaw += parseRawListings(html).length;
-  if (totalRaw < 10) {
-    await getPage(year - 2, year + 2, 1);
-  }
-  
   return pages.length > 0 ? pages.join('\n<!--page-->\n') : null;
 }
 

@@ -11,7 +11,7 @@
  */
 
 import prisma from '@/lib/prisma';
-import type { VehicleSpec, ValuationOutput, MatchMatrixRow } from './types';
+import type { VehicleSpec, ValuationOutput, MatchMatrixRow, TargetIdentityCluster, ConsensusBand, LeaveOneOutResult } from './types';
 import { runValuation } from './engine';
 import { buildSpecFromBody } from './request';
 import { chatCompletion } from '../nvidia-client';
@@ -108,6 +108,9 @@ export interface Section24OutputContract {
   adjustments: Section24Adjustment[];
   dataQuality: Section24DataQuality;
   sensitivity: Section24Sensitivity;
+  targetCluster?: TargetIdentityCluster;
+  consensusBand?: ConsensusBand;
+  leaveOneOut?: LeaveOneOutResult[];
   marketInsights: string[];
   warnings: string[];
   reasoning: string[];
@@ -260,8 +263,32 @@ export async function runIntelligenceValuation(
     }
   }
 
-  // Target copies
-  if (audit?.targetExclusions) {
+  // Identity conflict exclusions (contradictory models e.g. BMW 520 F10 for an X5)
+  if (audit?.identityConflictExclusions) {
+    for (const idEx of audit.identityConflictExclusions) {
+      comparablesExcluded.push({
+        title: idEx.title,
+        source: idEx.source,
+        price: 0,
+        reasonCategory: 'IDENTITY_CONFLICT',
+        reasonAr: idEx.reason,
+      });
+    }
+  }
+
+  // Target copies & Unified Target Identity Cluster (Requirement §1 & §8)
+  if (audit?.targetCluster?.listings && audit.targetCluster.listings.length > 0) {
+    for (const tl of audit.targetCluster.listings) {
+      comparablesExcluded.push({
+        id: tl.id,
+        title: `${tl.title || 'إعلان السيارة المستهدفة'} (${tl.source})`,
+        source: tl.source,
+        price: tl.price || effectiveAskingPrice || 0,
+        reasonCategory: 'TARGET_IDENTITY_CLUSTER',
+        reasonAr: tl.reason || 'إعلان ضمن عنقود السيارة المستهدفة عبر المنصات (مستبعد لمنع تسريب السعر)',
+      });
+    }
+  } else if (audit?.targetExclusions) {
     for (const t of audit.targetExclusions) {
       comparablesExcluded.push({
         title: `إعلان متطابق مع السيارة المستهدفة (${t})`,
@@ -314,7 +341,7 @@ export async function runIntelligenceValuation(
   // 7. Data Quality
   const dqIssues: string[] = [];
   if (sameYearShare < 0.5) {
-    dqIssues.push('قلة إعلانات نفس سنة الصنع والاعتماد على مستويات أوسع (Tier 4)');
+    dqIssues.push('قلة إعلانات نفس سنة الصنع والاعتماد على شواهد داعمة (Tier 4)');
   }
   if (usedComps.length < 5) {
     dqIssues.push('حجم عينة المقارنات محدود في السوق');
@@ -351,16 +378,21 @@ export async function runIntelligenceValuation(
     warnings.push(`تمت الاستعانة بمقارنات من فئات وسنوات مجاورة (Tier 4) نظراً لعدم توفر معروض كافٍ من نفس سنة ${spec.year}.`);
   }
 
+  // Negotiation note: Grounded strictly in sold data availability (no hallucinated percentages)
+  const negotiationInsight = output.priceBasis.sold > 0
+    ? `تحليل صفقات البيع الفعلية المنفذة (${output.priceBasis.sold} صفقات) يظهر خصماً تفاوضياً عن أسعار العرض.`
+    : 'أسعار المقارنات مستندة إلى عروض السوق النشطة؛ الصفقات الفعلية تعتمد على الفحص الفني والتفاوض المباشر دون افتراض نسب خصم جزافية.';
+
   const marketInsights: string[] = [
     `السوق المحلي لسيارات ${spec.brandEn || spec.brand} ${spec.modelEn || spec.model} يتأثر بشكل كبير بسنة الصنع وتوافر فئات الهايبرد/البنزين.`,
-    'الأسعار الفعلية عند التفاوض والتنفيذ غالباً ما تشهد خصماً يتراوح بين 3% إلى 7% عن أسعار الإعلانات المعروضة.',
+    negotiationInsight,
     `تم تطبيق الوسيط المرجح (Weighted Median) لضمان عدم تأثر السعر العادل بأي عروض مبالغ بها أو مشبوهة.`,
   ];
 
   // 10. Analytical Reasoning
   const reasoning: string[] = [
     `تم استخراج وتحليل بيانات السيارة: ${spec.brand} ${spec.model} موديل ${spec.year} مع عزل السعر المطلوب (${effectiveAskingPrice ? effectiveAskingPrice.toLocaleString() + ' JOD' : 'غير محدد'}) تماماً من معادلة FMV.`,
-    `تم استبعاد الإعلانات المشبوهة وإعلانات اللوحات والأرقام المميزة عبر بوابة فحص سلامة الأسعار (Price Sanity Gate).`,
+    `تم استبعاد الإعلانات المشبوهة وإعلانات اللوحات وتناقضات الموديلات عبر بوابتي السلامة والتحقق من الهوية (Sanity & Identity Gate).`,
     `تم احتساب مصفوفة المطابقة الفنية (Match Matrix) وتعديل فوارق الممشى وسنة الصنع لجميع المقارنات المعتمدة.`,
     `القيمة السوقية العادلة المحسوبة هي ${fmv.toLocaleString()} دينار أردني بنطاق سعري يتراوح بين ${output.minPrice.toLocaleString()} و ${output.maxPrice.toLocaleString()} دينار أردني، مع درجة موثوقية ${output.confidence}%.`,
   ];
@@ -369,7 +401,7 @@ export async function runIntelligenceValuation(
   const auditTrail: string[] = [
     `Target vehicle validated: ${spec.brand} ${spec.model} (${spec.year}), askingPrice isolated: ${effectiveAskingPrice ?? 'NONE'}.`,
     `Market search scanned ${totalMarketCount} candidate listings across sources.`,
-    `Sanity filter quarantined ${comparablesExcluded.length} invalid, suspicious, or duplicate listings.`,
+    `Sanity and identity gates quarantined ${comparablesExcluded.length} invalid, suspicious, duplicate, or conflicting listings.`,
     `Matched ${usedComps.length} valid comparables into Tier hierarchy.`,
     `Applied calibrated price adjustments (mileage, year depreciation).`,
     `Calculated robust weighted median: ${fmv} JOD.`,
@@ -400,6 +432,9 @@ export async function runIntelligenceValuation(
     adjustments,
     dataQuality,
     sensitivity,
+    targetCluster: audit?.targetCluster,
+    consensusBand: audit?.consensusBand,
+    leaveOneOut: audit?.leaveOneOutAnalysis,
     marketInsights,
     warnings,
     reasoning,

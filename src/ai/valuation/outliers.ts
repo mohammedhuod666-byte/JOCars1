@@ -2,8 +2,102 @@
  * Cleaning: exact duplicates, cross-source near-duplicates (spec §8),
  * IQR outlier fences with recorded reasons (spec §4 — never silent).
  */
-import type { Comparable, NormalizedListing } from './types';
+import type { Comparable, NormalizedListing, TargetIdentityCluster, VehicleSpec } from './types';
 import { contentHash } from './normalize';
+import { sameBrand, sameModel } from './similarity';
+
+/**
+ * Detect all mirror listings, portal cross-posts, and target database entries
+ * representing the target car across all sources into a single unified TargetIdentityCluster.
+ * (Requirement §1 & §8)
+ *
+ * All cluster members are excluded from the market candidate pool BEFORE matching,
+ * deduplication, and sanity checking.
+ * They do NOT count as source diversity or candidate comps.
+ */
+export function detectTargetIdentityCluster(
+  listings: NormalizedListing[],
+  target: { carId?: string | null; spec: VehicleSpec; askingPrice?: number | null }
+): { cluster: TargetIdentityCluster; cleanListings: NormalizedListing[] } {
+  const norm = (s?: string | null) => (s || '').toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
+  const targetKm = target.spec.kilometers || 0;
+  const targetYear = target.spec.year;
+  const targetFingerprint = `${norm(target.spec.brand)}_${norm(target.spec.model)}_${targetYear}_${targetKm}`;
+
+  const clusterListings: TargetIdentityCluster['listings'] = [];
+  const clusterSourcesSet = new Set<string>();
+  const cleanListings: NormalizedListing[] = [];
+
+  for (const l of listings) {
+    let isTarget = false;
+    let matchReason = '';
+
+    // 1. Direct ID / URL match
+    if (target.carId && (l.externalId === target.carId || (l as any).carId === target.carId)) {
+      isTarget = true;
+      matchReason = `تطابق مباشر لمعرّف السيارة في قاعدة البيانات (${target.carId})`;
+    } else if (l.url && target.carId && l.url.includes(target.carId)) {
+      isTarget = true;
+      matchReason = 'تطابق رابط الإعلان مع السيارة المستهدفة';
+    }
+
+    // 2. VIN match
+    if (!isTarget && target.spec.vin && (l as any).vin && norm((l as any).vin) === norm(target.spec.vin)) {
+      isTarget = true;
+      matchReason = `تطابق رقم الشاصي (VIN: ${target.spec.vin})`;
+    }
+
+    // 3. Same vehicle cross-portal clone check (Brand + Model + Year match)
+    if (!isTarget && sameBrand(l, target.spec) && sameModel(l, target.spec) && l.year === targetYear) {
+      if (targetKm > 0 && l.kilometers != null && l.kilometers > 0) {
+        const absKmDiff = Math.abs(l.kilometers - targetKm);
+        const relKmDiff = absKmDiff / Math.max(targetKm, 1);
+
+        // a) Very close mileage (within 500 km or 0.5%): definite clone regardless of price
+        if (absKmDiff <= 500 || relKmDiff <= 0.005) {
+          isTarget = true;
+          matchReason = `تطابق دقيق لممشى السيارة المستهدفة (${l.kilometers} كم vs ${targetKm} كم)`;
+        }
+        // b) Close mileage (within 5,000 km or 3%) with same city or same trim or close price
+        else if (absKmDiff <= 5000 || relKmDiff <= 0.03) {
+          const sameCity = !!(target.spec.city && l.city && norm(target.spec.city) === norm(l.city));
+          const sameTrim = !!(target.spec.trim && l.trim && norm(target.spec.trim) === norm(l.trim));
+          const priceClose = target.askingPrice != null && target.askingPrice > 0 && Math.abs(l.priceJod - target.askingPrice) <= 1500;
+
+          if (sameCity || sameTrim || priceClose) {
+            isTarget = true;
+            matchReason = `نفس الموديل والسنة وممشى متقارب جداً (${l.kilometers} كم) مع تطابق ${sameTrim ? 'الفئة' : sameCity ? 'المدينة' : 'السعر'}`;
+          }
+        }
+      }
+    }
+
+    if (isTarget) {
+      clusterListings.push({
+        id: l.externalId || l.url || undefined,
+        source: l.source,
+        url: l.url,
+        title: (l as any).title || `${l.brand} ${l.model} ${l.year || ''}`,
+        price: l.priceJod,
+        kilometers: l.kilometers,
+        year: l.year,
+        reason: matchReason,
+      });
+      clusterSourcesSet.add(l.source);
+    } else {
+      cleanListings.push(l);
+    }
+  }
+
+  const cluster: TargetIdentityCluster = {
+    targetFingerprint,
+    listings: clusterListings,
+    totalClusterCount: clusterListings.length,
+    sourcesInCluster: Array.from(clusterSourcesSet),
+  };
+
+  return { cluster, cleanListings };
+}
 
 function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) return 0;

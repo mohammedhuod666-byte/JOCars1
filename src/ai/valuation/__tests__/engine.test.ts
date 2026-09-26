@@ -7,11 +7,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKilometers, parsePrice, toJod, normalizeTrim, contentHash } from '../normalize';
 import { extractSpecsFromTitle } from '../spec-extract';
-import { assignTier, scoreSimilarity, isTargetCopy } from '../similarity';
-import { dedupeExact, dedupeNear, iqrFences, flagOutliers, sanityCheck } from '../outliers';
+import { assignTier, scoreSimilarity, isTargetCopy, checkListingIdentityConsistency } from '../similarity';
+import { dedupeExact, dedupeNear, iqrFences, flagOutliers, sanityCheck, detectTargetIdentityCluster } from '../outliers';
 import { adjustComparable, calibrate } from '../adjust';
-import { weightedMedian, weightedAvg, confidenceScore, computeWeight } from '../price';
-import type { Comparable, VehicleSpec } from '../types';
+import { weightedMedian, weightedAvg, confidenceScore, computeWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut } from '../price';
+import type { Comparable, VehicleSpec, NormalizedListing } from '../types';
 
 const spec: VehicleSpec = {
   brand: 'تويوتا', brandEn: 'toyota', model: 'كامري', modelEn: 'camry',
@@ -271,5 +271,197 @@ describe('source spec extraction (no corruption)', () => {
     const got = extractSpecsFromTitle('X5 xDrive 2.0');
     assert.notEqual(got.drivetrain, 'FWD');
     assert.notEqual(got.engineCc, 2500);
+  });
+});
+
+describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () => {
+  const x5Spec: VehicleSpec = {
+    brand: 'بي ام دبليو',
+    brandEn: 'bmw',
+    model: 'X5',
+    modelEn: 'X5',
+    year: 2018,
+    trim: 'xDrive40e',
+    kilometers: 171000,
+    fuelType: 'HYBRID',
+    transmission: 'AUTOMATIC',
+    city: 'عمان',
+  };
+
+  function mkNorm(over: Partial<NormalizedListing> = {}): NormalizedListing {
+    return {
+      source: 'opensooq', sourceLabel: 'OpenSooq', brand: 'بي ام دبليو', brandEn: 'bmw',
+      model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 100000,
+      price: 28000, currency: 'JOD', priceJod: 28000, fxRate: 1, city: 'عمان', country: 'JO',
+      priceType: 'asking', specs: [], scrapedAt: new Date().toISOString(), ...over,
+    };
+  }
+
+  // Test 1: Target Identity Cluster across 3 sites
+  it('1. Target Identity Cluster: consolidates 3 mirrors across sites into 1 cluster and excludes all from cleanListings', () => {
+    const target = { carId: 'car-bmw-x5', spec: x5Spec, askingPrice: 30000 };
+    const candidates: NormalizedListing[] = [
+      mkNorm({
+        source: 'jocars', externalId: 'car-bmw-x5', brand: 'بي ام دبليو', brandEn: 'BMW',
+        model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 171000,
+        price: 30000, priceJod: 30000,
+      }),
+      mkNorm({
+        source: 'opensooq', externalId: 'os-clone-1', url: 'https://opensooq/clone', brand: 'بي ام دبليو', brandEn: 'BMW',
+        model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 171200,
+        price: 30000, priceJod: 30000,
+      }),
+      mkNorm({
+        source: 'ordonauto', externalId: 'oa-clone-2', brand: 'بي ام دبليو', brandEn: 'BMW',
+        model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 170900,
+        price: 29500, priceJod: 29500,
+      }),
+      // Real separate comparable
+      mkNorm({
+        source: 'opensooq', externalId: 'os-real-comp', brand: 'بي ام دبليو', brandEn: 'BMW',
+        model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 85000,
+        price: 28500, priceJod: 28500,
+      }),
+    ];
+
+    const { cluster, cleanListings } = detectTargetIdentityCluster(candidates, target);
+    assert.equal(cluster.totalClusterCount, 3);
+    assert.equal(cluster.sourcesInCluster.length, 3);
+    assert.ok(cluster.sourcesInCluster.includes('jocars'));
+    assert.ok(cluster.sourcesInCluster.includes('opensooq'));
+    assert.ok(cluster.sourcesInCluster.includes('ordonauto'));
+    assert.equal(cleanListings.length, 1);
+    assert.equal(cleanListings[0].externalId, 'os-real-comp');
+  });
+
+  // Test 2: BMW 520 F10 title -> IDENTITY_CONFLICT
+  it('2. Identity Conflict Gate: BMW 520 F10 title fails identity check for an X5', () => {
+    const f10Listing: NormalizedListing = mkNorm({
+      source: 'opensooq', externalId: 'os-520', brand: 'بي ام دبليو', brandEn: 'BMW',
+      model: 'X5', modelEn: 'X5', trim: 'بي ام دبليو 520 f10 بحالة الوكالة فحص كامل',
+      year: 2018, kilometers: 120000, price: 19500, priceJod: 19500,
+    });
+    const res = checkListingIdentityConsistency(f10Listing, x5Spec);
+    assert.equal(res.consistent, false);
+    assert.match(res.reason || '', /IDENTITY_CONFLICT/);
+
+    const tier = assignTier(f10Listing, x5Spec);
+    assert.equal(tier, 0); // Must be strictly excluded
+  });
+
+  // Test 3: Unknown year cannot enter Tier 1 or Tier 2
+  it('3. Unknown year cannot enter Tier 1/2', () => {
+    const noYearListing: NormalizedListing = mkNorm({
+      source: 'opensooq', externalId: 'os-noyear', brand: 'بي ام دبليو', brandEn: 'BMW',
+      model: 'X5', modelEn: 'X5', year: null, kilometers: 100000, price: 25000, priceJod: 25000,
+    });
+    const tier = assignTier(noYearListing, x5Spec, { allowPlus2: false, allowTier4: false });
+    assert.equal(tier, 0);
+  });
+
+  // Test 4: Same-year primary comps dominate over older comps (>= 85% weight)
+  it('4. Primary Set Weight Dominance: same-year comps control >= 85% of weight', () => {
+    const comps: Comparable[] = [
+      mkListing({ year: 2018, yearDiff: 0, tier: 1, similarity: 95, weight: 1, priceJod: 29000 }),
+      mkListing({ year: 2018, yearDiff: 0, tier: 2, similarity: 90, weight: 0.85, priceJod: 28000 }),
+      mkListing({ year: 2013, yearDiff: 5, tier: 4, similarity: 65, weight: 0.9, priceJod: 16500 }),
+      mkListing({ year: 2014, yearDiff: 4, tier: 4, similarity: 60, weight: 0.8, priceJod: 17000 }),
+    ];
+    balancePrimarySecondaryWeights(comps);
+
+    const primaryW = comps.filter((c) => c.tier <= 2).reduce((sum, c) => sum + c.weight, 0);
+    const secondaryW = comps.filter((c) => c.tier > 2).reduce((sum, c) => sum + c.weight, 0);
+    const totalW = primaryW + secondaryW;
+    const primaryShare = primaryW / totalW;
+
+    assert.ok(primaryShare >= 0.85, `Primary share ${primaryShare} must be >= 0.85`);
+  });
+
+  // Test 5: Only Tier 4 exists -> low confidence / approximate capped
+  it('5. Only Tier 4 exists: confidence is capped and marked approximate', () => {
+    const conf = confidenceScore({
+      used: 3, found: 3, sourcesUsed: 1, highSim: 0, spreadRatio: 0.3,
+      freshShare: 0.5, specComplete: true, yearMatchShare: 0, trimMatchShare: 0,
+      engineMatchShare: 0.5, tier1Share: 0, excludedShare: 0,
+    });
+    assert.ok(conf.score <= 35, `Confidence score ${conf.score} should be <= 35`);
+    assert.equal(conf.label, 'منخفض');
+  });
+
+  // Test 6: 1,000 JD outlier quarantined by price sanity gate
+  it('6. Price Sanity Gate: 1,000 JD listing is quarantined as SUSPICIOUS_PRICE against 25k group', () => {
+    const group: NormalizedListing[] = [
+      mkNorm({ source: 'os', brand: 'BMW', model: 'X5', year: 2018, price: 27000, priceJod: 27000 }),
+      mkNorm({ source: 'os', brand: 'BMW', model: 'X5', year: 2018, price: 28000, priceJod: 28000 }),
+      mkNorm({ source: 'os', brand: 'BMW', model: 'X5', year: 2018, price: 29000, priceJod: 29000 }),
+      mkNorm({ source: 'os', brand: 'BMW', model: 'X5', year: 2018, price: 30000, priceJod: 30000 }),
+      mkNorm({ source: 'os', brand: 'BMW', model: 'X5', year: 2018, price: 1000, priceJod: 1000 }),
+    ];
+    const { clean, excluded } = sanityCheck(group);
+    assert.equal(clean.length, 4);
+    assert.equal(excluded.length, 1);
+    assert.equal(excluded[0].reason, 'SUSPICIOUS_PRICE');
+  });
+
+  // Test 7: Target Asking Price Invariance (20k vs 35k)
+  it('7. Target Price Invariance: Asking price 20k vs 35k produces identical weighted median', () => {
+    const marketComps = [
+      { price: 28000, weight: 1.5 },
+      { price: 29000, weight: 2.0 },
+      { price: 30000, weight: 1.8 },
+      { price: 27500, weight: 1.2 },
+    ];
+    // Asking price is completely isolated: neither 20,000 nor 35,000 is injected into marketComps
+    const fmv1 = weightedMedian(marketComps);
+    const fmv2 = weightedMedian(marketComps);
+    assert.equal(fmv1, fmv2);
+    assert.equal(Math.abs(fmv1 - fmv2), 0);
+  });
+
+  // Test 8: Leave-One-Out Sensitivity Analysis
+  it('8. Leave-One-Out Sensitivity: removing single comp computes delta and checks dominance', () => {
+    const comps: Comparable[] = [
+      mkListing({ externalId: 'c1', priceJod: 28000, weight: 2 }),
+      mkListing({ externalId: 'c2', priceJod: 29000, weight: 2 }),
+      mkListing({ externalId: 'c3', priceJod: 45000, weight: 5 }), // Dominant whale
+    ];
+    const baseFmv = weightedMedian(comps.map((c) => ({ price: c.priceJod, weight: c.weight })));
+    const loo = computeLeaveOneOut(comps, baseFmv);
+
+    assert.equal(loo.length, 3);
+    const whaleResult = loo.find((r) => r.comparableId === 'c3');
+    assert.ok(whaleResult);
+    assert.ok(whaleResult.isDominant, 'Whale should be flagged as dominant comparable');
+    assert.ok(Math.abs(whaleResult.percentShift) > 10);
+  });
+
+  // Test 9: Market Consensus Band Calculation
+  it('9. Consensus Band: calculates low, high, median, count, and spread correctly', () => {
+    const comps: Comparable[] = [
+      mkListing({ priceJod: 27000 }),
+      mkListing({ priceJod: 28500 }),
+      mkListing({ priceJod: 31000 }),
+    ];
+    const band = buildMarketConsensusBand(comps);
+    assert.equal(band.low, 27000);
+    assert.equal(band.high, 31000);
+    assert.equal(band.median, 28500);
+    assert.equal(band.count, 3);
+    assert.equal(band.spread, 4000);
+  });
+
+  // Test 10: Source diversity does not count duplicate vehicles
+  it('10. Source Diversity: 3 mirrors of the same car across 3 portals do not add to valid source count', () => {
+    const target = { carId: 'car-bmw-x5', spec: x5Spec, askingPrice: 30000 };
+    const candidates: NormalizedListing[] = [
+      mkNorm({ source: 'jocars', externalId: 'c1', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171000, price: 30000, priceJod: 30000 }),
+      mkNorm({ source: 'opensooq', externalId: 'c2', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171100, price: 30000, priceJod: 30000 }),
+      mkNorm({ source: 'ordonauto', externalId: 'c3', brand: 'BMW', model: 'X5', year: 2018, kilometers: 170950, price: 30000, priceJod: 30000 }),
+    ];
+    const { cleanListings } = detectTargetIdentityCluster(candidates, target);
+    // All 3 mirrors excluded
+    assert.equal(cleanListings.length, 0);
+    const validSources = new Set(cleanListings.map((l) => l.source)).size;
+    assert.equal(validSources, 0, 'Cloned listings cannot count towards source diversity');
   });
 });

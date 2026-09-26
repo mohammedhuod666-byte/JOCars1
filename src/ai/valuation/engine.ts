@@ -8,10 +8,10 @@ import prisma from '@/lib/prisma';
 import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec, ValuationAuditTrace } from './types';
 import { roundDisplayPrice } from './types';
 import { collectAll, type SourceOutcome } from './sources';
-import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix } from './similarity';
-import { dedupeExact, dedupeNear, flagOutliers, iqrFences, sanityCheck } from './outliers';
+import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix, checkListingIdentityConsistency } from './similarity';
+import { dedupeExact, dedupeNear, flagOutliers, iqrFences, sanityCheck, detectTargetIdentityCluster } from './outliers';
 import { adjustComparable, calibrate } from './adjust';
-import { computeWeight, confidenceScore, priceStats, weightedMedian } from './price';
+import { computeWeight, confidenceScore, priceStats, weightedMedian, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut } from './price';
 import { getTuning } from './tuning';
 import { contentHash } from './normalize';
 
@@ -340,24 +340,22 @@ export async function runValuation(
     stage(pipeline, 'persist', 'حفظ السوق', t0, `أرشفة ${archived}/${listings.length} إعلان بقاعدة بيانات السوق`);
     t0 = Date.now();
 
-    // 1b) Target-leakage guard FIRST: the target car (by internal ID, URL,
-    // or cross-source fingerprint) can never value itself. Logged loudly.
-    const targetId = { carId: opts.carId || null, spec, askingPrice: opts.targetPrice ?? null };
-    const leaked: string[] = [];
-    const pool = listings.filter((l) => {
-      const hit = isTargetCopy(l, targetId);
-      if (hit.hit) {
-        leaked.push(`${l.source}:${(l.brandEn || l.brand)} ${(l.modelEn || l.model)} ${l.year} ${l.priceJod}`);
-        return false;
-      }
-      return true;
+    // 1b) Unified Target Identity Cluster (Requirement §1 & §8)
+    // All cross-portal clones, DB copies, and mirror ads representing the target
+    // vehicle are gathered into a single cluster and excluded from candidates completely.
+    const { cluster: targetCluster, cleanListings: targetFilteredListings } = detectTargetIdentityCluster(listings, {
+      carId: opts.carId || null,
+      spec,
+      askingPrice: opts.targetPrice ?? null,
     });
+    const leaked = targetCluster.listings.map((l) => `${l.source}:${l.title} ${l.price} JOD (${l.reason})`);
+    const pool = targetFilteredListings;
     funnel.push({
-      stage: 'leakage', stageAr: 'استبعاد الهدف', before: listings.length, after: pool.length,
-      rejected: leaked.length,
-      notes: leaked.length > 0
-        ? ['TARGET LISTING EXCLUDED FROM COMPARABLES', ...leaked.slice(0, 5)]
-        : ['لا تطابق مع الإعلان المستهدف'],
+      stage: 'leakage', stageAr: 'عنقود الهدف الموحد', before: listings.length, after: pool.length,
+      rejected: targetCluster.totalClusterCount,
+      notes: targetCluster.totalClusterCount > 0
+        ? [`TARGET_IDENTITY_CLUSTER: تم اكتشاف وعزل ${targetCluster.totalClusterCount} إعلانات مطابقة للهدف عبر (${targetCluster.sourcesInCluster.join(', ')})`, ...leaked.slice(0, 5)]
+        : ['لا يوجد تطابق مع إعلانات السيارة المستهدفة في السوق'],
     });
 
     // 1c) Price sanity gate BEFORE matching/adjustment: untrustworthy raw
@@ -373,8 +371,32 @@ export async function runValuation(
            ...sanityOut.slice(0, 4).map((e) => `${e.listing.source} ${e.listing.priceJod} (${e.reasonAr.slice(0, 60)})`)]
         : ['كل الأسعار سليمة'],
     });
-    // From here on, matching works on the sane pool only.
-    const matchPool = sanePool;
+
+    // 1d) Identity Consistency Gate: Quarantine contradictory models (e.g. BMW 520 F10 for an X5)
+    const identityConflictExclusions: { title: string; source: string; reason: string }[] = [];
+    const nonConflictedPool = sanePool.filter((l) => {
+      const idCheck = checkListingIdentityConsistency(l, spec);
+      if (!idCheck.consistent) {
+        identityConflictExclusions.push({
+          title: (l as any).title || `${l.brand} ${l.model} ${l.year || ''}`,
+          source: l.source,
+          reason: idCheck.reason || 'تناقض في هوية وموديل المركبة (IDENTITY_CONFLICT)',
+        });
+        return false;
+      }
+      return true;
+    });
+
+    funnel.push({
+      stage: 'identity-consistency', stageAr: 'فحص هوية الموديل', before: sanePool.length, after: nonConflictedPool.length,
+      rejected: identityConflictExclusions.length,
+      notes: identityConflictExclusions.length > 0
+        ? identityConflictExclusions.slice(0, 5).map((e) => `${e.source}: ${e.title} -> ${e.reason}`)
+        : ['كل الإعلانات متطابقة الهوية مع الموديل المستهدف'],
+    });
+
+    // From here on, matching works on the nonConflictedPool only.
+    const matchPool = nonConflictedPool;
 
     // 2) Tiered matching, hierarchical (spec §2): first pass tiers 1-2 to
     // decide whether ±2 and tier-4 admission are needed — never binary-drop
@@ -568,18 +590,18 @@ export async function runValuation(
     for (const c of adjusted) {
       c.weight = computeWeight(c, SOURCE_TRUST);
       (c as any).rawWeight = c.weight;
+      (c as any).isPrimary = c.tier <= 2 || c.yearDiff === 0;
     }
-    // T4 contribution cap: fallback rows together may hold at most 30% of
-    // total weight when higher tiers exist — T4 scaffolds, never leads.
-    const totalW = adjusted.reduce((x, c) => x + c.weight, 0);
-    const t4W = adjusted.filter((c) => c.tier === 4).reduce((x, c) => x + c.weight, 0);
-    const nonT4W = totalW - t4W;
-    if (nonT4W > 0 && t4W / totalW > 0.3) {
-      const targetT4 = (nonT4W * 0.3) / 0.7;
-      const scale = targetT4 / t4W;
-      for (const c of adjusted) if (c.tier === 4) c.weight = Math.max(0.02, c.weight * scale);
-    }
-    stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod}`);
+
+    // Balance primary and secondary sets (Requirement §2):
+    // Primary set controls >= 85% of total weight when present.
+    balancePrimarySecondaryWeights(adjusted);
+
+    const primaryComparables = adjusted.filter((c) => c.tier <= 2 || c.yearDiff === 0);
+    const secondaryComparables = adjusted.filter((c) => !(c.tier <= 2 || c.yearDiff === 0));
+    const hasPrimaryEvidence = primaryComparables.length > 0;
+
+    stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod} (أساسي: ${primaryComparables.length} / ثانوي: ${secondaryComparables.length})`);
     t0 = Date.now();
 
     // 5) Price (spec §5): weighted median leads.
@@ -590,6 +612,10 @@ export async function runValuation(
     const maxPrice = estimated + spread;
     stage(pipeline, 'price', 'التسعير', t0, `وسيط مرجح ${estimated.toLocaleString()} (متوسط مرجح ${stats.weightedAvg.toLocaleString()}، وسيط ${stats.median.toLocaleString()})`);
     t0 = Date.now();
+
+    // 5b) Market Consensus Band & Leave-One-Out Analysis (Requirement §4)
+    const consensusBand = buildMarketConsensusBand(hasPrimaryEvidence ? primaryComparables : adjusted);
+    const leaveOneOutAnalysis = computeLeaveOneOut(adjusted, estimated);
 
     // 6) Confidence (spec §11): count AND match quality, never count alone.
     const n = adjusted.length;
@@ -610,7 +636,14 @@ export async function runValuation(
       tier1Share: share((c) => c.tier === 1),
       excludedShare: found > 0 ? (found - n) / found : 0,
     });
-    if (grade === 'approximate') {
+
+    // Check if Tier 4 is trying to dictate FMV alone without primary comps (Requirement §2):
+    if (!hasPrimaryEvidence) {
+      // Tier 4 is supporting evidence only, cannot produce high confidence alone
+      conf.score = Math.min(conf.score, 30);
+      conf.label = 'منخفض';
+      conf.reasons.unshift('غياب مقارنات من نفس سنة الصنع — الاعتماد فقط على شواهد داعمة (Tier 4)');
+    } else if (grade === 'approximate') {
       conf.score = Math.min(conf.score, 35);
       conf.label = 'منخفض';
       conf.reasons.unshift('تقدير تقريبي جداً (2-3 مقارنات) — استرشد به بحذر');
@@ -632,24 +665,13 @@ export async function runValuation(
     const roundedDisplayPrice = roundDisplayPrice(estimated, conf.score);
 
     // Sensitivity Analysis: Leave-One-Out (Comparable Removal Test)
-    const removals: ValuationAuditTrace['sensitivity']['removals'] = [];
-    if (adjusted.length >= 2) {
-      for (let i = 0; i < adjusted.length; i++) {
-        const subset = adjusted.filter((_, idx) => idx !== i);
-        const subItems = subset.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: c.weight }));
-        const subFmv = weightedMedian(subItems);
-        const delta = subFmv - estimated;
-        const deltaPct = estimated > 0 ? Math.round((delta / estimated) * 1000) / 10 : 0;
-        const title = `${adjusted[i].brand} ${adjusted[i].model} ${adjusted[i].year || ''} (${adjusted[i].sourceLabel})`.trim();
-        removals.push({
-          index: i + 1,
-          title,
-          fmvWithout: subFmv,
-          delta,
-          deltaPct,
-        });
-      }
-    }
+    const removals: ValuationAuditTrace['sensitivity']['removals'] = leaveOneOutAnalysis.map((loo, idx) => ({
+      index: idx + 1,
+      title: loo.comparableTitle,
+      fmvWithout: loo.fmvWithout,
+      delta: loo.absoluteShift,
+      deltaPct: loo.percentShift,
+    }));
 
     const yearDistribution: Record<string, number> = {};
     for (const l of listings) {
@@ -672,6 +694,8 @@ export async function runValuation(
     const auditTrace: ValuationAuditTrace = {
       targetSnapshot: fullSnapshot,
       dataQuality,
+      targetCluster,
+      identityConflictExclusions,
       marketSearchResults: {
         total: listings.length,
         sources: outcomes.map((o) => ({ source: o.label, count: o.count })),
@@ -692,6 +716,11 @@ export async function runValuation(
         tier3: matched.filter((c) => c.tier === 3).length,
         tier4: matched.filter((c) => c.tier === 4).length,
       },
+      primaryComparablesCount: primaryComparables.length,
+      secondaryComparablesCount: secondaryComparables.length,
+      consensusBand,
+      leaveOneOutAnalysis,
+      effectiveComparableWeight: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
       comparablesAudit: matched.map((c) => ({
         source: c.sourceLabel,
         sourceUrl: c.url,
@@ -717,6 +746,7 @@ export async function runValuation(
         rawPrice: c.priceJod,
         normalizedPrice: c.adjustedPrice ?? c.priceJod,
         tier: c.tier,
+        isPrimary: c.tier <= 2 || c.yearDiff === 0,
         similarity: c.similarity,
         simBreakdown: c.simBreakdown,
         rawWeight: (c as any).rawWeight ?? c.weight,

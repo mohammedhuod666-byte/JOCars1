@@ -35,20 +35,134 @@ function closeModel(a: NormalizedListing, spec: VehicleSpec): boolean {
   return hit > 0 && hit / st.length >= 0.5;
 }
 
+export const KNOWN_BRANDS = [
+  { key: 'bmw', patterns: ['bmw', 'بي ام', 'بي إم', 'ب ام', 'بي ام دبليو'] },
+  { key: 'mercedes', patterns: ['mercedes', 'مرسيدس', 'بنز', 'benz'] },
+  { key: 'toyota', patterns: ['toyota', 'تويوتا', 'تايوتا'] },
+  { key: 'hyundai', patterns: ['hyundai', 'هيونداي', 'حيونداي'] },
+  { key: 'kia', patterns: ['kia', 'كيا'] },
+  { key: 'nissan', patterns: ['nissan', 'نيسان'] },
+  { key: 'byd', patterns: ['byd', 'بي واي دي', 'باي دي', 'دولفين', 'dolphin'] },
+  { key: 'honda', patterns: ['honda', 'هوندا'] },
+  { key: 'ford', patterns: ['ford', 'فورد'] },
+  { key: 'chevrolet', patterns: ['chevrolet', 'شفروليه', 'شيفروليه'] },
+  { key: 'audi', patterns: ['audi', 'اودي', 'أودي'] },
+  { key: 'lexus', patterns: ['lexus', 'لكزس'] },
+];
+
 export function sameBrand(a: NormalizedListing, spec: VehicleSpec): boolean {
+  const aBrand = norm(a.brand);
+  const aBrandEn = norm(a.brandEn);
+  const sBrand = norm(spec.brand);
+  const sBrandEn = norm(spec.brandEn);
+
   const pairs: [string | null | undefined, string | null | undefined][] = [
-    [a.brand, spec.brand], [a.brandEn, spec.brandEn],
+    [aBrand, sBrand], [aBrandEn, sBrandEn],
+    [aBrand, sBrandEn], [aBrandEn, sBrand],
   ];
   for (const [x, y] of pairs) {
-    const nx = norm(x); const ny = norm(y);
-    if (nx && ny && (nx === ny || nx.includes(ny) || ny.includes(nx))) return true;
+    if (x && y && (x === y || x.includes(y) || y.includes(x))) return true;
   }
+
+  // Canonical known brand check (e.g. "BMW" vs "بي ام دبليو")
+  const aMatches = KNOWN_BRANDS.find(b => b.patterns.some(p => aBrand.includes(p) || aBrandEn.includes(p)));
+  const sMatches = KNOWN_BRANDS.find(b => b.patterns.some(p => sBrand.includes(p) || sBrandEn.includes(p)));
+  if (aMatches && sMatches && aMatches.key === sMatches.key) return true;
+
   return false;
 }
 
+export interface IdentityCheckResult {
+  consistent: boolean;
+  reason?: string;
+  detectedModel?: string;
+  detectedBrand?: string;
+}
+
+/**
+ * Listing Identity Consistency Check (Requirement §3).
+ * Detects contradictions between target vehicle and listing title/metadata.
+ * e.g., Target: BMW X5, Title: "بي ام دبليو 520 F10" -> IDENTITY_CONFLICT.
+ */
+export function checkListingIdentityConsistency(
+  l: NormalizedListing | { brand: string; model: string; title?: string | null; trim?: string | null; bodyType?: string | null; brandEn?: string | null; modelEn?: string | null },
+  spec: VehicleSpec
+): IdentityCheckResult {
+  const title = String((l as any).title || (l as any).trim || '').toLowerCase().trim();
+  const targetModel = norm(spec.modelEn || spec.model);
+  const targetBrand = norm(spec.brandEn || spec.brand);
+
+  // 1. Non-car listing patterns (license plates, parts, non-automotive goods)
+  if (/رقم مميز|ارقام مميزة|لوحة مميزة|ترميز|لوحة ارقام|نمرة سيارة|نمرة مميزة|قطع غيار|جنطات|محرك للبيع|جير للبيع|قير للبيع|حزام|تنحيف|تخسيس|كرش|مشد|رجاج|سكوتر|دراجة|ماتور|موتور/i.test(title)) {
+    return {
+      consistent: false,
+      reason: `NON_CAR_LISTING: إعلان غير مخصص لسيارة كاملة (لوحة/قطع/مستلزمات): ${title.slice(0, 50)}`,
+    };
+  }
+
+  // 2. Cross-brand conflict
+  const targetBrandEntry = KNOWN_BRANDS.find(b => b.patterns.some(p => targetBrand.includes(p)));
+  if (targetBrandEntry) {
+    for (const otherBrand of KNOWN_BRANDS) {
+      if (otherBrand.key !== targetBrandEntry.key) {
+        if (otherBrand.patterns.some(p => {
+          const re = new RegExp(`(^|\\s|[^a-z0-9])${p}($|\\s|[^a-z0-9])`, 'i');
+          return re.test(title);
+        })) {
+          return {
+            consistent: false,
+            reason: `IDENTITY_CONFLICT: تناقض في الشركة الصانعة (الهدف ${spec.brand} ولكن الإعلان يشير إلى ${otherBrand.key})`,
+            detectedBrand: otherBrand.key,
+          };
+        }
+      }
+    }
+  }
+
+  // 3. Model series conflict for BMW
+  if (targetBrandEntry?.key === 'bmw' || targetBrand.includes('bmw') || targetBrand.includes('بي ام')) {
+    if (targetModel.includes('x5') || targetModel.includes('اكس فايف') || targetModel.includes('اكس 5')) {
+      const BMW_NON_X5_MODELS = [
+        { model: '5-Series (F10/G30)', re: /\b(520|523|525|528|530|535|540|550|f10|f11|g30|m5)\b|الفئة الخامسة|سلسلة 5/i },
+        { model: '3-Series (E46/E90/F30/G20)', re: /\b(316|318|320|323|325|328|330|335|340|e46|e90|f30|g20|m3)\b|الفئة الثالثة|سلسلة 3/i },
+        { model: '7-Series', re: /\b(730|740|745|750|760|f01|g11)\b|الفئة السابعة/i },
+        { model: 'X1', re: /\b(x1|اكس 1|اكس1)\b/i },
+        { model: 'X3', re: /\b(x3|اكس 3|اكس3)\b/i },
+        { model: 'X4', re: /\b(x4|اكس 4|اكس4)\b/i },
+        { model: 'X6', re: /\b(x6|اكس 6|اكس6)\b/i },
+        { model: 'X7', re: /\b(x7|اكس 7|اكس7)\b/i },
+        { model: 'Z4', re: /\b(z4|زد 4)\b/i },
+        { model: 'i3', re: /\b(i3|اي 3)\b/i },
+      ];
+      const mentionsX5 = /\bx5\b|اكس\s*فايف|اكس\s*5/i.test(title);
+      for (const m of BMW_NON_X5_MODELS) {
+        if (m.re.test(title)) {
+          // If title explicitly states 520 / f10 / 320 / i3 / z4, it's NOT an X5 even if X5 is mentioned in spam tags
+          if (!mentionsX5 || /\b(520|f10|320|f30|z4|i3)\b/i.test(title)) {
+            return {
+              consistent: false,
+              reason: `IDENTITY_CONFLICT: تناقض في الموديل (الهدف X5 ولكن الإعلان يشير إلى ${m.model})`,
+              detectedModel: m.model,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Model series conflict for Mercedes
+  if (targetBrandEntry?.key === 'mercedes' || targetBrand.includes('مرسيدس')) {
+    if (targetModel.includes('e-class') || targetModel.includes('e200') || targetModel.includes('e300')) {
+      if (/\b(c180|c200|c250|c300|c43|c63)\b/i.test(title) && !/\b(e200|e300|e350)\b/i.test(title)) {
+        return { consistent: false, reason: `IDENTITY_CONFLICT: تناقض في الموديل (الهدف E-Class ولكن الإعلان C-Class)` };
+      }
+    }
+  }
+
+  return { consistent: true };
+}
+
 function specMatches(a: NormalizedListing, spec: VehicleSpec): boolean {
-  // A factor counts as matching when the target is unknown OR values equal.
-  // Missing data must never demote a row by itself.
   const trimOk = !spec.trim || !a.trim || norm(a.trim) === norm(spec.trim);
   const fuelOk = !spec.fuelType || !a.fuelType || norm(a.fuelType) === norm(spec.fuelType);
   const transOk = !spec.transmission || !a.transmission || norm(a.transmission) === norm(spec.transmission);
@@ -76,6 +190,10 @@ const FULL_CTX: TierContext = { allowPlus2: true, allowTier4: true, allowAnyYear
 
 export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial<TierContext> = {}): Tier | 0 {
   const c: TierContext = { ...FULL_CTX, ...ctx };
+  // Check Identity Consistency FIRST
+  const identityCheck = checkListingIdentityConsistency(a, spec);
+  if (!identityCheck.consistent) return 0;
+
   if (!sameBrand(a, spec)) return 0;
   const same = sameModel(a, spec);
   const yd = a.year === null || a.year === undefined ? null : Math.abs(a.year - spec.year);
@@ -95,12 +213,12 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
 
 function trimScore(a: NormalizedListing, spec: VehicleSpec): number {
   if (!spec.trim) return 0.5; // unknown target trim: neutral
-  if (!a.trim) return 0.4;
+  if (!a.trim) return 0.25; // UNKNOWN is not neutral
   return norm(a.trim) === norm(spec.trim) ? 1 : 0.2;
 }
 
 function kmScore(a: NormalizedListing, spec: VehicleSpec): number {
-  if (!a.kilometers || !spec.kilometers) return 0.5;
+  if (!a.kilometers || !spec.kilometers) return 0.25; // UNKNOWN is not neutral
   const diff = Math.abs(a.kilometers - spec.kilometers) / Math.max(spec.kilometers, 1);
   if (diff <= 0.1) return 1;
   if (diff <= 0.25) return 0.8;
@@ -109,36 +227,58 @@ function kmScore(a: NormalizedListing, spec: VehicleSpec): number {
   return 0.1;
 }
 
+/**
+ * Strict Technical Scoring: UNKNOWN is NOT a match and NOT neutral.
+ * Unknown specs receive 0.25 (penalty for missing evidence).
+ */
 function engineTransScore(a: NormalizedListing, spec: VehicleSpec): number {
-  let s = 0.5;
-  let n = 0;
+  let s = 0;
+  let count = 0;
+
   if (spec.fuelType) {
-    n++;
+    count++;
     if (a.fuelType && norm(a.fuelType) === norm(spec.fuelType)) {
-      s += 0.5;
+      s += 1.0;
     } else if (a.fuelType) {
-      // Different fuel: strong demotion
-      s -= 0.6;
+      s += 0.0;
     } else {
-      // Unknown fuel: moderate penalty
-      s -= 0.2;
+      s += 0.25; // UNKNOWN penalty
     }
   }
+
   if (spec.transmission) {
-    n++;
-    s += (a.transmission && norm(a.transmission) === norm(spec.transmission)) ? 0.5 : -0.2;
+    count++;
+    if (a.transmission && norm(a.transmission) === norm(spec.transmission)) {
+      s += 1.0;
+    } else if (a.transmission) {
+      s += 0.0;
+    } else {
+      s += 0.25; // UNKNOWN penalty
+    }
   }
+
   if (spec.drivetrain) {
-    n++;
-    s += (a.drivetrain && norm(a.drivetrain) === norm(spec.drivetrain)) ? 0.5 : -0.2;
+    count++;
+    if (a.drivetrain && norm(a.drivetrain) === norm(spec.drivetrain)) {
+      s += 1.0;
+    } else if (a.drivetrain) {
+      s += 0.0;
+    } else {
+      s += 0.25; // UNKNOWN penalty
+    }
   }
-  if ((a as any).horsepower && (spec as any).horsepower) {
-    n++;
-    const diff = Math.abs(Number((a as any).horsepower) - Number((spec as any).horsepower)) / Math.max(1, Number((spec as any).horsepower));
-    s += diff <= 0.1 ? 0.5 : diff <= 0.25 ? 0 : -0.3;
+
+  if ((spec as any).engineCapacity) {
+    count++;
+    if ((a as any).engineCc) {
+      const diff = Math.abs(Number((a as any).engineCc) - Number((spec as any).engineCapacity)) / Math.max(1, Number((spec as any).engineCapacity));
+      s += diff <= 0.1 ? 1.0 : diff <= 0.25 ? 0.6 : 0.1;
+    } else {
+      s += 0.25; // UNKNOWN penalty
+    }
   }
-  if (n === 0) return 0.5;
-  return Math.max(0, Math.min(1, s));
+
+  return count > 0 ? s / count : 0.5;
 }
 
 /**
