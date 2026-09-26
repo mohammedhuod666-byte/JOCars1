@@ -71,7 +71,7 @@ export interface Comparable extends NormalizedListing {
   excludeReason?: string | null;
   ageDays: number;
   isDuplicateOf?: string | null;
-  matrix?: { factor: string; factorAr: string; target: string; comp: string; verdict: 'EXACT' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN' }[];
+  matrix?: MatchMatrixRow[];
 }
 
 export interface PriceStats {
@@ -117,6 +117,78 @@ export interface ValuationOutput {
   dataVersion: string;
   targetDiffPct: number | null;
   insufficientReason?: string | null;
+  roundedDisplayPrice?: number;
+  auditTrace?: ValuationAuditTrace;
+}
+
+export interface MatchMatrixRow {
+  factor: string;
+  factorAr: string;
+  target: string;
+  comp: string;
+  verdict: 'MATCH' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN';
+}
+
+export interface ValuationAuditTrace {
+  targetSnapshot: Record<string, any>;
+  dataQuality: DataQualityReport;
+  marketSearchResults: { total: number; sources: { source: string; count: number }[] };
+  yearDistribution: Record<string, number>;
+  targetExclusions: string[];
+  suspiciousPriceExclusions: { title: string; price: number; reason: string }[];
+  duplicateExclusions: string[];
+  tierAssignments: { tier1: number; tier2: number; tier3: number; tier4: number };
+  comparablesAudit: {
+    source: string;
+    sourceUrl?: string | null;
+    listingId?: string | null;
+    year: number | null;
+    make: string;
+    model: string;
+    trim?: string | null;
+    engine?: string | null;
+    engineCc?: number | null;
+    horsepower?: number | null;
+    cylinders?: number | null;
+    fuel?: string | null;
+    transmission?: string | null;
+    drivetrain?: string | null;
+    mileage?: number | null;
+    body?: string | null;
+    condition?: string | null;
+    location?: string | null;
+    color?: string | null;
+    doors?: number | null;
+    features?: string[];
+    rawPrice: number;
+    normalizedPrice: number;
+    tier: number;
+    similarity: number;
+    simBreakdown: Record<string, number>;
+    rawWeight: number;
+    finalWeight: number;
+    priceAdjustments: { factor: string; factorAr: string; delta: number }[];
+    included: boolean;
+    excludeReason?: string | null;
+    matchMatrix: MatchMatrixRow[];
+  }[];
+  rawWeightsSum: number;
+  finalWeightsSum: number;
+  robustStatistic: PriceStats;
+  finalFmv: number;
+  displayFmv: number;
+  confidence: number;
+  status: string;
+  sensitivity: {
+    baselineFmv: number;
+    removals: { index: number; title: string; fmvWithout: number; delta: number; deltaPct: number }[];
+  };
+}
+
+export function roundDisplayPrice(price: number, confidence: number): number {
+  if (price <= 0) return 0;
+  const step = confidence >= 75 ? 50 : confidence >= 50 ? 100 : 250;
+  return Math.round(price / step) * step;
 }
 
 /** Per-stage funnel audit (spec §9): where listings disappear, with reasons. */

@@ -5,12 +5,13 @@
  * Numbers come ONLY from here. The LLM only writes the explanation.
  */
 import prisma from '@/lib/prisma';
-import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec } from './types';
+import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec, ValuationAuditTrace } from './types';
+import { roundDisplayPrice } from './types';
 import { collectAll, type SourceOutcome } from './sources';
 import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix } from './similarity';
 import { dedupeExact, dedupeNear, flagOutliers, iqrFences, sanityCheck } from './outliers';
 import { adjustComparable, calibrate } from './adjust';
-import { computeWeight, confidenceScore, priceStats } from './price';
+import { computeWeight, confidenceScore, priceStats, weightedMedian } from './price';
 import { getTuning } from './tuning';
 import { contentHash } from './normalize';
 
@@ -27,6 +28,7 @@ export interface EngineResult {
   status: 'RELIABLE' | 'LIMITED' | 'APPROXIMATE' | 'INSUFFICIENT' | 'FAILED';
   insufficientReason?: string;
   dataQuality?: DataQualityReport;
+  auditTrace?: ValuationAuditTrace;
 }
 
 export function buildTargetSnapshot(
@@ -563,14 +565,19 @@ export async function runValuation(
     // 4) Calibrate + adjust (spec §6, §7).
     const cal = calibrate(included);
     const adjusted = included.map((c) => adjustComparable(c, spec, cal));
-    for (const c of adjusted) c.weight = computeWeight(c, SOURCE_TRUST);
+    for (const c of adjusted) {
+      c.weight = computeWeight(c, SOURCE_TRUST);
+      (c as any).rawWeight = c.weight;
+    }
     // T4 contribution cap: fallback rows together may hold at most 30% of
-    // total weight — T4 scaffolds, never leads.
+    // total weight when higher tiers exist — T4 scaffolds, never leads.
     const totalW = adjusted.reduce((x, c) => x + c.weight, 0);
     const t4W = adjusted.filter((c) => c.tier === 4).reduce((x, c) => x + c.weight, 0);
-    if (totalW > 0 && t4W / totalW > 0.3) {
-      const scale = (totalW * 0.3) / t4W;
-      for (const c of adjusted) if (c.tier === 4) c.weight = Math.max(0.05, c.weight * scale);
+    const nonT4W = totalW - t4W;
+    if (nonT4W > 0 && t4W / totalW > 0.3) {
+      const targetT4 = (nonT4W * 0.3) / 0.7;
+      const scale = targetT4 / t4W;
+      for (const c of adjusted) if (c.tier === 4) c.weight = Math.max(0.02, c.weight * scale);
     }
     stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod}`);
     t0 = Date.now();
@@ -622,6 +629,34 @@ export async function runValuation(
     stage(pipeline, 'confidence', 'الثقة', t0, `${conf.score}% (${conf.label}) من ${conf.reasons.length} مؤشرات قابلة للقياس`);
     t0 = Date.now();
 
+    const roundedDisplayPrice = roundDisplayPrice(estimated, conf.score);
+
+    // Sensitivity Analysis: Leave-One-Out (Comparable Removal Test)
+    const removals: ValuationAuditTrace['sensitivity']['removals'] = [];
+    if (adjusted.length >= 2) {
+      for (let i = 0; i < adjusted.length; i++) {
+        const subset = adjusted.filter((_, idx) => idx !== i);
+        const subItems = subset.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: c.weight }));
+        const subFmv = weightedMedian(subItems);
+        const delta = subFmv - estimated;
+        const deltaPct = estimated > 0 ? Math.round((delta / estimated) * 1000) / 10 : 0;
+        const title = `${adjusted[i].brand} ${adjusted[i].model} ${adjusted[i].year || ''} (${adjusted[i].sourceLabel})`.trim();
+        removals.push({
+          index: i + 1,
+          title,
+          fmvWithout: subFmv,
+          delta,
+          deltaPct,
+        });
+      }
+    }
+
+    const yearDistribution: Record<string, number> = {};
+    for (const l of listings) {
+      const yrKey = l.year ? String(l.year) : 'UNKNOWN';
+      yearDistribution[yrKey] = (yearDistribution[yrKey] || 0) + 1;
+    }
+
     const sources = [...new Map(adjusted.map((c) => [c.source, c.sourceLabel])).entries()]
       .map(([source, label]) => ({ source, label, count: adjusted.filter((c) => c.source === source).length }));
     const dataVersion = new Date(Math.max(...adjusted.map((c) => new Date(c.scrapedAt).getTime()))).toISOString();
@@ -633,6 +668,76 @@ export async function runValuation(
     for (const c of adjusted) {
       c.matrix = matchMatrix(spec, c);
     }
+
+    const auditTrace: ValuationAuditTrace = {
+      targetSnapshot: fullSnapshot,
+      dataQuality,
+      marketSearchResults: {
+        total: listings.length,
+        sources: outcomes.map((o) => ({ source: o.label, count: o.count })),
+      },
+      yearDistribution,
+      targetExclusions: leaked,
+      suspiciousPriceExclusions: sanityOut.map((e) => ({
+        title: `${e.listing.brand} ${e.listing.model} ${e.listing.year || ''}`.trim(),
+        price: e.listing.priceJod,
+        reason: `${e.reason}: ${e.reasonAr}`,
+      })),
+      duplicateExclusions: matched
+        .filter((c) => !c.included && c.excludeReason && (c.excludeReason.includes('مكرر') || c.excludeReason.includes('موقع آخر')))
+        .map((c) => `${c.brand} ${c.model} (${c.priceJod} JD): ${c.excludeReason}`),
+      tierAssignments: {
+        tier1: matched.filter((c) => c.tier === 1).length,
+        tier2: matched.filter((c) => c.tier === 2).length,
+        tier3: matched.filter((c) => c.tier === 3).length,
+        tier4: matched.filter((c) => c.tier === 4).length,
+      },
+      comparablesAudit: matched.map((c) => ({
+        source: c.sourceLabel,
+        sourceUrl: c.url,
+        listingId: c.externalId,
+        year: c.year,
+        make: c.brandEn || c.brand,
+        model: c.modelEn || c.model,
+        trim: c.trim,
+        engine: (c as any).engineCc ? `${(c as any).engineCc} CC` : null,
+        engineCc: (c as any).engineCc,
+        horsepower: (c as any).horsepower,
+        cylinders: (c as any).cylinders,
+        fuel: c.fuelType,
+        transmission: c.transmission,
+        drivetrain: (c as any).drivetrain,
+        mileage: c.kilometers,
+        body: (c as any).bodyType,
+        condition: c.condition,
+        location: c.city,
+        color: (c as any).color,
+        doors: (c as any).doors,
+        features: c.specs,
+        rawPrice: c.priceJod,
+        normalizedPrice: c.adjustedPrice ?? c.priceJod,
+        tier: c.tier,
+        similarity: c.similarity,
+        simBreakdown: c.simBreakdown,
+        rawWeight: (c as any).rawWeight ?? c.weight,
+        finalWeight: Math.round(c.weight * 1000) / 1000,
+        priceAdjustments: c.adjustments,
+        included: c.included,
+        excludeReason: c.excludeReason,
+        matchMatrix: matchMatrix(spec, c),
+      })),
+      rawWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + ((c as any).rawWeight ?? c.weight), 0) * 1000) / 1000,
+      finalWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
+      robustStatistic: stats,
+      finalFmv: estimated,
+      displayFmv: roundedDisplayPrice,
+      confidence: conf.score,
+      status: grade,
+      sensitivity: {
+        baselineFmv: estimated,
+        removals,
+      },
+    };
 
     const output: ValuationOutput = {
       estimatedPrice: estimated, minPrice, maxPrice, grade, funnel, profile,
@@ -647,6 +752,8 @@ export async function runValuation(
       method: 'weighted-median',
       stats, factors, pipeline,
       modelVersion: 'v1', dataVersion, targetDiffPct,
+      roundedDisplayPrice,
+      auditTrace,
     };
 
     // Persist result + update comparables with final numbers (spec §13, §15).
@@ -700,7 +807,7 @@ export async function runValuation(
     const finalStatus = output.grade === 'full' ? 'RELIABLE' : output.grade === 'limited' ? 'LIMITED' : 'APPROXIMATE';
     await prisma.valuationRequest.update({ where: { id: request.id }, data: { status: finalStatus } }).catch(() => {});
     setStageListener(null);
-    return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus, dataQuality };
+    return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus, dataQuality, auditTrace };
   } catch (e: any) {
     await prisma.valuationRequest.update({
       where: { id: request.id },

@@ -126,7 +126,7 @@ export function iqrFences(prices: number[]): IqrResult {
 }
 
 export type SanityReason =
-  | 'INVALID_PRICE' | 'POSSIBLE_PLACEHOLDER' | 'SUSPICIOUS_PRICE' | 'EXTREME_OUTLIER';
+  | 'INVALID_PRICE' | 'POSSIBLE_PLACEHOLDER' | 'SUSPICIOUS_PRICE' | 'EXTREME_OUTLIER' | 'NON_CAR_LISTING';
 
 export interface SanityExclusion {
   listing: NormalizedListing;
@@ -142,6 +142,7 @@ export interface SanityExclusion {
  * - price < 100 JOD → POSSIBLE_PLACEHOLDER (teaser "15/25/65" ads)
  * - price < 15% of group median (median > 3000) → SUSPICIOUS_PRICE
  * - price > 8× group median (median > 3000) → EXTREME_OUTLIER
+ * - plate number / parts / wanted ad → NON_CAR_LISTING
  */
 export function sanityCheck(
   listings: NormalizedListing[],
@@ -162,6 +163,21 @@ export function sanityCheck(
   const clean: NormalizedListing[] = [];
   const excluded: SanityExclusion[] = [];
   for (const l of listings) {
+    // 1) Filter non-car ads (license plates, parts, wanted ads)
+    const textToCheck = `${l.trim || ''} ${l.brand || ''} ${l.model || ''} ${(l.specs || []).join(' ')}`.toLowerCase();
+    const nonCarPatterns = [
+      'رقم مميز', 'ارقام مميزة', 'لوحة مميزة', 'ترميز', 'لوحة ارقام', 'نمرة سيارة', 'نمرة مميزة',
+      'قطع غيار', 'جنطات', 'محرك للبيع', 'جير للبيع', 'قير للبيع', 'مطلوب للشراء', 'مطلوب سيارة',
+    ];
+    if (nonCarPatterns.some((p) => textToCheck.includes(p))) {
+      excluded.push({
+        listing: l,
+        reason: 'NON_CAR_LISTING',
+        reasonAr: `إعلان غير مخصص لسيارة كاملة (لوحة/أرقام/قطع/طلب): ${l.trim || ''}`,
+      });
+      continue;
+    }
+
     if (!l.priceJod || l.priceJod <= 0) {
       excluded.push({ listing: l, reason: 'INVALID_PRICE', reasonAr: 'سعر غير صالح (≤0)' });
       continue;

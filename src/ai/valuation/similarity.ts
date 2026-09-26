@@ -84,7 +84,7 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
   if (same && yd === 0) {
     return specMatches(a, spec) ? 1 : 2;
   }
-  if (same && yd === null) return 2; // year unknown: strong by model, never dropped
+  if (same && yd === null) return c.allowAnyYear ? 4 : 0; // year unknown can NEVER be same-year Tier 1 or Tier 2
   if (same && yd !== null && yd <= 1) return fuelMismatch ? 4 : 3;
   if (same && yd !== null && yd === 2 && c.allowPlus2) return 4;
   if (same && yd !== null && yd > 2 && yd <= 5 && c.allowAnyYear) return 4; // expansion: bounded window only
@@ -158,7 +158,7 @@ export interface MatchRow {
   factorAr: string;
   target: string;
   comp: string;
-  verdict: 'EXACT' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN';
+  verdict: 'MATCH' | 'CLOSE' | 'DIFFERENT' | 'UNKNOWN';
 }
 
 /** Human-readable per-factor comparison for the audit table. */
@@ -167,27 +167,28 @@ export function matchMatrix(spec: VehicleSpec, c: NormalizedListing): MatchRow[]
     if (a === null || a === undefined || a === '' || b === null || b === undefined || b === '') return 'UNKNOWN' as const;
     const na = String(a).toLowerCase().trim();
     const nb = String(b).toLowerCase().trim();
-    if (na === nb) return 'EXACT' as const;
+    if (na === nb || na.includes(nb) || nb.includes(na)) return 'MATCH' as const;
     return 'DIFFERENT' as const;
   };
   const num = (a: any, b: any, tol: number) => {
     if (a === null || a === undefined || b === null || b === undefined) return 'UNKNOWN' as const;
     const d = Math.abs(Number(a) - Number(b)) / Math.max(1, Number(b));
-    return d === 0 ? 'EXACT' as const : d <= tol ? 'CLOSE' as const : 'DIFFERENT' as const;
+    return d === 0 ? 'MATCH' as const : d <= tol ? 'CLOSE' as const : 'DIFFERENT' as const;
   };
   const fmt = (v: any) => (v === null || v === undefined || v === '' ? '—' : String(v));
   return [
-    { factor: 'year', factorAr: 'السنة', target: fmt(spec.year), comp: fmt(c.year), verdict: num(c.year, spec.year, 0) === 'EXACT' ? 'EXACT' : c.year == null ? 'UNKNOWN' : Math.abs(c.year - spec.year) <= 1 ? 'CLOSE' : 'DIFFERENT' },
-    { factor: 'model', factorAr: 'الموديل', target: fmt(spec.model), comp: fmt(c.model), verdict: eq(c.modelEn || c.model, spec.modelEn || spec.model) },
+    { factor: 'make', factorAr: 'الشركة الصانعة', target: fmt(spec.brandEn || spec.brand), comp: fmt(c.brandEn || c.brand), verdict: eq(c.brandEn || c.brand, spec.brandEn || spec.brand) },
+    { factor: 'model', factorAr: 'الموديل', target: fmt(spec.modelEn || spec.model), comp: fmt(c.modelEn || c.model), verdict: eq(c.modelEn || c.model, spec.modelEn || spec.model) },
+    { factor: 'year', factorAr: 'السنة', target: fmt(spec.year), comp: fmt(c.year), verdict: num(c.year, spec.year, 0) === 'MATCH' ? 'MATCH' : c.year == null ? 'UNKNOWN' : Math.abs(c.year - spec.year) <= 1 ? 'CLOSE' : 'DIFFERENT' },
     { factor: 'trim', factorAr: 'الفئة', target: fmt(spec.trim), comp: fmt(c.trim), verdict: eq(c.trim, spec.trim) },
-    { factor: 'engine', factorAr: 'المحرك', target: fmt((spec as any).engineCapacity), comp: fmt((c as any).engineCc), verdict: num((c as any).engineCc, (spec as any).engineCapacity, 0.15) },
-    { factor: 'cylinders', factorAr: 'السلندر', target: fmt((spec as any).cylinders), comp: fmt((c as any).cylinders), verdict: eq((c as any).cylinders, (spec as any).cylinders) },
-    { factor: 'horsepower', factorAr: 'القدرة', target: fmt((spec as any).horsepower), comp: fmt((c as any).horsepower), verdict: num((c as any).horsepower, (spec as any).horsepower, 0.1) },
     { factor: 'fuel', factorAr: 'الوقود', target: fmt(spec.fuelType), comp: fmt(c.fuelType), verdict: eq(c.fuelType, spec.fuelType) },
     { factor: 'transmission', factorAr: 'الجير', target: fmt(spec.transmission), comp: fmt(c.transmission), verdict: eq(c.transmission, spec.transmission) },
     { factor: 'drivetrain', factorAr: 'الدفع', target: fmt(spec.drivetrain), comp: fmt(c.drivetrain), verdict: eq(c.drivetrain, spec.drivetrain) },
+    { factor: 'engineCc', factorAr: 'سعة المحرك', target: fmt((spec as any).engineCapacity), comp: fmt((c as any).engineCc), verdict: num((c as any).engineCc, (spec as any).engineCapacity, 0.15) },
+    { factor: 'horsepower', factorAr: 'القدرة الحصانية', target: fmt((spec as any).horsepower), comp: fmt((c as any).horsepower), verdict: num((c as any).horsepower, (spec as any).horsepower, 0.1) },
     { factor: 'mileage', factorAr: 'الممشى', target: fmt(spec.kilometers), comp: fmt(c.kilometers), verdict: num(c.kilometers, spec.kilometers, 0.1) },
-    { factor: 'options', factorAr: 'المواصفات', target: fmt((spec.specs || []).length), comp: fmt((c.specs || []).length), verdict: 'CLOSE' },
+    { factor: 'location', factorAr: 'المدينة', target: fmt(spec.city), comp: fmt(c.city), verdict: eq(c.city, spec.city) },
+    { factor: 'features', factorAr: 'المواصفات الإضافية', target: fmt((spec.specs || []).length), comp: fmt((c.specs || []).length), verdict: 'CLOSE' },
   ];
 }
 
