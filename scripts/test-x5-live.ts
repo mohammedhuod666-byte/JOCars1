@@ -67,6 +67,7 @@ async function main() {
   for (let i = 0; i < result.comparablesUsed.length; i++) {
     const c = result.comparablesUsed[i];
     console.log(`[${i + 1}] ${c.title} | Source: ${c.source} | Year: ${c.year} | Km: ${c.mileage?.toLocaleString() || 'N/A'} | Raw: ${c.originalPrice} JOD | Adj: ${c.adjustedPrice} JOD | Contrib: ${c.contributionPercent}% | Tier: ${c.tier} (${c.tierLabel}) | Weight: ${c.weight}`);
+    console.log(`    URL Verification -> Canonical: ${c.canonicalUrl} | Status: ${c.urlStatus} | Evidence: ${c.evidenceStatus} | VerifiedAt: ${c.urlVerifiedAt}`);
     if (c.weightBreakdown) {
       console.log(`    Weights Breakdown -> Year: ${c.weightBreakdown.yearWeight} | Spec: ${c.weightBreakdown.technicalWeight} | Km: ${c.weightBreakdown.mileageWeight} | Source: ${c.weightBreakdown.sourceQualityWeight} | Age: ${c.weightBreakdown.recencyWeight}`);
     }

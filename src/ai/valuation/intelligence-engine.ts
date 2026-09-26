@@ -20,10 +20,14 @@ import type {
   LeaveOneOutResult,
   PriceAdjustment,
   WeightBreakdown,
+  UrlStatus,
+  EvidenceStatus,
+  SourceSnapshot,
 } from './types';
 import { runValuation } from './engine';
 import { buildSpecFromBody } from './request';
 import { runGlmIntelligence, type GlmIntelligenceOutput, type GlmInputPayload } from './glm-intelligence';
+import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
 
 export interface Section24PricePosition {
   classification: 'BELOW_MARKET' | 'FAIR' | 'ABOVE_MARKET' | 'UNKNOWN';
@@ -54,6 +58,14 @@ export interface Section24ComparableUsed {
   id?: string;
   source: string;
   sourceUrl?: string | null;
+  canonicalUrl?: string | null;
+  finalUrl?: string | null;
+  urlStatus?: UrlStatus;
+  urlVerifiedAt?: string | null;
+  httpStatus?: number | null;
+  redirectedFrom?: string | null;
+  evidenceStatus?: EvidenceStatus;
+  sourceSnapshot?: SourceSnapshot;
   title: string;
   make?: string;
   model?: string;
@@ -279,6 +291,14 @@ export async function runIntelligenceValuation(
     id: c.listingId || undefined,
     source: c.source,
     sourceUrl: c.sourceUrl || null,
+    canonicalUrl: c.canonicalUrl || (c.sourceUrl ? resolveCanonicalListingUrl(c.sourceUrl, c.source) : null),
+    finalUrl: c.finalUrl || c.canonicalUrl || c.sourceUrl || null,
+    urlStatus: c.urlStatus || 'UNKNOWN',
+    urlVerifiedAt: c.urlVerifiedAt || null,
+    httpStatus: c.httpStatus ?? null,
+    redirectedFrom: c.redirectedFrom ?? null,
+    evidenceStatus: c.evidenceStatus || 'VERIFIED_AT_COLLECTION',
+    sourceSnapshot: c.sourceSnapshot,
     title: `${c.make} ${c.model} ${c.year || ''} ${c.trim || ''}`.trim(),
     make: c.make,
     model: c.model,

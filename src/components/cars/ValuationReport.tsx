@@ -18,6 +18,8 @@ import {
   FilterX,
   FileCheck,
   Sparkles,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -49,6 +51,16 @@ export function ValuationReport({
   const [legacyReport, setLegacyReport] = useState<any>(null);
   const [history, setHistory] = useState<{ at: string; estimated: number }[]>([]);
   const [insufficient, setInsufficient] = useState<string | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const copyToClipboard = (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedUrl(text);
+      toast.success('تم نسخ الرابط');
+      setTimeout(() => setCopiedUrl(null), 2500);
+    }
+  };
 
   const auth = useCallback((): Record<string, string> => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
@@ -579,15 +591,37 @@ export function ValuationReport({
                               </span>
                             </td>
                             <td className="p-2.5">
-                              {c.sourceUrl?.startsWith('http') ? (
+                              {c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE' ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"
+                                  title="تم التحقق من هذا الإعلان كدليل تاريخي، لكن الرابط لم يعد متاحاً على المصدر الأصلي"
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span>{c.source}</span>
+                                  <span className="text-[10px] text-amber-400/80">(غير متاح)</span>
+                                </span>
+                              ) : c.urlStatus === 'BLOCKED' ? (
+                                <span
+                                  className="inline-flex items-center gap-1 text-slate-300 text-[11px] font-medium bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
+                                  title="المصدر محمي بجدار حماية، تم الاحتفاظ بالدليل الأصلي"
+                                >
+                                  <ShieldCheck className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{c.source}</span>
+                                  <span className="text-[10px] text-slate-400">(محمي)</span>
+                                </span>
+                              ) : (c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') ? (
                                 <a
-                                  href={c.sourceUrl}
+                                  href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={(e) => e.stopPropagation()}
                                   className="text-blue-400 hover:underline inline-flex items-center gap-1 font-semibold"
+                                  title={c.urlStatus === 'REDIRECTED' ? 'تم التوجيه للرابط المعتمد' : 'رابط نشط تم التحقق منه'}
                                 >
                                   {c.source} <ExternalLink className="w-3 h-3" />
+                                  {c.urlStatus === 'REDIRECTED' && (
+                                    <span className="text-[9px] text-blue-300/80 bg-blue-500/15 px-1 rounded border border-blue-500/30">معاد توجيهه</span>
+                                  )}
                                 </a>
                               ) : c.sourceUrl ? (
                                 <Link
@@ -629,19 +663,152 @@ export function ValuationReport({
                                       </span>
                                     )}
                                   </span>
-                                  {c.sourceUrl?.startsWith('http') && (
-                                    <>
-                                      <span>•</span>
-                                      <a
-                                        href={c.sourceUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-400 underline dir-ltr truncate max-w-xs inline-block"
-                                      >
-                                        {c.sourceUrl}
-                                      </a>
-                                    </>
+                                </div>
+
+                                {/* Source Evidence & Traceability Card */}
+                                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <FileCheck className="w-4 h-4 text-blue-400" />
+                                      <span className="font-bold text-slate-200 text-xs">بطاقة توثيق الدليل والمصدر (Source Evidence Card)</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                      <span className={`px-2 py-0.5 rounded font-medium border ${
+                                        c.evidenceStatus === 'VERIFIED_AT_COLLECTION'
+                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                          : c.evidenceStatus === 'MANUAL_ENTRY'
+                                          ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                                      }`}>
+                                        {c.evidenceStatus === 'VERIFIED_AT_COLLECTION'
+                                          ? 'موثق وقت الجمع'
+                                          : c.evidenceStatus === 'MANUAL_ENTRY'
+                                          ? 'إدخال يدوي مدقق'
+                                          : 'شاهد سوقي مجمع'}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded font-medium border ${
+                                        c.urlStatus === 'VALID'
+                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                          : c.urlStatus === 'REDIRECTED'
+                                          ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                                          : c.urlStatus === 'BLOCKED'
+                                          ? 'bg-slate-800 text-slate-300 border-slate-700'
+                                          : c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE'
+                                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                                      }`}>
+                                        {c.urlStatus === 'VALID'
+                                          ? 'الرابط نشط وصالح (200 OK)'
+                                          : c.urlStatus === 'REDIRECTED'
+                                          ? 'تم التحويل للرابط الرسمي (301/302)'
+                                          : c.urlStatus === 'NOT_FOUND'
+                                          ? 'الرابط غير متاح (404/410)'
+                                          : c.urlStatus === 'UNAVAILABLE'
+                                          ? 'المحتوى غير متاح'
+                                          : c.urlStatus === 'BLOCKED'
+                                          ? 'المصدر محمي بجدار حماية'
+                                          : 'حالة الرابط غير محددة'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Inactive / 404 URL Alert Banner */}
+                                  {(c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE') && (
+                                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[11px] flex items-start gap-2">
+                                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                      <div>
+                                        <p className="font-semibold text-amber-300">تنبيه توثيقي:</p>
+                                        <p className="text-amber-200/90 leading-relaxed">
+                                          هذا الإعلان تم جمعه كدليل سوقي تاريخي موثق، لكن الرابط الأصلي لم يعد متاحاً على موقع المصدر (قد يكون الإعلان حذف أو انتهت صلاحيته). تم الاحتفاظ به كدليل تاريخي لحساب القيمة العادلة دون تزييف أو افتراض.
+                                        </p>
+                                      </div>
+                                    </div>
                                   )}
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-300 pt-1">
+                                    <div className="space-y-1">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">المصدر:</span>
+                                        <span className="font-semibold text-white">{c.source}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">تاريخ الجمع:</span>
+                                        <span className="font-mono text-slate-200">
+                                          {c.sourceSnapshot?.collectedAt
+                                            ? new Date(c.sourceSnapshot.collectedAt).toLocaleDateString('ar-JO', { year: 'numeric', month: 'short', day: 'numeric' })
+                                            : 'تاريخ الجمع الأولي'}
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">آخر تحقق من الرابط:</span>
+                                        <span className="font-mono text-slate-200">
+                                          {c.urlVerifiedAt
+                                            ? new Date(c.urlVerifiedAt).toLocaleDateString('ar-JO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                            : 'تم التحقق مؤخراً'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                      <div>
+                                        <span className="text-slate-400 block mb-0.5">الرابط المعتمد:</span>
+                                        {c.urlStatus === 'VALID' || c.urlStatus === 'REDIRECTED' ? (
+                                          <a
+                                            href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-400 underline font-mono text-[10px] break-all inline-flex items-center gap-1 hover:text-blue-300"
+                                          >
+                                            {c.finalUrl || c.canonicalUrl || c.sourceUrl}
+                                            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                                          </a>
+                                        ) : (
+                                          <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                                            <span className="text-slate-400 font-mono text-[10px] break-all select-all flex-1">
+                                              {c.canonicalUrl || c.sourceUrl || 'لا يوجد رابط'}
+                                            </span>
+                                            {(c.canonicalUrl || c.sourceUrl) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(c.canonicalUrl || c.sourceUrl!)}
+                                                className="text-slate-400 hover:text-white p-1"
+                                                title="نسخ الرابط"
+                                              >
+                                                {copiedUrl === (c.canonicalUrl || c.sourceUrl) ? (
+                                                  <Check className="w-3 h-3 text-emerald-400" />
+                                                ) : (
+                                                  <Copy className="w-3 h-3" />
+                                                )}
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {c.sourceUrl && c.sourceUrl !== (c.finalUrl || c.canonicalUrl) && (
+                                        <div>
+                                          <span className="text-slate-400 block mb-0.5">الرابط الأصلي عند الجمع:</span>
+                                          <div className="flex items-center gap-1 bg-slate-900/60 px-2 py-0.5 rounded border border-slate-800/60">
+                                            <span className="text-slate-400 font-mono text-[9px] break-all select-all flex-1">
+                                              {c.sourceUrl}
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => copyToClipboard(c.sourceUrl!)}
+                                              className="text-slate-400 hover:text-white p-0.5"
+                                              title="نسخ الرابط الأصلي"
+                                            >
+                                              {copiedUrl === c.sourceUrl ? (
+                                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                              ) : (
+                                                <Copy className="w-2.5 h-2.5" />
+                                              )}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
 
                                 {/* Weight Breakdown Multi-Factor Chips */}

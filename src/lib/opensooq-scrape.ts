@@ -286,9 +286,24 @@ function toListing(item: Record<string, unknown>): OpenSooqListing {
 
   const titleLower = title.toLowerCase();
 
+  const rawPostUrl = item.post_url ? String(item.post_url).trim() : '';
+  const itemId = String(item.id || item.post_id || '').trim();
+  let listingUrl = '';
+  if (rawPostUrl) {
+    listingUrl = rawPostUrl.startsWith('http')
+      ? rawPostUrl
+      : `https://jo.opensooq.com${rawPostUrl.startsWith('/') ? '' : '/'}${rawPostUrl}`;
+  } else if (itemId) {
+    listingUrl = `https://jo.opensooq.com/ar/search/${itemId}`;
+  }
+  // OpenSooq canonical listing detail URL pattern is /ar/search/{id} (never /post/ which returns 410)
+  listingUrl = listingUrl
+    .replace(/jo\.opensooq\.com\/search\//, 'jo.opensooq.com/ar/search/')
+    .replace(/jo\.opensooq\.com\/(?:en|ar)?\/?post\//, 'jo.opensooq.com/ar/search/');
+
   return {
     site: 'السوق المفتوح',
-    url: 'https://jo.opensooq.com' + (item.post_url ? String(item.post_url).replace('/search/', '/post/') : ''),
+    url: listingUrl,
     price,
     year: parseYear(cps, title),
     km: parseKm(item.kilometers_Cars_value_i as string | undefined),

@@ -3,6 +3,9 @@
  * All money math happens in JOD floats; display rounds to whole dinars.
  */
 
+import type { UrlStatus, EvidenceStatus, UrlVerificationResult, SourceSnapshot } from './url-verifier';
+export type { UrlStatus, EvidenceStatus, UrlVerificationResult, SourceSnapshot };
+
 export interface VehicleSpec {
   brand: string;      // Arabic or English, normalized downstream
   brandEn?: string | null;
@@ -58,6 +61,14 @@ export interface NormalizedListing {
   specs: string[];
   listingDate?: string | null;
   scrapedAt: string;  // ISO
+  canonicalUrl?: string | null;
+  finalUrl?: string | null;
+  urlStatus?: UrlStatus;
+  urlVerifiedAt?: string | null;
+  httpStatus?: number | null;
+  redirectedFrom?: string | null;
+  evidenceStatus?: EvidenceStatus;
+  sourceSnapshot?: SourceSnapshot;
 }
 
 export type AdjustmentProvenance = 'MARKET_DERIVED' | 'MODEL_DERIVED' | 'EMPIRICAL_SEGMENT' | 'CONSERVATIVE_HEURISTIC';
@@ -222,6 +233,14 @@ export interface ValuationAuditTrace {
   comparablesAudit: {
     source: string;
     sourceUrl?: string | null;
+    canonicalUrl?: string | null;
+    finalUrl?: string | null;
+    urlStatus?: UrlStatus;
+    urlVerifiedAt?: string | null;
+    httpStatus?: number | null;
+    redirectedFrom?: string | null;
+    evidenceStatus?: EvidenceStatus;
+    sourceSnapshot?: SourceSnapshot;
     listingId?: string | null;
     year: number | null;
     make: string;

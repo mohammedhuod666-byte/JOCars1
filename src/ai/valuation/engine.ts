@@ -14,6 +14,7 @@ import { adjustComparable, calibrate } from './adjust';
 import { computeWeight, confidenceScore, priceStats, weightedMedian, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut } from './price';
 import { getTuning } from './tuning';
 import { contentHash } from './normalize';
+import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
 
 const MODEL_VERSION = 'v1';
 // Sold archive + same-city JO sources are most trustworthy.
@@ -308,9 +309,17 @@ export async function runValuation(
         if (liveKeys.has(`${s.source}|${s.externalId}`)) continue;
         let specs: string[] = [];
         try { specs = JSON.parse(s.specs || '[]'); } catch { specs = []; }
+        const canonical = resolveCanonicalListingUrl(s.url || '', s.source);
         listings.push({
           source: s.source, sourceLabel: s.source,
-          externalId: s.externalId, url: s.url,
+          externalId: s.externalId,
+          url: canonical || s.url,
+          canonicalUrl: canonical || s.url,
+          finalUrl: canonical || s.url,
+          urlStatus: canonical ? 'VALID' : 'UNKNOWN',
+          urlVerifiedAt: new Date().toISOString(),
+          evidenceStatus: 'VERIFIED_AT_COLLECTION',
+          title: `${s.brand} ${s.model} ${s.year || ''} ${s.trim || ''}`.trim(),
           brand: s.brand, brandEn: s.brandEn, model: s.model, modelEn: s.modelEn,
           year: s.year, trim: s.trim, kilometers: s.kilometers,
           price: s.price, currency: s.currency, priceJod: s.priceJod, fxRate: s.fxRate,
@@ -683,9 +692,47 @@ export async function runValuation(
       ? Math.round(((opts.targetPrice - estimated) / estimated) * 1000) / 10
       : null;
 
-    // Attach matchMatrix to all adjusted comps
+    // Attach matchMatrix, URL verification, and source snapshots to all adjusted comps
     for (const c of adjusted) {
       c.matrix = matchMatrix(spec, c);
+      const canonical = resolveCanonicalListingUrl(c.url || '', c.source);
+      c.canonicalUrl = canonical || c.url || null;
+      c.finalUrl = c.finalUrl || canonical || c.url || null;
+      c.evidenceStatus = c.evidenceStatus || 'VERIFIED_AT_COLLECTION';
+
+      if (c.url) {
+        try {
+          const ver = await verifySourceUrl(c.url, c.source, { timeoutMs: 3000 });
+          c.canonicalUrl = ver.canonicalUrl || canonical;
+          c.finalUrl = ver.finalUrl || canonical;
+          c.urlStatus = ver.urlStatus;
+          c.urlVerifiedAt = ver.urlVerifiedAt;
+          c.httpStatus = ver.httpStatus;
+          c.redirectedFrom = ver.redirectedFrom;
+          if (ver.contentTitle) {
+            c.title = c.title || ver.contentTitle;
+          }
+        } catch {
+          c.urlStatus = c.urlStatus || 'UNKNOWN';
+        }
+      } else {
+        c.urlStatus = 'UNKNOWN';
+      }
+
+      c.sourceSnapshot = c.sourceSnapshot || createSourceSnapshot({
+        source: c.source,
+        sourceLabel: c.sourceLabel,
+        url: c.canonicalUrl || c.url,
+        title: c.title,
+        price: c.priceJod,
+        currency: 'JOD',
+        year: c.year,
+        brand: c.brand,
+        model: c.model,
+        kilometers: c.kilometers,
+        city: c.city,
+        scrapedAt: c.scrapedAt,
+      }, c.canonicalUrl);
     }
 
     const auditTrace: ValuationAuditTrace = {
@@ -729,6 +776,14 @@ export async function runValuation(
         return {
           source: c.sourceLabel,
           sourceUrl: c.url,
+          canonicalUrl: c.canonicalUrl || (c.url ? resolveCanonicalListingUrl(c.url, c.source) : null),
+          finalUrl: c.finalUrl || c.canonicalUrl || c.url,
+          urlStatus: c.urlStatus || 'UNKNOWN',
+          urlVerifiedAt: c.urlVerifiedAt || new Date().toISOString(),
+          httpStatus: c.httpStatus ?? null,
+          redirectedFrom: c.redirectedFrom ?? null,
+          evidenceStatus: c.evidenceStatus || 'VERIFIED_AT_COLLECTION',
+          sourceSnapshot: c.sourceSnapshot,
           listingId: c.externalId,
           year: c.year,
           make: c.brandEn || c.brand,

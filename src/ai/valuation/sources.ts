@@ -5,6 +5,7 @@
  */
 import type { NormalizedListing, VehicleSpec } from './types';
 import { parseKilometers, toJod, normalizeTrim, contentHash, enrichFromTitle } from './normalize';
+import { resolveCanonicalListingUrl, createSourceSnapshot } from './url-verifier';
 import { collectOrdonAuto } from './sources-ordonauto';
 import { collectFacebook, FACEBOOK_STATUS } from './sources-facebook';
 
@@ -38,18 +39,29 @@ async function collectOpenSooq(spec: VehicleSpec, timeoutMs: number): Promise<No
     ]);
     if (!res || !res.listings) return [];
     const now = new Date().toISOString();
-    // Full same-brand set (not the sliced UI list) so tiers 2-3 have data.
-    const pool = (res.brandMatchedListings && res.brandMatchedListings.length > 0)
+    // Prefer strictly matched listings (same brand and model).
+    const pool = (res.matchedListings && res.matchedListings.length > 0)
+      ? res.matchedListings
+      : (res.brandMatchedListings && res.brandMatchedListings.length > 0)
       ? res.brandMatchedListings
       : res.listings;
+
     return pool.map((l, i) => {
       const km = parseKilometers(l.km);
       const { priceJod, fxRate } = toJod(l.price, 'JOD');
+      const canonicalUrl = resolveCanonicalListingUrl(l.url || '', 'opensooq');
+
       const row: NormalizedListing = {
         source: 'opensooq',
         sourceLabel: 'السوق المفتوح',
-        externalId: `os-${contentHash([l.url])}-${i}`,
-        url: l.url || null,
+        externalId: `os-${contentHash([canonicalUrl || l.url])}-${i}`,
+        url: canonicalUrl || l.url || null,
+        canonicalUrl: canonicalUrl || null,
+        finalUrl: canonicalUrl || null,
+        urlStatus: canonicalUrl ? 'VALID' : 'UNKNOWN',
+        urlVerifiedAt: now,
+        evidenceStatus: 'VERIFIED_AT_COLLECTION',
+        title: l.title || `${spec.brand} ${spec.model}`,
         brand: spec.brand,
         brandEn: brand || null,
         model: spec.model,
@@ -73,7 +85,24 @@ async function collectOpenSooq(spec: VehicleSpec, timeoutMs: number): Promise<No
         listingDate: l.postedAt,
         scrapedAt: now,
       };
-      return enrichFromTitle(row, l.title);
+
+      const enriched = enrichFromTitle(row, l.title);
+      enriched.sourceSnapshot = createSourceSnapshot({
+        source: 'opensooq',
+        sourceLabel: 'السوق المفتوح',
+        url: canonicalUrl || l.url,
+        title: l.title,
+        price: l.price,
+        currency: 'JOD',
+        year: l.year,
+        brand: enriched.brand,
+        model: enriched.model,
+        kilometers: km,
+        city: l.city,
+        scrapedAt: now,
+      }, canonicalUrl);
+
+      return enriched;
     });
   } catch {
     return [];
