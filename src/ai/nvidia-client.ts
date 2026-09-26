@@ -29,7 +29,7 @@ export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
   'gpt-oss': {
     id: 'gpt-oss',
     model: 'openai/gpt-oss-20b',
-    nameAr: 'GPT OSS 20B 🧠',
+    nameAr: 'GPT OSS 20B ',
     nameEn: 'GPT OSS 20B',
     description: 'الأذكى والأدق — الأفضل لإجابات السيارات والأسعار',
     maxTokens: 4096,
@@ -38,19 +38,19 @@ export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
   },
   glm: {
     id: 'glm',
-    model: 'z-ai/glm-5.3-flash',
-    nameAr: 'GLM 5.3 Flash ⚡',
-    nameEn: 'GLM 5.3 Flash',
-    description: 'سريع للغاية ومباشر للمحادثات والإجابات الفورية',
+    model: 'z-ai/glm-5.3',
+    nameAr: 'GLM 5.3',
+    nameEn: 'GLM 5.3',
+    description: 'نموذج التقييم والذكاء السوقي المتقدم للأردن (Z-AI / GLM 5.3)',
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1,
   },
   minimax: {
     id: 'minimax',
-    model: 'moonshotai/kimi-k2.6',
-    nameAr: 'Kimi K2.6 📊',
-    nameEn: 'Kimi K2.6',
+    model: 'moonshotai/kimi-k3',
+    nameAr: 'Kimi K3 ',
+    nameEn: 'Kimi K3',
     description: 'قوة قصوى للتحليل المعمّق ومقارنة الأسعار بالسوق الأردني',
     maxTokens: 4096,
     temperature: 0.7,
@@ -59,7 +59,7 @@ export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
   mistral: {
     id: 'mistral',
     model: 'mistralai/mistral-large-2-instruct',
-    nameAr: 'Mistral Large 🔮',
+    nameAr: 'Mistral Large ',
     nameEn: 'Mistral Large',
     description: 'نموذج محادثة مختصر وسريع للإجابات التكتيكية',
     maxTokens: 4096,
@@ -68,9 +68,10 @@ export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
   },
 };
 
-// Default = fastest model (Flash-class). Speed first for chat UX;
-// user can still pick a heavier model from the UI selector.
-export const DEFAULT_MODEL: AIModelId = 'glm';
+// Default = gpt-oss-20b (verified live: ~1s replies). glm-flash currently
+// hangs on NVIDIA's side (60s+ with no token), so it stays selectable in
+// the UI but is never first in line. User can still pick any model manually.
+export const DEFAULT_MODEL: AIModelId = 'gpt-oss';
 
 let client: OpenAI | null = null;
 
@@ -108,17 +109,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function getModelInfo(modelId?: AIModelId): AIModelInfo {
-  return AI_MODELS[modelId || DEFAULT_MODEL] || AI_MODELS[DEFAULT_MODEL];
+function getModelInfo(modelId?: AIModelId | string): AIModelInfo {
+  if (modelId === 'z-ai/glm-5-3' || modelId === 'z-ai/glm-5.3') {
+    return AI_MODELS['glm'];
+  }
+  return (modelId && AI_MODELS[modelId as keyof typeof AI_MODELS]) || AI_MODELS[DEFAULT_MODEL];
 }
 
-// Failover ordered fast-first. The 120B giant is dropped from the chat
-// path: it is far too slow for interactive replies.
+// Failover ordered by live reliability (measured 2026-09-24):
+// gpt-oss-20b answers in ~1s; mistral is the backup. glm-flash is NOT in
+// the cascade: it hangs on NVIDIA's side (no token within 60s) and would
+// add only dead waiting time. It stays manually selectable in the UI.
 const FAILOVER_MODELS = [
-  'z-ai/glm-5.3-flash',
   'openai/gpt-oss-20b',
   'mistralai/mistral-large-2-instruct',
-  'moonshotai/kimi-k2.6',
 ];
 
 /**
@@ -188,28 +192,30 @@ export async function chatCompletion(
 }
 
 /**
- * Intelligent Local Arabic Engine for Cars JO
+ * Intelligent Local Arabic Engine for Cars JO — OFFLINE fallback only.
+ * Exported so routes can detect fallback replies and avoid caching them
+ * as if they were real model answers (cache poisoning).
  */
-function generateArabicFallbackResponse(query: string): string {
+export function generateArabicFallbackResponse(query: string): string {
   const q = query.toLowerCase().trim();
 
   if (/^(السلام عليكم|سلام عليكم|السلامعليكم|سلام|مرحبا|مرحباً|أهلا|اهلا|هلا|صباح الخير|مساء الخير|كيفك|شلونك)/i.test(q)) {
-    return `وعليكم السلام ورحمة الله وبركاته! 🌸\n\nأهلاً بك في منصة **Cars JO** 🇯🇴! أنا مساعدك الذكي السريع.\n\nكيف يمكنني مساعدتك اليوم؟\n- 🚗 **البحث عن سيارات للبيع** (كاش أو بالتقسيط) (/cars)\n- ⚡ **رادار محطات شحن الكهرباء** وسرعة الشواحن بالأردن (/ev-charging-jordan)\n- 💰 **حاسبة الجمارك والترخيص** 2026 (/customs-calculator)\n- 🏦 **حساب تمويل الأقساط البنكية** (/finance-calculator)\n- 🔧 **دليل ورش الصيانة المعتمدة** (/workshops)`;
+    return `وعليكم السلام ورحمة الله وبركاته! \n\nأهلاً بك في منصة **Cars JO** ! أنا مساعدك الذكي السريع.\n\nكيف يمكنني مساعدتك اليوم؟\n-  **البحث عن سيارات للبيع** (كاش أو بالتقسيط) (/cars)\n-  **رادار محطات شحن الكهرباء** وسرعة الشواحن بالأردن (/ev-charging-jordan)\n-  **حاسبة الجمارك والترخيص** 2026 (/customs-calculator)\n-  **حساب تمويل الأقساط البنكية** (/finance-calculator)\n-  **دليل ورش الصيانة المعتمدة** (/workshops)`;
   }
 
   if (q.includes('جمارك') || q.includes('ترخيص') || q.includes('جمرك')) {
-    return `أهلاً بك! 🇯🇴\n\nحسب تعرفة الجمارك والترخيص الأردنية 2026:\n- **السيارات الكهربائية (EV):** 10% إلى 15% حسب القوة بالكيلوواط (kW).\n- **السيارات الهايبرد:** 55% إلى 70% حسب سعة المحرك (CC).\n- **سيارات البنزين:** تتفاوت حسب سعة المحرك وسنة الصنع.\n\n💡 يمكنك تجربة **حاسبة الجمارك والترخيص** المباشرة في موقعنا من خلال الرابط: (/customs-calculator)`;
+    return `أهلاً بك! \n\nحسب تعرفة الجمارك والترخيص الأردنية 2026:\n- **السيارات الكهربائية (EV):** 10% إلى 15% حسب القوة بالكيلوواط (kW).\n- **السيارات الهايبرد:** 55% إلى 70% حسب سعة المحرك (CC).\n- **سيارات البنزين:** تتفاوت حسب سعة المحرك وسنة الصنع.\n\n يمكنك تجربة **حاسبة الجمارك والترخيص** المباشرة في موقعنا من خلال الرابط: (/customs-calculator)`;
   }
 
   if (q.includes('تقسيط') || q.includes('تمويل') || q.includes('بنك') || q.includes('دفعة')) {
-    return `أهلاً بك! 🏦\n\nيوفر موقع Cars JO حاسبة تمويل متكاملة للبنوك الأردنية:\n- **نسبة الفائدة المرابحة:** تبدأ من 4.5% سنوياً.\n- **أقصى فترة سداد:** تصل حتى 8 سنوات (96 شهر).\n- **أقل دفعة اولى:** 10% إلى 20%.\n\n💡 احسب قسطك الشهري بدقة عبر **حاسبة التمويل**: (/finance-calculator)`;
+    return `أهلاً بك! \n\nيوفر موقع Cars JO حاسبة تمويل متكاملة للبنوك الأردنية:\n- **نسبة الفائدة المرابحة:** تبدأ من 4.5% سنوياً.\n- **أقصى فترة سداد:** تصل حتى 8 سنوات (96 شهر).\n- **أقل دفعة اولى:** 10% إلى 20%.\n\n احسب قسطك الشهري بدقة عبر **حاسبة التمويل**: (/finance-calculator)`;
   }
 
   if (q.includes('شاحن') || q.includes('شحن') || q.includes('كهرباء') || q.includes('ev')) {
-    return `أهلاً بك! ⚡\n\nيقدم موقع كارس جو رادار محطات الشحن الفائق السريع للسيارات الكهربائية بالأردن (عمان، إربد، الزرقاء، العقبة والسلط) مع حاسبة الوفر السنوي للبنزين.\n\n💡 تصفح **رادار محطات الشحن الأردني**: (/ev-charging-jordan)`;
+    return `أهلاً بك! \n\nيقدم موقع كارس جو رادار محطات الشحن الفائق السريع للسيارات الكهربائية بالأردن (عمان، إربد، الزرقاء، العقبة والسلط) مع حاسبة الوفر السنوي للبنزين.\n\n تصفح **رادار محطات الشحن الأردني**: (/ev-charging-jordan)`;
   }
 
-  return `أهلاً بك في **JO Cars** 🇯🇴!\n\nأنا مساعدك الذكي السريع. أستطيع الإجابة عن أي استفسار يتعلق بالسيارات والأسعار والقطع والورش والجمارك والأقساط بالأردن!\n\n💡 يمكنك تصفح الأقسام الرئيسية:\n- 🚗 السيارات للبيع (/cars)\n- ⚡ محطات شحن الكهرباء (/ev-charging-jordan)\n- 💰 حاسبة الجمارك (/customs-calculator)\n- 🏦 حاسبة التمويل البنكي (/finance-calculator)\n- 🔧 دليل الورش (/workshops)`;
+  return `أهلاً بك في **JO Cars** !\n\nأنا مساعدك الذكي السريع. أستطيع الإجابة عن أي استفسار يتعلق بالسيارات والأسعار والقطع والورش والجمارك والأقساط بالأردن!\n\n يمكنك تصفح الأقسام الرئيسية:\n-  السيارات للبيع (/cars)\n-  محطات شحن الكهرباء (/ev-charging-jordan)\n-  حاسبة الجمارك (/customs-calculator)\n-  حاسبة التمويل البنكي (/finance-calculator)\n-  دليل الورش (/workshops)`;
 }
 
 /**
@@ -227,13 +233,15 @@ const STREAM_HARD_MS = 45000;
 // ── Circuit breaker: if NVIDIA completions keep hanging/failing, stop
 // waiting on them for a cooldown period and answer instantly from the local
 // engine instead. Without this, every reply pays the full failover cascade.
+// Threshold 3 (not 1): a single upstream blip must NOT silence the bot for
+// everyone; only a repeated outage trips the breaker.
 let breakerFails = 0;
 let breakerOpenedAt = 0;
 // Threshold 1: the upstream was measured hanging on every model, so one
 // exhausted cascade is enough evidence — the next reply goes instant.
 // Any later success auto-resets, and the breaker re-probes every cooldown.
-const BREAKER_THRESHOLD = 1;
-const BREAKER_COOLDOWN_MS = 5 * 60 * 1000;
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 2 * 60 * 1000;
 
 function breakerOpen(): boolean {
   return breakerFails >= BREAKER_THRESHOLD && Date.now() - breakerOpenedAt < BREAKER_COOLDOWN_MS;
