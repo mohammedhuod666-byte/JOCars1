@@ -176,13 +176,29 @@ export function matchMatrix(spec: VehicleSpec, c: NormalizedListing): MatchRow[]
     return d === 0 ? 'MATCH' as const : d <= tol ? 'CLOSE' as const : 'DIFFERENT' as const;
   };
   const fmt = (v: any) => (v === null || v === undefined || v === '' ? '—' : String(v));
+  const normFuel = (f: any) => {
+    if (!f) return '';
+    const s = String(f).toLowerCase().trim();
+    if (s.includes('gas') || s.includes('petrol') || s.includes('بنزين')) return 'petrol';
+    if (s.includes('hyb') || s.includes('هايبرد')) return 'hybrid';
+    if (s.includes('elec') || s.includes('كهرب')) return 'electric';
+    if (s.includes('diesel') || s.includes('ديزل')) return 'diesel';
+    return s;
+  };
+  const normTrans = (t: any) => {
+    if (!t) return '';
+    const s = String(t).toLowerCase().trim();
+    if (s.includes('auto') || s.includes('اوتو') || s.includes('أوتو')) return 'auto';
+    if (s.includes('man') || s.includes('عادي') || s.includes('يدوي')) return 'manual';
+    return s;
+  };
   return [
     { factor: 'make', factorAr: 'الشركة الصانعة', target: fmt(spec.brandEn || spec.brand), comp: fmt(c.brandEn || c.brand), verdict: eq(c.brandEn || c.brand, spec.brandEn || spec.brand) },
     { factor: 'model', factorAr: 'الموديل', target: fmt(spec.modelEn || spec.model), comp: fmt(c.modelEn || c.model), verdict: eq(c.modelEn || c.model, spec.modelEn || spec.model) },
     { factor: 'year', factorAr: 'السنة', target: fmt(spec.year), comp: fmt(c.year), verdict: num(c.year, spec.year, 0) === 'MATCH' ? 'MATCH' : c.year == null ? 'UNKNOWN' : Math.abs(c.year - spec.year) <= 1 ? 'CLOSE' : 'DIFFERENT' },
     { factor: 'trim', factorAr: 'الفئة', target: fmt(spec.trim), comp: fmt(c.trim), verdict: eq(c.trim, spec.trim) },
-    { factor: 'fuel', factorAr: 'الوقود', target: fmt(spec.fuelType), comp: fmt(c.fuelType), verdict: eq(c.fuelType, spec.fuelType) },
-    { factor: 'transmission', factorAr: 'الجير', target: fmt(spec.transmission), comp: fmt(c.transmission), verdict: eq(c.transmission, spec.transmission) },
+    { factor: 'fuel', factorAr: 'الوقود', target: fmt(spec.fuelType), comp: fmt(c.fuelType), verdict: eq(normFuel(c.fuelType), normFuel(spec.fuelType)) },
+    { factor: 'transmission', factorAr: 'الجير', target: fmt(spec.transmission), comp: fmt(c.transmission), verdict: eq(normTrans(c.transmission), normTrans(spec.transmission)) },
     { factor: 'drivetrain', factorAr: 'الدفع', target: fmt(spec.drivetrain), comp: fmt(c.drivetrain), verdict: eq(c.drivetrain, spec.drivetrain) },
     { factor: 'engineCc', factorAr: 'سعة المحرك', target: fmt((spec as any).engineCapacity), comp: fmt((c as any).engineCc), verdict: num((c as any).engineCc, (spec as any).engineCapacity, 0.15) },
     { factor: 'horsepower', factorAr: 'القدرة الحصانية', target: fmt((spec as any).horsepower), comp: fmt((c as any).horsepower), verdict: num((c as any).horsepower, (spec as any).horsepower, 0.1) },
