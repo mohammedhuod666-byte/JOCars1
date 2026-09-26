@@ -78,7 +78,7 @@ export default function CarDetailPage() {
 
   const applyCarData = (data: any) => {
     setCar(data);
-    setLiveFairPrice(data.fairPriceEstimate ?? null);
+    // Ignore legacy stale DB estimate; ValuationReport will provide fresh Section 24 FMV
     setIsSaved(data.isFavorited || false);
     setHasMoreImages(data.hasMoreImages || false);
     document.title = `${data.brand?.nameAr || ''} ${data.model?.nameAr || ''} ${data.year} | كارس جو JO Cars`;

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getMarketPrices } from '@/lib/market-scrape';
+import { runIntelligenceValuation } from '@/ai/valuation/intelligence-engine';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -22,45 +22,69 @@ export async function POST(request: NextRequest) {
     const yearNum = parseInt(year);
     const kmNum = parseInt(kilometers) || 0;
 
-    const result = await getMarketPrices(brand, model || '', yearNum, kmNum, condition || 'GOOD');
+    const report = await runIntelligenceValuation({
+      spec: {
+        brand,
+        model: model || '',
+        year: yearNum,
+        kilometers: kmNum,
+        condition: condition || 'GOOD',
+      }
+    });
+
+    const fmv = report.fairMarketValue || 0;
+    const min = report.range.low || Math.round(fmv * 0.9);
+    const max = report.range.high || Math.round(fmv * 1.1);
 
     return Response.json({
       success: true,
       data: {
         query: { brand, model: model || '', year: yearNum, kilometers: kmNum, condition: condition || '' },
         stats: {
-          totalListings: result.stats.count,
+          totalListings: report.marketEvidence.totalListings,
           priceRange: {
-            min: result.stats.min || result.dbPrices.min,
-            max: result.stats.max || result.dbPrices.max,
-            avg: result.stats.avg || result.dbPrices.avg,
-            median: result.stats.median || result.dbPrices.median,
+            min,
+            max,
+            avg: fmv,
+            median: fmv,
           },
-          estimatedPrice: result.estimatedPrice,
-          pricePosition: result.priceLabel,
+          estimatedPrice: fmv,
+          pricePosition: {
+            label: report.pricePosition.classification === 'BELOW_MARKET'
+              ? 'أقل من متوسط السوق'
+              : report.pricePosition.classification === 'ABOVE_MARKET'
+              ? 'أعلى من متوسط السوق'
+              : 'مطابق لسعر السوق العادل',
+            color: report.pricePosition.classification === 'BELOW_MARKET'
+              ? 'text-green-500'
+              : report.pricePosition.classification === 'ABOVE_MARKET'
+              ? 'text-red-500'
+              : 'text-emerald-500',
+            icon: 'CheckCircle',
+          },
           conditionAdjustment: 0,
-          sources: result.stats.sources,
+          sources: Array.from(new Set(report.comparablesUsed.map(c => c.source))),
         },
-        trend: { direction: 'من مصادر متعددة', percent: 0, emoji: '🌐' },
-        similarCars: result.webPrices.map(p => ({
-          id: p.url,
+        trend: { direction: 'مبني على سوق الأردن الفعلي', percent: 0, emoji: '' },
+        similarCars: report.comparablesUsed.map(c => ({
+          id: c.id || c.sourceUrl || '',
           slug: '',
-          title: p.title,
-          price: p.price,
-          year: p.year,
-          kilometers: p.km,
+          title: c.title,
+          price: c.originalPrice,
+          year: c.year || yearNum,
+          kilometers: c.mileage || 0,
           condition: '',
           image: null,
-          city: p.location,
-          source: p.source,
-          url: p.url,
+          city: 'الأردن',
+          source: c.source,
+          url: c.sourceUrl || '',
         })),
       },
     });
-  } catch {
+  } catch (err: any) {
     return Response.json({
       success: false,
-      error: 'عذراً، حدث خطأ أثناء تحليل السوق. حاول مرة أخرى.',
+      error: err?.message || 'عذراً، حدث خطأ أثناء تحليل السوق. حاول مرة أخرى.',
     }, { status: 500 });
   }
 }

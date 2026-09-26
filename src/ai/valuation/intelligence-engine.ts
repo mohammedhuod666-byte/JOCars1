@@ -117,6 +117,8 @@ export interface Section24OutputContract {
 export interface RunIntelligenceValuationOptions {
   askingPriceOverride?: number | null;
   useAiSynthesis?: boolean;
+  userId?: string | null;
+  onStage?: (stage: { stageAr: string; detail: string; ms: number }) => void;
 }
 
 /**
@@ -160,10 +162,15 @@ export async function runIntelligenceValuation(
   const effectiveAskingPrice = options.askingPriceOverride !== undefined ? options.askingPriceOverride : (spec.askingPrice ?? null);
 
   // 1. Run deterministic valuation engine with full audit trace
-  const engineResult = await runValuation(spec, {
-    carId,
-    targetPrice: effectiveAskingPrice ?? undefined,
-  });
+  const engineResult = await runValuation(
+    spec,
+    {
+      carId,
+      userId: options.userId ?? undefined,
+      targetPrice: effectiveAskingPrice ?? undefined,
+    },
+    options.onStage
+  );
 
   const output = engineResult.output;
   const audit = engineResult.auditTrace;

@@ -2,11 +2,10 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { runValuation, latestResultForCar, historyForCar } from '@/ai/valuation/engine';
-import { explainValuation } from '@/ai/valuation/explain';
+import { runIntelligenceValuation } from '@/ai/valuation/intelligence-engine';
+import { historyForCar } from '@/ai/valuation/engine';
 import { getTuning } from '@/ai/valuation/tuning';
 import { buildSpecFromBody } from '@/ai/valuation/request';
-import { matchMatrix } from '@/ai/valuation/similarity';
 import type { VehicleSpec } from '@/ai/valuation/types';
 
 export async function POST(request: NextRequest) {
@@ -42,85 +41,101 @@ export async function POST(request: NextRequest) {
     carId = built.carId;
     targetPrice = built.targetPrice;
 
-    const result = await runValuation(spec, { carId, userId: user.id, targetPrice });
+    const s24 = await runIntelligenceValuation(
+      { carId, spec },
+      { userId: user.id, askingPriceOverride: targetPrice }
+    );
 
-    if (result.status !== 'RELIABLE' && result.status !== 'LIMITED' && result.status !== 'APPROXIMATE') {
-      if (result.status === 'INSUFFICIENT') {
-        return successResponse({
-          status: 'INSUFFICIENT',
-          requestId: result.requestId,
-          reason: result.insufficientReason,
-          comparablesFound: result.comparables.length,
-          sources: result.outcomes,
-        });
-      }
-      return errorResponse(result.insufficientReason || 'فشل التحليل', 500);
-    }
-    if (!result.output) {
-      return errorResponse(result.insufficientReason || 'فشل التحليل', 500);
+    if (s24.status === 'INSUFFICIENT_DATA' || !s24.fairMarketValue) {
+      return successResponse({
+        status: 'INSUFFICIENT',
+        section24: s24,
+        reason: s24.warnings[0] || 'بيانات السوق غير كافية لإنتاج تقييم عادل موثوق',
+        comparablesFound: s24.marketEvidence.totalListings,
+        sources: [],
+      });
     }
 
-    // Explanation layer (numbers-fed; never blocks the report on failure).
-    const explanation = await explainValuation(spec, result.output).catch(() => null);
-    if (explanation) {
-      await prisma.valuationResult.updateMany({
-        where: { requestId: result.requestId },
-        data: { explanation },
-      }).catch(() => {});
-    }
-
-    const top = [...result.comparables]
-      .filter((c) => c.included)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 15)
-      .map((c) => ({
-        source: c.source, sourceLabel: c.sourceLabel, url: c.url,
-        title: `${c.brand} ${c.model} ${c.year ?? ''}`.trim(),
-        year: c.year, kilometers: c.kilometers, price: c.priceJod,
-        adjustedPrice: c.adjustedPrice, similarity: c.similarity,
-        simBreakdown: c.simBreakdown,
-        tier: c.tier, yearDiff: c.yearDiff, weight: Math.round(c.weight * 1000) / 1000,
-        adjustments: c.adjustments, ageDays: c.ageDays,
-        matrix: spec ? matchMatrix(spec, c) : [],
-      }));
+    const legacyReport = {
+      estimatedPrice: s24.fairMarketValue,
+      minPrice: s24.range.low ?? s24.fairMarketValue,
+      maxPrice: s24.range.high ?? s24.fairMarketValue,
+      grade: s24.status.toLowerCase(),
+      confidence: s24.confidence,
+      confidenceLabel: s24.confidence >= 70 ? 'مرتفعة' : s24.confidence >= 40 ? 'متوسطة' : 'محدودة',
+      confidenceReasons: s24.warnings,
+      comparablesUsed: s24.comparablesUsed.length,
+      comparablesFound: s24.marketEvidence.totalListings,
+      sourcesUsed: s24.marketEvidence.uniqueSources,
+      sources: [],
+      stats: { weightedMedian: s24.fairMarketValue },
+      factors: [],
+      explanation: s24.reasoning.join('\n'),
+      pipeline: [],
+      calculatedAt: new Date().toISOString(),
+      targetDiffPct: s24.pricePosition.differencePercent,
+    };
 
     return successResponse({
-      status: result.status,
-      requestId: result.requestId,
-      report: { ...result.output, explanation },
-      comparables: top,
-      rejected: result.comparables.filter((c) => !c.included).length,
-      sources: result.outcomes,
+      status: s24.status,
+      section24: s24,
+      report: legacyReport,
+      comparables: s24.comparablesUsed,
+      rejected: s24.marketEvidence.excludedListings,
+      sources: [],
     });
   } catch (e: any) {
     return errorResponse(e?.message || 'فشل التحليل', e?.status || 500);
   }
 }
 
-// GET /api/valuations?carId= — cached latest result + price history graph data.
+// GET /api/valuations?carId= — Section 24 intelligence valuation + price history graph data.
 export async function GET(request: NextRequest) {
   const carId = request.nextUrl.searchParams.get('carId');
   if (!carId) return errorResponse('carId مطلوب', 400);
   try {
-    const [latest, history] = await Promise.all([
-      latestResultForCar(carId),
-      historyForCar(carId),
+    const [s24, history] = await Promise.all([
+      runIntelligenceValuation({ carId }),
+      historyForCar(carId).catch(() => []),
     ]);
-    if (!latest) return successResponse({ status: 'NONE', latest: null, history });
+
+    if (s24.status === 'INSUFFICIENT_DATA' || !s24.fairMarketValue) {
+      return successResponse({
+        status: 'INSUFFICIENT',
+        section24: s24,
+        latest: null,
+        history,
+      });
+    }
+
+    const latest = {
+      estimatedPrice: s24.fairMarketValue,
+      minPrice: s24.range.low ?? s24.fairMarketValue,
+      maxPrice: s24.range.high ?? s24.fairMarketValue,
+      grade: s24.status.toLowerCase(),
+      confidence: s24.confidence,
+      confidenceLabel: s24.confidence >= 70 ? 'مرتفعة' : s24.confidence >= 40 ? 'متوسطة' : 'محدودة',
+      confidenceReasons: s24.warnings,
+      comparablesUsed: s24.comparablesUsed.length,
+      comparablesFound: s24.marketEvidence.totalListings,
+      sourcesUsed: s24.marketEvidence.uniqueSources,
+      sources: [],
+      stats: { weightedMedian: s24.fairMarketValue },
+      factors: [],
+      explanation: s24.reasoning.join('\n'),
+      pipeline: [],
+      calculatedAt: new Date().toISOString(),
+      targetDiffPct: s24.pricePosition.differencePercent,
+      comparables: s24.comparablesUsed,
+    };
+
     return successResponse({
       status: 'DONE',
-      latest: {
-        ...latest,
-        confidenceReasons: JSON.parse(latest.confidenceReasons || '[]'),
-        sources: JSON.parse(latest.sources || '[]'),
-        stats: JSON.parse(latest.stats || '{}'),
-        factors: JSON.parse(latest.factors || '[]'),
-        pipeline: JSON.parse(latest.pipeline || '[]'),
-        funnel: JSON.parse((latest as any).funnel || '[]'),
-      },
+      section24: s24,
+      latest,
       history,
     });
-  } catch {
-    return errorResponse('فشل التحميل', 500);
+  } catch (err: any) {
+    return errorResponse(err?.message || 'فشل التحميل', 500);
   }
 }
