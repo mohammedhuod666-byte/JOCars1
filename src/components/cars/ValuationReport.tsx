@@ -20,6 +20,11 @@ import {
   Sparkles,
   Copy,
   Check,
+  Layers,
+  Activity,
+  Globe,
+  Radio,
+  Sliders,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
@@ -28,6 +33,7 @@ import type {
   Section24ComparableUsed,
   Section24ComparableExcluded,
 } from '@/ai/valuation/intelligence-engine';
+import type { MarketSourceExecution, QualitativeMatchLevel, ValuationAuditTrace } from '@/ai/valuation/types';
 
 export function ValuationReport({
   carId,
@@ -40,13 +46,15 @@ export function ValuationReport({
 }) {
   const { token, isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'public' | 'admin'>('public');
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [stages, setStages] = useState<{ stageAr: string; detail: string; ms: number }[]>([]);
   const [explaining, setExplaining] = useState(false);
   const [expandedComp, setExpandedComp] = useState<number | null>(null);
+  const [adminExpandedComp, setAdminExpandedComp] = useState<number | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
-  const [showAudit, setShowAudit] = useState(false);
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [section24, setSection24] = useState<Section24OutputContract | null>(null);
   const [legacyReport, setLegacyReport] = useState<any>(null);
   const [history, setHistory] = useState<{ at: string; estimated: number }[]>([]);
@@ -148,42 +156,33 @@ export function ValuationReport({
         for (const part of parts) {
           const ev = part.match(/event:\s*(\w+)/)?.[1];
           const dm = part.match(/data:\s*([\s\S]*)/)?.[1];
-          if (!ev || dm === undefined) continue;
+          if (!ev || !dm) continue;
 
-          let d: any = null;
+          let data: any = {};
           try {
-            d = JSON.parse(dm);
+            data = JSON.parse(dm);
           } catch {
             continue;
           }
 
           if (ev === 'stage') {
-            setStages((prev) => [...prev.filter((s) => s.stageAr !== d.stageAr), d]);
+            setStages((prev) => [...prev, data]);
           } else if (ev === 'explaining') {
             setExplaining(true);
-          } else if (ev === 'done') {
+          } else if (ev === 'result') {
+            applyValuationData(data);
             finished = true;
-            if (d.status === 'RELIABLE' || d.status === 'LIMITED' || d.status === 'APPROXIMATE') {
-              applyValuationData(d);
-              toast.success(
-                d.status === 'RELIABLE'
-                  ? 'اكتمل التحليل — تقييم موثوق'
-                  : d.status === 'LIMITED'
-                  ? 'اكتمل التحليل — تقييم محدود'
-                  : 'اكتمل التحليل — تقدير تقريبي'
-              );
-              load();
-            } else if (d.status === 'INSUFFICIENT') {
-              setInsufficient(d.reason || 'البيانات غير كافية');
-            }
+          } else if (ev === 'insufficient') {
+            setInsufficient(data.reason || 'بيانات السوق غير كافية');
+            finished = true;
           } else if (ev === 'error') {
+            toast.error(data.message || 'حدث خطأ أثناء التحليل');
             finished = true;
-            toast.error(d.message || 'فشل التحليل');
           }
         }
       }
     } catch {
-      toast.error('تعذر الاتصال بمحرك التقييم');
+      toast.error('انقطع الاتصال بمحرك التحليل');
     } finally {
       setRunning(false);
       setExplaining(false);
@@ -234,6 +233,50 @@ export function ValuationReport({
   const compsExcluded: Section24ComparableExcluded[] = section24?.comparablesExcluded || [];
   const evidence = section24?.marketEvidence;
   const pricePos = section24?.pricePosition;
+  const audit: ValuationAuditTrace | undefined = section24?.auditTrace;
+  const marketSourceExecutions: MarketSourceExecution[] =
+    section24?.marketSourceExecutions || audit?.marketSourceExecutions || [];
+
+  function getQualitativeBadge(comp: Section24ComparableUsed) {
+    const match = comp.qualitativeMatch || (
+      comp.similarity >= 80 ? 'مطابقة قوية' :
+      comp.similarity >= 70 ? 'مطابقة جيدة' :
+      comp.similarity >= 55 ? 'مطابقة متوسطة' : 'مطابقة محدودة'
+    );
+
+    const colors: Record<QualitativeMatchLevel, string> = {
+      'مطابقة قوية': 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+      'مطابقة جيدة': 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+      'مطابقة متوسطة': 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+      'مطابقة محدودة': 'bg-slate-800 text-slate-400 border-slate-700',
+    };
+
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border inline-flex items-center gap-1.5 ${colors[match] || colors['مطابقة محدودة']}`}>
+        <span>{match}</span>
+        {comp.isPowertrainMismatch && (
+          <span className="text-[10px] text-amber-300 font-normal">(محرك مختلف)</span>
+        )}
+      </span>
+    );
+  }
+
+  function getExecutionStatusBadge(st: string) {
+    switch (st) {
+      case 'SEARCHED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">تم البحث بنجاح</span>;
+      case 'NO_RESULTS':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">لا نتائج متوافقة</span>;
+      case 'BLOCKED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">محمي / جدار حماية</span>;
+      case 'FAILED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">فشل الاستعلام</span>;
+      case 'DISABLED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">معطل</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">{st}</span>;
+    }
+  }
 
   return (
     <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
@@ -249,7 +292,7 @@ export function ValuationReport({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-white text-sm sm:text-base">
-                القيمة السوقية العادلة (تحليل AI)
+                تقرير التقييم العادل وتحليل السوق بالذكاء الاصطناعي
               </h3>
               {fmv && (
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${confBg} ${confColor}`}>
@@ -279,7 +322,7 @@ export function ValuationReport({
               <Scale className="w-12 h-12 text-slate-600 mx-auto" />
               <p className="text-slate-300 font-bold text-sm">لم يُحلل سعر هذه السيارة بعد</p>
               <p className="text-slate-400 text-xs max-w-md mx-auto">
-                يجمع المحرك الذكي إعلانات السوق الفعلية، ينظف الأسعار الصورية، ويحسب القيمة العادلة دون التأثر بسعر البائع.
+                يجمع المحرك الذكي إعلانات السوق الفعلية عبر 7 مصادر أردنية، ينظف الأسعار الصورية، ويحسب القيمة العادلة دون التأثر بسعر البائع.
               </p>
               <button
                 onClick={run}
@@ -332,633 +375,403 @@ export function ValuationReport({
           {/* Main Valuation Content */}
           {fmv && !running && (
             <>
-              {/* Market Reality Notice */}
-              <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-slate-300 text-xs flex items-center gap-2.5">
-                <Info className="w-4 h-4 text-blue-400 shrink-0" />
-                <span>
-                  ملاحظة سوقية: اعتمد التقييم على أسعار الإعلانات والعروض المتاحة في السوق الأردني، وليس بالضرورة أسعار البيع النهائية المنفذة.
-                </span>
-              </div>
-
-              {/* Status Alert if not full reliable */}
-              {status !== 'RELIABLE' && (
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-                  <span>
-                    {status === 'INSUFFICIENT_DIRECT_EVIDENCE'
-                      ? 'أدلة مباشرة غير كافية (غياب إعلانات لنفس سنة الصنع) — تم الاستناد إلى شواهد داعمة من سنوات أخرى بنطاق استرشادي واسع.'
-                      : status === 'LIMITED_MARKET_EVIDENCE'
-                      ? 'أدلة سوقية محدودة — استرشد بالنطاق السعري بحذر.'
-                      : status === 'APPROXIMATE'
-                      ? 'تقدير تقريبي جداً (عدد قليل من المقارنات) — استرشد به بحذر شديد.'
-                      : 'تقييم محدود — تمت الاستعانة بمقارنات أوسع نظراً لمحدودية المعروض المتطابق تماماً.'}
-                  </span>
-                </div>
-              )}
-
-              {/* 3 Core Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
-                  <p className="text-[11px] text-slate-400 mb-1 font-semibold">القيمة السوقية العادلة</p>
-                  <p className="text-2xl font-black text-white">
-                    {fmv.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
-                  </p>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
-                  <p className="text-[11px] text-slate-400 mb-1 font-semibold">النطاق السعري المتوقع</p>
-                  <p className="text-base sm:text-lg font-black text-white mt-1">
-                    {minPrice?.toLocaleString()} – {maxPrice?.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
-                  </p>
-                  {section24?.rangeDisclaimerAr && (
-                    <p className="text-[10px] text-amber-400/90 mt-1 font-medium leading-tight">
-                      ⚠️ {section24.rangeDisclaimerAr}
-                    </p>
-                  )}
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
-                  <p className="text-[11px] text-slate-400 mb-1 font-semibold">درجة الموثوقية</p>
-                  <p className={`text-2xl font-black ${confColor}`}>
-                    {confidence}%
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{statusLabel}</p>
-                </div>
-              </div>
-
-              {/* Asking Price vs FMV Position */}
-              {pricePos && pricePos.differencePercent !== null && (
-                <div
-                  className={`p-4 rounded-2xl text-xs sm:text-sm border flex items-start gap-3 ${
-                    pricePos.classification === 'FAIR'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                      : pricePos.classification === 'BELOW_MARKET'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                  }`}
-                >
-                  <Scale className="w-5 h-5 shrink-0 mt-0.5" />
-                  <div className="space-y-1">
-                    <div>
-                      <span className="font-black">موقف السعر المطلوب ({askingPrice.toLocaleString()} د.أ): </span>
-                      {pricePos.classification === 'FAIR' && (
-                        <span>السعر المطلوب ضمن النطاق العادل للقيمة السوقية.</span>
-                      )}
-                      {pricePos.classification === 'BELOW_MARKET' && (
-                        <span>
-                          السعر المطلوب أقل من القيمة السوقية العادلة بـ{' '}
-                          {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (
-                          {Math.abs(pricePos.differencePercent || 0)}%) — يعتبر فرصة سعرية ممتازة.
-                        </span>
-                      )}
-                      {pricePos.classification === 'ABOVE_MARKET' && (
-                        <span>
-                          السعر المطلوب أعلى من القيمة السوقية العادلة بـ{' '}
-                          {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (+
-                          {pricePos.differencePercent}%) — السعر المطلوب أعلى من تقدير السوق العادل.
-                        </span>
-                      )}
-                    </div>
-                    {pricePos.percentileLabel && (
-                      <div className="text-[11px] text-slate-300 font-medium bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-700/50 inline-block">
-                        {pricePos.percentileLabel}
-                      </div>
+              {/* Tab Selector: Public Report vs Admin Audit */}
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('public')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'public'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>التقرير العام للمستخدم</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('admin')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      activeTab === 'admin'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>لوحة التدقيق التقني (Admin Audit)</span>
+                    {marketSourceExecutions.length > 0 && (
+                      <span className="text-[10px] bg-purple-950 px-1.5 py-0.5 rounded-full border border-purple-400/40 text-purple-200">
+                        {marketSourceExecutions.length} مصادر
+                      </span>
                     )}
-                  </div>
+                  </button>
                 </div>
-              )}
-
-              {/* Market Evidence Summary Bar */}
-              {evidence && (
-                <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
-                  <p className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
-                    <Database className="w-4 h-4 text-blue-400" />
-                    <span>إحصائيات الأدلة السوقية (Market Evidence)</span>
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
-                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                      <p className="text-[10px] text-slate-400">إجمالي المفحوص</p>
-                      <p className="text-sm font-bold text-white mt-0.5">{evidence.totalListings} إعلان</p>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                      <p className="text-[10px] text-slate-400">المقارنات المعتمدة</p>
-                      <p className="text-sm font-bold text-emerald-400 mt-0.5">{evidence.usedComparables} سيارات</p>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                      <p className="text-[10px] text-slate-400">المستبعدة والحظر الصوري</p>
-                      <p className="text-sm font-bold text-rose-400 mt-0.5">{evidence.excludedListings} إعلان</p>
-                    </div>
-                    <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                      <p className="text-[10px] text-slate-400">المصادر المستقلة</p>
-                      <p className="text-sm font-bold text-cyan-400 mt-0.5">{evidence.uniqueSources} مصادر</p>
-                    </div>
-                  </div>
+                <div className="text-[11px] text-slate-500 hidden sm:block">
+                  {activeTab === 'public' ? 'عرض نظيف ومباشر للمستهلك' : 'تدقيق حسابي ومصادري كامل'}
                 </div>
-              )}
+              </div>
 
-              {/* Market Insights & Reasoning */}
-              {((section24?.marketInsights && section24.marketInsights.length > 0) || (section24?.reasoning && section24.reasoning.length > 0)) && (
-                <div className="space-y-2 p-4 rounded-2xl bg-slate-900/50 border border-slate-800">
-                  <p className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
-                    <Info className="w-4 h-4 text-cyan-400" />
-                    <span>الرؤى والتحليل السوقي</span>
-                  </p>
-                  <div className="space-y-1.5 text-xs text-slate-300">
-                    {(section24?.marketInsights || []).map((insight, idx) => (
-                      <p key={`ins-${idx}`} className="flex items-start gap-2">
-                        <span className="text-blue-400 font-bold">•</span>
-                        <span>{insight}</span>
-                      </p>
-                    ))}
-                    {(section24?.reasoning || []).map((reason, idx) => (
-                      <p key={`rea-${idx}`} className="flex items-start gap-2 text-slate-400">
-                        <span className="text-slate-500 font-bold">•</span>
-                        <span>{reason}</span>
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* GLM Intelligence Insights */}
-              {section24?.glmIntelligence && (
-                <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950/30 border border-indigo-500/20">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-white text-xs flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-indigo-400" />
-                      <span>تحليل الذكاء الاصطناعي وتفسير السوق</span>
-                    </p>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
-                      {section24.glmIntelligence.generatedBy === 'GLM_MODEL' ? 'GLM Intelligence' : 'تحليل رياضي مؤكد'}
+              {/* ────────────────────────────────────────────────────────── */}
+              {/* VIEW 1: PUBLIC CONSUMER REPORT (Clean, Professional)       */}
+              {/* ────────────────────────────────────────────────────────── */}
+              {activeTab === 'public' && (
+                <div className="space-y-6">
+                  {/* Market Reality Notice */}
+                  <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-slate-300 text-xs flex items-center gap-2.5">
+                    <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>
+                      ملاحظة سوقية: يعتمد التقييم على أسعار الإعلانات والعروض المتاحة في السوق الأردني، وليس بالضرورة أسعار البيع النهائية المنفذة.
                     </span>
                   </div>
 
-                  {section24.glmIntelligence.marketSummary && (
-                    <p className="text-xs text-slate-200 leading-relaxed bg-slate-950/40 p-3 rounded-xl border border-slate-800">
-                      {section24.glmIntelligence.marketSummary}
-                    </p>
+                  {/* Status Alert if not full reliable */}
+                  {status !== 'RELIABLE' && (
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2.5">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>
+                        {status === 'INSUFFICIENT_DIRECT_EVIDENCE'
+                          ? 'أدلة مباشرة غير كافية (غياب إعلانات لنفس سنة الصنع) — تم الاستناد إلى شواهد داعمة من سنوات أخرى بنطاق استرشادي واسع.'
+                          : status === 'LIMITED_MARKET_EVIDENCE'
+                          ? 'أدلة سوقية محدودة — استرشد بالنطاق السعري بحذر.'
+                          : status === 'APPROXIMATE'
+                          ? 'تقدير تقريبي جداً (عدد قليل من المقارنات) — استرشد به بحذر شديد.'
+                          : 'تقييم محدود — تمت الاستعانة بمقارنات أوسع نظراً لمحدودية المعروض المتطابق تماماً.'}
+                      </span>
+                    </div>
                   )}
 
-                  {section24.glmIntelligence.keyDrivers && section24.glmIntelligence.keyDrivers.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-bold text-slate-400">العوامل والمحركات الرئيسية للقيمة:</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {section24.glmIntelligence.keyDrivers.map((driver, dIdx) => (
-                          <div key={dIdx} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-300 space-y-1">
-                            <p className="leading-relaxed">{driver.text}</p>
-                            {driver.evidence && (
-                              <div className="inline-flex items-center gap-1 text-[10px] font-mono text-cyan-400 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/40">
-                                <span>دليل:</span>
-                                <span>{driver.evidence.metric}</span>
-                                <span>=</span>
-                                <span className="font-bold">{String(driver.evidence.value)}</span>
-                              </div>
-                            )}
+                  {/* 3 Core Stats Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
+                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">القيمة السوقية العادلة</p>
+                      <p className="text-2xl font-black text-white">
+                        {fmv.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
+                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">النطاق الاسترشادي للقيمة</p>
+                      <p className="text-base sm:text-lg font-black text-white mt-1">
+                        {minPrice?.toLocaleString()} – {maxPrice?.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-medium leading-tight">
+                        {section24?.rangeDisclaimerAr || 'بناءً على عروض السوق الحالية'}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
+                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">درجة الموثوقية</p>
+                      <p className={`text-2xl font-black ${confColor}`}>
+                        {confidence}%
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{statusLabel}</p>
+                    </div>
+                  </div>
+
+                  {/* Asking Price vs FMV Position */}
+                  {pricePos && pricePos.differencePercent !== null && (
+                    <div
+                      className={`p-4 rounded-2xl text-xs sm:text-sm border flex items-start gap-3 ${
+                        pricePos.classification === 'FAIR'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                          : pricePos.classification === 'BELOW_MARKET'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                      }`}
+                    >
+                      <Scale className="w-5 h-5 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-black">موقف السعر المطلوب ({askingPrice.toLocaleString()} د.أ): </span>
+                          {pricePos.classification === 'FAIR' && (
+                            <span>السعر المطلوب ضمن النطاق العادل للقيمة السوقية.</span>
+                          )}
+                          {pricePos.classification === 'BELOW_MARKET' && (
+                            <span>
+                              السعر المطلوب أقل من القيمة السوقية العادلة بـ{' '}
+                              {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (
+                              {Math.abs(pricePos.differencePercent || 0)}%) — يعتبر فرصة سعرية ممتازة.
+                            </span>
+                          )}
+                          {pricePos.classification === 'ABOVE_MARKET' && (
+                            <span>
+                              السعر المطلوب أعلى من القيمة السوقية العادلة بـ{' '}
+                              {Math.abs(pricePos.differenceAmount || 0).toLocaleString()} د.أ (+
+                              {pricePos.differencePercent}%) — السعر المطلوب أعلى من تقدير السوق العادل.
+                            </span>
+                          )}
+                        </div>
+                        {pricePos.percentileLabel && (
+                          <div className="text-[11px] text-slate-300 font-medium bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-700/50 inline-block">
+                            {pricePos.percentileLabel}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   )}
 
-                  {section24.glmIntelligence.dataWarnings && section24.glmIntelligence.dataWarnings.length > 0 && (
-                    <div className="space-y-1 pt-1">
-                      {section24.glmIntelligence.dataWarnings.map((dw, wIdx) => (
-                        <div key={wIdx} className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
-                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
-                          <span>{dw.text}</span>
+                  {/* Market Evidence Summary Bar */}
+                  {evidence && (
+                    <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2">
+                      <p className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-blue-400" />
+                        <span>إحصائيات الأدلة السوقية</span>
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <p className="text-[10px] text-slate-400">إجمالي العروض المفحوصة</p>
+                          <p className="text-sm font-bold text-white mt-0.5">{evidence.totalListings} إعلان</p>
                         </div>
-                      ))}
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <p className="text-[10px] text-slate-400">المقارنات المعتمدة</p>
+                          <p className="text-sm font-bold text-emerald-400 mt-0.5">{evidence.usedComparables} سيارات</p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <p className="text-[10px] text-slate-400">العروض المستبعدة والصورية</p>
+                          <p className="text-sm font-bold text-rose-400 mt-0.5">{evidence.excludedListings} إعلان</p>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <p className="text-[10px] text-slate-400">المصادر المستقلة</p>
+                          <p className="text-sm font-bold text-cyan-400 mt-0.5">{evidence.uniqueSources} مصادر</p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {section24.glmIntelligence.limitations && section24.glmIntelligence.limitations.length > 0 && (
-                    <div className="pt-1">
-                      <p className="text-[11px] font-bold text-slate-400 mb-1">محددات التقييم:</p>
-                      <ul className="list-disc list-inside text-[11px] text-slate-400 space-y-0.5">
-                        {section24.glmIntelligence.limitations.map((lim, lIdx) => (
-                          <li key={lIdx}>{lim}</li>
-                        ))}
-                      </ul>
+                  {/* AI & GLM Market Explanation */}
+                  {section24?.glmIntelligence && (
+                    <div className="space-y-3 p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950/30 border border-indigo-500/20">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-white text-xs flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4 text-indigo-400" />
+                          <span>تحليل الذكاء الاصطناعي وتفسير السوق</span>
+                        </p>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+                          {section24.glmIntelligence.generatedBy === 'GLM_MODEL' ? 'GLM Intelligence' : 'تحليل رياضي مؤكد'}
+                        </span>
+                      </div>
+
+                      {section24.glmIntelligence.marketSummary && (
+                        <p className="text-xs text-slate-200 leading-relaxed bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+                          {section24.glmIntelligence.marketSummary}
+                        </p>
+                      )}
+
+                      {section24.glmIntelligence.keyDrivers && section24.glmIntelligence.keyDrivers.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-bold text-slate-400">العوامل الرئيسية المؤثرة في القيمة:</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {section24.glmIntelligence.keyDrivers.map((driver, dIdx) => (
+                              <div key={dIdx} className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-300 space-y-1">
+                                <p className="leading-relaxed">{driver.text}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {section24.glmIntelligence.dataWarnings && section24.glmIntelligence.dataWarnings.length > 0 && (
+                        <div className="space-y-1 pt-1">
+                          {section24.glmIntelligence.dataWarnings.map((dw, wIdx) => (
+                            <div key={wIdx} className="flex items-start gap-2 text-[11px] text-amber-300/90 bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                              <span>{dw.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Comparables Used Table with Match Matrix */}
-              {compsUsed.length > 0 && (
-                <div className="overflow-x-auto space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
-                      <FileCheck className="w-4 h-4 text-emerald-400" />
-                      <span>السيارات المقارنة المعتمدة في الحساب ({compsUsed.length})</span>
-                    </p>
-                    <span className="text-[11px] text-slate-400">انقر على أي سيارة لعرض مصفوفة المطابقة الفنية</span>
-                  </div>
+                  {/* Public Comparables Table (Clean: Original Price Only, Qualitative Match, No Math) */}
+                  {compsUsed.length > 0 && (
+                    <div className="overflow-x-auto space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-slate-300 text-xs flex items-center gap-1.5">
+                          <FileCheck className="w-4 h-4 text-emerald-400" />
+                          <span>السيارات المقارنة في السوق ({compsUsed.length})</span>
+                        </p>
+                        <span className="text-[11px] text-slate-400">انقر على أي سيارة لعرض المواصفات ورابط المصدر</span>
+                      </div>
 
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-slate-500 text-right bg-slate-900/80">
-                        <th className="p-2.5 rounded-r-xl">السيارة</th>
-                        <th className="p-2.5">السنة</th>
-                        <th className="p-2.5">الممشى</th>
-                        <th className="p-2.5">السعر الأصلي</th>
-                        <th className="p-2.5">بعد التعديل</th>
-                        <th className="p-2.5">المطابقة</th>
-                        <th className="p-2.5 rounded-l-xl">المصدر</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                      {compsUsed.slice(0, 10).map((c, i) => (
-                        <Fragment key={c.id || i}>
-                          <tr
-                            className="text-slate-300 cursor-pointer hover:bg-slate-800/50 transition-colors"
-                            onClick={() => setExpandedComp(expandedComp === i ? null : i)}
-                            title="اضغط لتفاصيل المطابقة الفنية"
-                          >
-                            <td className="p-2.5 font-semibold">
-                              <span className="text-blue-400 ml-1">{expandedComp === i ? '▾' : '▸'}</span>{' '}
-                              {c.title}
-                            </td>
-                            <td className="p-2.5">{c.year || '—'}</td>
-                            <td className="p-2.5">
-                              {c.mileage ? `${c.mileage.toLocaleString()} كم` : '—'}
-                            </td>
-                            <td className="p-2.5">{c.originalPrice?.toLocaleString()} د.أ</td>
-                            <td className="p-2.5 font-bold text-white">
-                              {c.adjustedPrice ? `${c.adjustedPrice.toLocaleString()} د.أ` : `${c.originalPrice?.toLocaleString()} د.أ`}
-                            </td>
-                            <td className="p-2.5">
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30">
-                                {c.similarity}%
-                              </span>
-                            </td>
-                            <td className="p-2.5">
-                              {c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE' ? (
-                                <span
-                                  className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"
-                                  title="تم التحقق من هذا الإعلان كدليل تاريخي، لكن الرابط لم يعد متاحاً على المصدر الأصلي"
-                                >
-                                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-                                  <span>{c.source}</span>
-                                  <span className="text-[10px] text-amber-400/80">(غير متاح)</span>
-                                </span>
-                              ) : c.urlStatus === 'BLOCKED' ? (
-                                <span
-                                  className="inline-flex items-center gap-1 text-slate-300 text-[11px] font-medium bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
-                                  title="المصدر محمي بجدار حماية، تم الاحتفاظ بالدليل الأصلي"
-                                >
-                                  <ShieldCheck className="w-3 h-3 text-slate-400 shrink-0" />
-                                  <span>{c.source}</span>
-                                  <span className="text-[10px] text-slate-400">(محمي)</span>
-                                </span>
-                              ) : (c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') ? (
-                                <a
-                                  href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-blue-400 hover:underline inline-flex items-center gap-1 font-semibold"
-                                  title={c.urlStatus === 'REDIRECTED' ? 'تم التوجيه للرابط المعتمد' : 'رابط نشط تم التحقق منه'}
-                                >
-                                  {c.source} <ExternalLink className="w-3 h-3" />
-                                  {c.urlStatus === 'REDIRECTED' && (
-                                    <span className="text-[9px] text-blue-300/80 bg-blue-500/15 px-1 rounded border border-blue-500/30">معاد توجيهه</span>
-                                  )}
-                                </a>
-                              ) : c.sourceUrl ? (
-                                <Link
-                                  href={c.sourceUrl}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="text-blue-400 hover:underline font-semibold"
-                                >
-                                  {c.source}
-                                </Link>
-                              ) : (
-                                <span className="text-slate-400">{c.source}</span>
-                              )}
-                            </td>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-slate-400 text-right bg-slate-900/90 border-b border-slate-800">
+                            <th className="p-3 rounded-r-xl">السيارة</th>
+                            <th className="p-3">السنة</th>
+                            <th className="p-3">الممشى</th>
+                            <th className="p-3">السعر المعلن</th>
+                            <th className="p-3">المطابقة</th>
+                            <th className="p-3 rounded-l-xl">المصدر</th>
                           </tr>
-
-                          {/* Expanded Comparable Details & Match Matrix */}
-                          {expandedComp === i && (
-                            <tr className="bg-slate-900/90 text-xs text-slate-300">
-                              <td colSpan={7} className="p-4 space-y-3 border-b border-slate-800">
-                                <div className="flex flex-wrap items-center gap-3 text-slate-400 text-[11px] pb-2 border-b border-slate-800">
-                                  <span>
-                                    المستوى الهرمي:{' '}
-                                    <strong className="text-white">
-                                      {c.tierLabel || (c.tier === 1
-                                        ? 'Tier 1 (نفس الموديل والسنة والفئة)'
-                                        : c.tier === 2
-                                        ? 'Tier 2 (نفس الموديل والسنة)'
-                                        : c.tier === 3
-                                        ? 'Tier 3 (نفس الموديل مع فرق سنة ±1)'
-                                        : 'Tier 4 (شواهد داعمة من نفس الموديل بسنوات أبعد)')}
-                                    </strong>
-                                  </span>
-                                  <span>•</span>
-                                  <span>
-                                    الوزن الرياضي: <strong className="text-white">{typeof c.weight === 'number' ? c.weight.toFixed(3) : c.weight}</strong>
-                                    {c.contributionPercent !== undefined && (
-                                      <span className="text-emerald-400 font-bold mr-1">
-                                        ({c.contributionPercent}% من التقييم)
-                                      </span>
-                                    )}
-                                  </span>
-                                </div>
-
-                                {/* Source Evidence & Traceability Card */}
-                                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-2">
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <FileCheck className="w-4 h-4 text-blue-400" />
-                                      <span className="font-bold text-slate-200 text-xs">بطاقة توثيق الدليل والمصدر (Source Evidence Card)</span>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                                      <span className={`px-2 py-0.5 rounded font-medium border ${
-                                        c.evidenceStatus === 'VERIFIED_AT_COLLECTION'
-                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                          : c.evidenceStatus === 'MANUAL_ENTRY'
-                                          ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                                      }`}>
-                                        {c.evidenceStatus === 'VERIFIED_AT_COLLECTION'
-                                          ? 'موثق وقت الجمع'
-                                          : c.evidenceStatus === 'MANUAL_ENTRY'
-                                          ? 'إدخال يدوي مدقق'
-                                          : 'شاهد سوقي مجمع'}
-                                      </span>
-                                      <span className={`px-2 py-0.5 rounded font-medium border ${
-                                        c.urlStatus === 'VALID'
-                                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                          : c.urlStatus === 'REDIRECTED'
-                                          ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                                          : c.urlStatus === 'BLOCKED'
-                                          ? 'bg-slate-800 text-slate-300 border-slate-700'
-                                          : c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE'
-                                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                                      }`}>
-                                        {c.urlStatus === 'VALID'
-                                          ? 'الرابط نشط وصالح (200 OK)'
-                                          : c.urlStatus === 'REDIRECTED'
-                                          ? 'تم التحويل للرابط الرسمي (301/302)'
-                                          : c.urlStatus === 'NOT_FOUND'
-                                          ? 'الرابط غير متاح (404/410)'
-                                          : c.urlStatus === 'UNAVAILABLE'
-                                          ? 'المحتوى غير متاح'
-                                          : c.urlStatus === 'BLOCKED'
-                                          ? 'المصدر محمي بجدار حماية'
-                                          : 'حالة الرابط غير محددة'}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* Inactive / 404 URL Alert Banner */}
-                                  {(c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE') && (
-                                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[11px] flex items-start gap-2">
-                                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="font-semibold text-amber-300">تنبيه توثيقي:</p>
-                                        <p className="text-amber-200/90 leading-relaxed">
-                                          هذا الإعلان تم جمعه كدليل سوقي تاريخي موثق، لكن الرابط الأصلي لم يعد متاحاً على موقع المصدر (قد يكون الإعلان حذف أو انتهت صلاحيته). تم الاحتفاظ به كدليل تاريخي لحساب القيمة العادلة دون تزييف أو افتراض.
-                                        </p>
-                                      </div>
-                                    </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {compsUsed.slice(0, 10).map((c, i) => (
+                            <Fragment key={c.id || i}>
+                              <tr
+                                className="text-slate-300 cursor-pointer hover:bg-slate-800/50 transition-colors"
+                                onClick={() => setExpandedComp(expandedComp === i ? null : i)}
+                                title="اضغط للتفاصيل والمصدر"
+                              >
+                                <td className="p-3 font-semibold">
+                                  <span className="text-blue-400 ml-1.5">{expandedComp === i ? '▾' : '▸'}</span>{' '}
+                                  {c.title}
+                                </td>
+                                <td className="p-3">{c.year || '—'}</td>
+                                <td className="p-3">
+                                  {c.mileage ? `${c.mileage.toLocaleString()} كم` : '—'}
+                                </td>
+                                <td className="p-3 font-bold text-white">
+                                  {(c.originalPrice || c.rawPrice)?.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">د.أ</span>
+                                </td>
+                                <td className="p-3">
+                                  {getQualitativeBadge(c)}
+                                </td>
+                                <td className="p-3">
+                                  {c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE' ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"
+                                      title="دليل تاريخي موثق، والرابط لم يعد متاحاً على المصدر"
+                                    >
+                                      <span>{c.source}</span>
+                                      <span className="text-[9px] text-amber-400/80">(أرشيف)</span>
+                                    </span>
+                                  ) : c.urlStatus === 'BLOCKED' ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-slate-300 text-[11px] font-medium bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
+                                    >
+                                      <span>{c.source}</span>
+                                      <span className="text-[9px] text-slate-400">(محمي)</span>
+                                    </span>
+                                  ) : (c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') ? (
+                                    <a
+                                      href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-blue-400 hover:underline inline-flex items-center gap-1 font-semibold"
+                                    >
+                                      {c.source} <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  ) : c.sourceUrl ? (
+                                    <Link
+                                      href={c.sourceUrl}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-blue-400 hover:underline font-semibold"
+                                    >
+                                      {c.source}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-slate-400">{c.source}</span>
                                   )}
+                                </td>
+                              </tr>
 
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-300 pt-1">
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">المصدر:</span>
-                                        <span className="font-semibold text-white">{c.source}</span>
+                              {/* Public Drawer (Clean: Specs + Source Evidence Card only) */}
+                              {expandedComp === i && (
+                                <tr className="bg-slate-900/95 text-xs text-slate-300">
+                                  <td colSpan={6} className="p-4 space-y-3 border-b border-slate-800">
+                                    <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-800">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-slate-400">درجة المطابقة:</span>
+                                        {getQualitativeBadge(c)}
                                       </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">تاريخ الجمع:</span>
-                                        <span className="font-mono text-slate-200">
-                                          {c.sourceSnapshot?.collectedAt
-                                            ? new Date(c.sourceSnapshot.collectedAt).toLocaleDateString('ar-JO', { year: 'numeric', month: 'short', day: 'numeric' })
-                                            : 'تاريخ الجمع الأولي'}
-                                        </span>
+                                      {c.powertrainNote && (
+                                        <div className="text-[11px] text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                                          ⚠️ {c.powertrainNote}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Specifications pills */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                                        <span className="text-[10px] text-slate-400 block">السنة</span>
+                                        <span className="font-bold text-white">{c.year || 'غير محدد'}</span>
                                       </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">آخر تحقق من الرابط:</span>
-                                        <span className="font-mono text-slate-200">
-                                          {c.urlVerifiedAt
-                                            ? new Date(c.urlVerifiedAt).toLocaleDateString('ar-JO', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                            : 'تم التحقق مؤخراً'}
-                                        </span>
+                                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                                        <span className="text-[10px] text-slate-400 block">الممشى</span>
+                                        <span className="font-bold text-white">{c.mileage ? `${c.mileage.toLocaleString()} كم` : 'غير محدد'}</span>
+                                      </div>
+                                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                                        <span className="text-[10px] text-slate-400 block">السعر المعلن</span>
+                                        <span className="font-bold text-white">{(c.originalPrice || c.rawPrice)?.toLocaleString()} د.أ</span>
+                                      </div>
+                                      <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                                        <span className="text-[10px] text-slate-400 block">المصدر</span>
+                                        <span className="font-bold text-white">{c.source}</span>
                                       </div>
                                     </div>
 
-                                    <div className="space-y-1.5">
-                                      <div>
-                                        <span className="text-slate-400 block mb-0.5">الرابط المعتمد:</span>
-                                        {c.urlStatus === 'VALID' || c.urlStatus === 'REDIRECTED' ? (
-                                          <a
-                                            href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-400 underline font-mono text-[10px] break-all inline-flex items-center gap-1 hover:text-blue-300"
-                                          >
+                                    {/* Source Evidence Card */}
+                                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <FileCheck className="w-4 h-4 text-blue-400" />
+                                          <span className="font-bold text-slate-200 text-xs">بطاقة توثيق الدليل والمصدر (Source Evidence Card)</span>
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
+                                          c.urlStatus === 'VALID'
+                                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                            : c.urlStatus === 'REDIRECTED'
+                                            ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                                            : c.urlStatus === 'BLOCKED'
+                                            ? 'bg-slate-800 text-slate-300 border-slate-700'
+                                            : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                        }`}>
+                                          {c.urlStatus === 'VALID'
+                                            ? 'رابط نشط وصالح'
+                                            : c.urlStatus === 'REDIRECTED'
+                                            ? 'رابط معاد توجيهه للمنشور'
+                                            : c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE'
+                                            ? 'إعلان مؤرشف (الرابط لم يعد متاحاً)'
+                                            : 'المصدر محمي'}
+                                        </span>
+                                      </div>
+
+                                      {/* Link box */}
+                                      <div className="flex items-center gap-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                                        <span className="text-[10px] text-slate-400">الرابط:</span>
+                                        {(c.finalUrl || c.canonicalUrl || c.sourceUrl) ? (
+                                          <span className="text-slate-300 font-mono text-[10px] break-all select-all flex-1">
                                             {c.finalUrl || c.canonicalUrl || c.sourceUrl}
-                                            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-                                          </a>
+                                          </span>
                                         ) : (
-                                          <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800">
-                                            <span className="text-slate-400 font-mono text-[10px] break-all select-all flex-1">
-                                              {c.canonicalUrl || c.sourceUrl || 'لا يوجد رابط'}
-                                            </span>
-                                            {(c.canonicalUrl || c.sourceUrl) && (
-                                              <button
-                                                type="button"
-                                                onClick={() => copyToClipboard(c.canonicalUrl || c.sourceUrl!)}
-                                                className="text-slate-400 hover:text-white p-1"
-                                                title="نسخ الرابط"
+                                          <span className="text-slate-500 text-[10px] flex-1">لا يوجد رابط مباشر متاح</span>
+                                        )}
+                                        {(c.finalUrl || c.canonicalUrl || c.sourceUrl) && (
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                              type="button"
+                                              onClick={() => copyToClipboard(c.finalUrl || c.canonicalUrl || c.sourceUrl!)}
+                                              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
+                                              title="نسخ الرابط"
+                                            >
+                                              {copiedUrl === (c.finalUrl || c.canonicalUrl || c.sourceUrl) ? (
+                                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                              ) : (
+                                                <Copy className="w-3.5 h-3.5" />
+                                              )}
+                                            </button>
+                                            {(c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') && (
+                                              <a
+                                                href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-400 hover:text-blue-300 p-1 rounded hover:bg-slate-800"
+                                                title="فتح الرابط الأصلي"
                                               >
-                                                {copiedUrl === (c.canonicalUrl || c.sourceUrl) ? (
-                                                  <Check className="w-3 h-3 text-emerald-400" />
-                                                ) : (
-                                                  <Copy className="w-3 h-3" />
-                                                )}
-                                              </button>
+                                                <ExternalLink className="w-3.5 h-3.5" />
+                                              </a>
                                             )}
                                           </div>
                                         )}
                                       </div>
-
-                                      {c.sourceUrl && c.sourceUrl !== (c.finalUrl || c.canonicalUrl) && (
-                                        <div>
-                                          <span className="text-slate-400 block mb-0.5">الرابط الأصلي عند الجمع:</span>
-                                          <div className="flex items-center gap-1 bg-slate-900/60 px-2 py-0.5 rounded border border-slate-800/60">
-                                            <span className="text-slate-400 font-mono text-[9px] break-all select-all flex-1">
-                                              {c.sourceUrl}
-                                            </span>
-                                            <button
-                                              type="button"
-                                              onClick={() => copyToClipboard(c.sourceUrl!)}
-                                              className="text-slate-400 hover:text-white p-0.5"
-                                              title="نسخ الرابط الأصلي"
-                                            >
-                                              {copiedUrl === c.sourceUrl ? (
-                                                <Check className="w-2.5 h-2.5 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="w-2.5 h-2.5" />
-                                              )}
-                                            </button>
-                                          </div>
-                                        </div>
-                                      )}
                                     </div>
-                                  </div>
-                                </div>
-
-                                {/* Weight Breakdown Multi-Factor Chips */}
-                                {c.weightBreakdown && (
-                                  <div className="space-y-1">
-                                    <p className="text-[11px] font-bold text-slate-400">تفكيك الوزن الرياضي (Multi-Factor Breakdown):</p>
-                                    <div className="flex flex-wrap gap-1.5 text-[10px]">
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        الهوية: <strong>{c.weightBreakdown.identityWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        السنة: <strong>{c.weightBreakdown.yearWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        المواصفات: <strong>{c.weightBreakdown.technicalWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        الممشى: <strong>{c.weightBreakdown.mileageWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        اكتمال البيانات: <strong>{c.weightBreakdown.completenessWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        جودة المصدر: <strong>{c.weightBreakdown.sourceQualityWeight}</strong>
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-300">
-                                        الحداثة: <strong>{c.weightBreakdown.recencyWeight}</strong>
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Mathematical Traceable Adjustments */}
-                                {c.adjustmentsList && c.adjustmentsList.length > 0 && (
-                                  <div className="space-y-1.5 pt-1">
-                                    <p className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
-                                      <span>التعديلات السعرية القابلة للتدقيق (Traceable Adjustments):</span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        السعر الأصلي: {c.originalPrice?.toLocaleString()} د.أ ← المعدل: {c.adjustedPrice?.toLocaleString()} د.أ
-                                      </span>
-                                    </p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                                      {c.adjustmentsList.map((adj, aIdx) => (
-                                        <div key={aIdx} className="p-2 rounded-xl bg-slate-950 border border-slate-800 text-[11px] space-y-1">
-                                          <div className="flex items-center justify-between">
-                                            <span className="font-bold text-slate-200">{adj.factorAr}</span>
-                                            <div className="flex items-center gap-1.5">
-                                              <span className={`font-mono font-bold ${adj.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {adj.delta > 0 ? `+${adj.delta.toLocaleString()}` : adj.delta.toLocaleString()} د.أ
-                                              </span>
-                                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                                                adj.provenance === 'MARKET_DERIVED'
-                                                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                              }`}>
-                                                {adj.provenance === 'MARKET_DERIVED' ? 'سوقي مشتق' : 'معيار متحفظ'}
-                                              </span>
-                                            </div>
-                                          </div>
-                                          <p className="text-[10px] text-slate-400">{adj.reason}</p>
-                                          {adj.formula && (
-                                            <p className="text-[9px] font-mono text-slate-500 dir-ltr text-right">{adj.formula}</p>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Detailed Match Matrix Grid */}
-                                {c.matchMatrix && c.matchMatrix.length > 0 && (
-                                  <div className="space-y-1.5">
-                                    <p className="font-bold text-slate-300 text-xs">
-                                      مصفوفة المطابقة الفنية (Match Matrix):
-                                    </p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
-                                      {c.matchMatrix.map((m, mIdx) => {
-                                        const isMatch = m.verdict === 'MATCH';
-                                        const isClose = m.verdict === 'CLOSE';
-                                        const isDiff = m.verdict === 'DIFFERENT';
-                                        return (
-                                          <div
-                                            key={mIdx}
-                                            className={`p-2 rounded-xl border text-[11px] space-y-0.5 ${
-                                              isMatch
-                                                ? 'bg-emerald-500/5 border-emerald-500/30 text-emerald-300'
-                                                : isClose
-                                                ? 'bg-amber-500/5 border-amber-500/30 text-amber-300'
-                                                : isDiff
-                                                ? 'bg-rose-500/5 border-rose-500/30 text-rose-300'
-                                                : 'bg-slate-950 border-slate-800 text-slate-400'
-                                            }`}
-                                          >
-                                            <div className="flex items-center justify-between font-bold">
-                                              <span>{m.factorAr}</span>
-                                              <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold">
-                                                {isMatch ? 'مطابق' : isClose ? 'متقارب' : isDiff ? 'مختلف' : 'غير محدد'}
-                                              </span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 truncate">
-                                              {m.target} ← {m.comp}
-                                            </p>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Excluded Comparables Toggle Section */}
-              {compsExcluded.length > 0 && (
-                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => setShowExcluded(!showExcluded)}
-                      className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5"
-                    >
-                      <FilterX className="w-4 h-4 text-rose-400" />
-                      <span>الإعلانات المستبعدة وفحص الأسعار الصورية ({compsExcluded.length})</span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExcluded ? 'rotate-180' : ''}`} />
-                    </button>
-                    <span className="text-[10px] text-slate-500">حماية من التلاعب وتسريب الأسعار</span>
-                  </div>
-
-                  {showExcluded && (
-                    <div className="overflow-x-auto pt-2">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-slate-500 text-right bg-slate-950">
-                            <th className="p-2">الإعلان</th>
-                            <th className="p-2">السعر</th>
-                            <th className="p-2">سبب الاستبعاد</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                          {compsExcluded.map((exc, eIdx) => (
-                            <tr key={eIdx} className="text-slate-400">
-                              <td className="p-2 font-medium text-slate-300 truncate max-w-xs">{exc.title}</td>
-                              <td className="p-2">{exc.price ? `${exc.price.toLocaleString()} د.أ` : '—'}</td>
-                              <td className="p-2 text-rose-300 font-medium">{exc.reasonAr}</td>
-                            </tr>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
                           ))}
                         </tbody>
                       </table>
@@ -967,28 +780,362 @@ export function ValuationReport({
                 </div>
               )}
 
-              {/* Mathematical Audit Trail (Section 24) */}
-              {section24?.auditTrail && section24.auditTrail.length > 0 && (
-                <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800 space-y-2">
-                  <button
-                    onClick={() => setShowAudit(!showAudit)}
-                    className="text-xs font-bold text-slate-400 hover:text-slate-200 flex items-center gap-1.5 w-full justify-between"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-blue-400" />
-                      <span>مسار التدقيق الحسابي للتقييم (Valuation Audit Trail)</span>
-                    </div>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAudit ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {showAudit && (
-                    <div className="space-y-1 pt-2 font-mono text-[11px] text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800/80">
-                      {section24.auditTrail.map((step, sIdx) => (
-                        <div key={sIdx} className="flex items-start gap-2">
-                          <span className="text-emerald-500 font-bold">[{sIdx + 1}]</span>
-                          <span>{step}</span>
+              {/* ────────────────────────────────────────────────────────── */}
+              {/* VIEW 2: ADMIN AUDIT (Full Technical Audit & Math)          */}
+              {/* ────────────────────────────────────────────────────────── */}
+              {activeTab === 'admin' && (
+                <div className="space-y-6">
+                  {/* The 7 Jordanian Market Sources Execution Audit Table */}
+                  <div className="p-4 rounded-2xl bg-slate-900 border border-purple-500/30 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-5 h-5 text-purple-400" />
+                        <div>
+                          <p className="font-extrabold text-white text-xs sm:text-sm">
+                            جدول تدقيق استعلامات المصادر السبعة (The 7 Market Sources Execution Audit)
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            تنفيذ شامل لجميع بوابات السوق الأردني السبعة دون استثناء أو اختصار مبكر
+                          </p>
                         </div>
-                      ))}
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                        {marketSourceExecutions.length}/7 مسجلة
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="text-slate-400 text-right bg-slate-950/80 border-b border-slate-800">
+                            <th className="p-2.5 rounded-r-lg">المصدر</th>
+                            <th className="p-2.5">الحالة</th>
+                            <th className="p-2.5">المدة</th>
+                            <th className="p-2.5">الاستعلامات المنفذة</th>
+                            <th className="p-2.5">النتائج الخام</th>
+                            <th className="p-2.5">الصالحة</th>
+                            <th className="p-2.5">المستبعدة</th>
+                            <th className="p-2.5">المقبولة</th>
+                            <th className="p-2.5 rounded-l-lg">ملاحظات / أخطاء</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/80 font-mono">
+                          {marketSourceExecutions.map((mse, mIdx) => (
+                            <tr key={mIdx} className="hover:bg-slate-800/40 text-slate-300">
+                              <td className="p-2.5 font-bold font-sans text-white">{mse.sourceLabel}</td>
+                              <td className="p-2.5 font-sans">{getExecutionStatusBadge(mse.status)}</td>
+                              <td className="p-2.5">{mse.durationMs} ms</td>
+                              <td className="p-2.5 max-w-[140px] truncate text-slate-400" title={mse.queriesExecuted?.join(', ')}>
+                                {mse.queriesExecuted?.length > 0 ? mse.queriesExecuted.join(', ') : '—'}
+                              </td>
+                              <td className="p-2.5 font-bold">{mse.rawResults}</td>
+                              <td className="p-2.5 text-emerald-400">{mse.validListings}</td>
+                              <td className="p-2.5 text-rose-400">{mse.rejectedListings}</td>
+                              <td className="p-2.5 text-blue-400 font-bold">{mse.acceptedComparables}</td>
+                              <td className="p-2.5 font-sans text-[10px] text-slate-400 max-w-[160px] truncate" title={mse.error || ''}>
+                                {mse.error || '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Target Identity Cluster Card */}
+                  {audit?.targetCluster && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                        <p className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                          <Radio className="w-4 h-4 text-cyan-400" />
+                          <span>عنقود هوية السيارة المستهدفة (Target Identity Cluster)</span>
+                        </p>
+                        <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                          {audit.targetCluster.totalClusterCount} إعلانات معزولة
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        تم عزل جميع الإعلانات المطابقة للسيارة المستهدفة عبر ({audit.targetCluster.sourcesInCluster?.join(', ') || 'المنصات'}) لمنع تسريب السعر المطلوب إلى معادلة FMV.
+                      </p>
+                      {audit.targetCluster.listings?.length > 0 && (
+                        <div className="space-y-1 pt-1 font-mono text-[10px]">
+                          {audit.targetCluster.listings.map((tl, tIdx) => (
+                            <div key={tIdx} className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between">
+                              <span className="text-slate-300">{tl.source}: {tl.title || 'إعلان مطابق'} ({tl.price} د.أ)</span>
+                              <span className="text-amber-400">{tl.reason}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Technical Comparables Multi-Factor Weight & Adjustments Table */}
+                  {compsUsed.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <p className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                          <Sliders className="w-4 h-4 text-emerald-400" />
+                          <span>التدقيق الرياضي للأوزان والتعديلات (Multi-Factor Math & Adjustments)</span>
+                        </p>
+                        <span className="text-[11px] text-slate-400">انقر للتفكيك الرياضي الكامل لكل سيارة</span>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-slate-400 text-right bg-slate-950 border-b border-slate-800">
+                              <th className="p-2.5 rounded-r-lg">السيارة</th>
+                              <th className="p-2.5">المستوى</th>
+                              <th className="p-2.5">السعر الأصلي</th>
+                              <th className="p-2.5">بعد التعديل</th>
+                              <th className="p-2.5">المطابقة %</th>
+                              <th className="p-2.5">الوزن النهائي</th>
+                              <th className="p-2.5 rounded-l-lg">المساهمة %</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800">
+                            {compsUsed.map((c, i) => (
+                              <Fragment key={c.id || i}>
+                                <tr
+                                  className="hover:bg-slate-800/40 cursor-pointer text-slate-300"
+                                  onClick={() => setAdminExpandedComp(adminExpandedComp === i ? null : i)}
+                                >
+                                  <td className="p-2.5 font-semibold">
+                                    <span className="text-purple-400 ml-1.5">{adminExpandedComp === i ? '▾' : '▸'}</span>
+                                    {c.title}
+                                  </td>
+                                  <td className="p-2.5">{c.tierLabel || `Tier ${c.tier}`}</td>
+                                  <td className="p-2.5 font-mono">{c.originalPrice?.toLocaleString()} د.أ</td>
+                                  <td className="p-2.5 font-mono font-bold text-white">
+                                    {c.adjustedPrice ? `${c.adjustedPrice.toLocaleString()} د.أ` : '—'}
+                                  </td>
+                                  <td className="p-2.5 font-mono">{c.similarity}%</td>
+                                  <td className="p-2.5 font-mono text-emerald-400 font-bold">{c.weight?.toFixed(3)}</td>
+                                  <td className="p-2.5 font-mono text-blue-400 font-bold">{c.contributionPercent}%</td>
+                                </tr>
+
+                                {/* Admin Expanded Detailed Breakdown */}
+                                {adminExpandedComp === i && (
+                                  <tr className="bg-slate-950 text-xs">
+                                    <td colSpan={7} className="p-4 space-y-3 border-b border-slate-800">
+                                      {/* Multi-Factor Weights Breakdown */}
+                                      {c.weightBreakdown && (
+                                        <div className="space-y-1">
+                                          <p className="text-[11px] font-bold text-slate-400">تفكيك الوزن الرياضي (Multi-Factor Weights):</p>
+                                          <div className="flex flex-wrap gap-1.5 text-[10px] font-mono">
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              الهوية: <strong>{c.weightBreakdown.identityWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              السنة: <strong>{c.weightBreakdown.yearWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              المواصفات: <strong>{c.weightBreakdown.technicalWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              الممشى: <strong>{c.weightBreakdown.mileageWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              اكتمال البيانات: <strong>{c.weightBreakdown.completenessWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              جودة المصدر: <strong>{c.weightBreakdown.sourceQualityWeight}</strong>
+                                            </span>
+                                            <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                              الحداثة: <strong>{c.weightBreakdown.recencyWeight}</strong>
+                                            </span>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Traceable Adjustments */}
+                                      {c.adjustmentsList && c.adjustmentsList.length > 0 && (
+                                        <div className="space-y-1.5 pt-1">
+                                          <p className="text-[11px] font-bold text-slate-400">معادلات التعديل السعري (Price Adjustments):</p>
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                            {c.adjustmentsList.map((adj, aIdx) => (
+                                              <div key={aIdx} className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-[11px] space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                  <span className="font-bold text-slate-200">{adj.factorAr}</span>
+                                                  <span className={`font-mono font-bold ${adj.delta >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {adj.delta > 0 ? `+${adj.delta.toLocaleString()}` : adj.delta.toLocaleString()} د.أ
+                                                  </span>
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">{adj.reason}</p>
+                                                {adj.formula && (
+                                                  <p className="text-[9px] font-mono text-slate-500 dir-ltr text-right">{adj.formula}</p>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Match Matrix */}
+                                      {c.matchMatrix && c.matchMatrix.length > 0 && (
+                                        <div className="space-y-1.5 pt-1">
+                                          <p className="text-[11px] font-bold text-slate-400">مصفوفة المطابقة الفنية (Match Matrix):</p>
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                                            {c.matchMatrix.map((m, mIdx) => (
+                                              <div key={mIdx} className="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                                <span className="text-slate-400">{m.factorAr}</span>
+                                                <span className={`font-bold ${
+                                                  m.verdict === 'MATCH' ? 'text-emerald-400' :
+                                                  m.verdict === 'CLOSE' ? 'text-amber-400' :
+                                                  m.verdict === 'DIFFERENT' ? 'text-rose-400' : 'text-slate-500'
+                                                }`}>
+                                                  {m.verdict}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Consensus Band & Leave-One-Out Analysis */}
+                  {audit?.consensusBand && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                      <p className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-blue-400" />
+                        <span>نطاق التوافق وحساسية الحذف (Consensus Band & Leave-One-Out)</span>
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono pt-1">
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-sans">الحد الأدنى</span>
+                          <span className="text-white font-bold">{audit.consensusBand.low.toLocaleString()} د.أ</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-sans">وسيط التوافق</span>
+                          <span className="text-emerald-400 font-bold">{audit.consensusBand.median.toLocaleString()} د.أ</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-sans">الحد الأعلى</span>
+                          <span className="text-white font-bold">{audit.consensusBand.high.toLocaleString()} د.أ</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-sans">الانتشار (Spread)</span>
+                          <span className="text-cyan-400 font-bold">{audit.consensusBand.spread.toLocaleString()} د.أ</span>
+                        </div>
+                      </div>
+
+                      {/* LOO Removals */}
+                      {audit.leaveOneOutAnalysis && audit.leaveOneOutAnalysis.length > 0 && (
+                        <div className="pt-2">
+                          <p className="text-[11px] font-bold text-slate-400 mb-1">اختبار ثبات القيمة بحذف كل سيارة مقارنة (Leave-One-Out Test):</p>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[10px] font-mono">
+                              <thead>
+                                <tr className="text-slate-400 text-right bg-slate-950">
+                                  <th className="p-1.5 font-sans">السيارة المحذوفة</th>
+                                  <th className="p-1.5">السعر</th>
+                                  <th className="p-1.5">FMV بدونها</th>
+                                  <th className="p-1.5">الإزاحة</th>
+                                  <th className="p-1.5">نسبة الإزاحة %</th>
+                                  <th className="p-1.5 font-sans">الحكم</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800">
+                                {audit.leaveOneOutAnalysis.map((loo, lIdx) => (
+                                  <tr key={lIdx} className="text-slate-300">
+                                    <td className="p-1.5 font-sans truncate max-w-[150px]">{loo.comparableTitle}</td>
+                                    <td className="p-1.5">{loo.price.toLocaleString()}</td>
+                                    <td className="p-1.5 font-bold">{loo.fmvWithout.toLocaleString()}</td>
+                                    <td className={`p-1.5 ${loo.absoluteShift === 0 ? 'text-slate-500' : loo.absoluteShift > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      {loo.absoluteShift > 0 ? `+${loo.absoluteShift}` : loo.absoluteShift}
+                                    </td>
+                                    <td className="p-1.5">{loo.percentShift}%</td>
+                                    <td className="p-1.5 font-sans">
+                                      {loo.isDominant ? (
+                                        <span className="text-rose-400 font-bold">مهيمنة (غير مستقرة)</span>
+                                      ) : (
+                                        <span className="text-emerald-400 font-bold">مستقرة وموزونة</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Excluded Comparables Section */}
+                  {compsExcluded.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => setShowExcluded(!showExcluded)}
+                          className="text-xs font-bold text-slate-300 hover:text-white flex items-center gap-1.5"
+                        >
+                          <FilterX className="w-4 h-4 text-rose-400" />
+                          <span>الإعلانات المستبعدة وحماية النزاهة ({compsExcluded.length})</span>
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExcluded ? 'rotate-180' : ''}`} />
+                        </button>
+                        <span className="text-[10px] text-slate-500">فلترة الهوية والسلامة السعرية</span>
+                      </div>
+
+                      {showExcluded && (
+                        <div className="overflow-x-auto pt-2">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-slate-500 text-right bg-slate-950">
+                                <th className="p-2">الإعلان</th>
+                                <th className="p-2">السعر</th>
+                                <th className="p-2">سبب الاستبعاد</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                              {compsExcluded.map((exc, eIdx) => (
+                                <tr key={eIdx} className="text-slate-400">
+                                  <td className="p-2 font-medium text-slate-300 truncate max-w-xs">{exc.title}</td>
+                                  <td className="p-2 font-mono">{exc.price ? `${exc.price.toLocaleString()} د.أ` : '—'}</td>
+                                  <td className="p-2 text-rose-300 font-medium">{exc.reasonAr}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Mathematical Audit Trail */}
+                  {section24?.auditTrail && section24.auditTrail.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                      <button
+                        onClick={() => setShowAuditTrail(!showAuditTrail)}
+                        className="text-xs font-bold text-slate-400 hover:text-slate-200 flex items-center gap-1.5 w-full justify-between"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-blue-400" />
+                          <span>المسار الحسابي الكامل للتقييم (Full Audit Trail)</span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAuditTrail ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {showAuditTrail && (
+                        <div className="space-y-1 pt-2 font-mono text-[11px] text-slate-400 bg-slate-950 p-3 rounded-xl border border-slate-800/80">
+                          {section24.auditTrail.map((step, sIdx) => (
+                            <div key={sIdx} className="flex items-start gap-2">
+                              <span className="text-emerald-500 font-bold">[{sIdx + 1}]</span>
+                              <span>{step}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -7,11 +7,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKilometers, parsePrice, toJod, normalizeTrim, contentHash } from '../normalize';
 import { extractSpecsFromTitle } from '../spec-extract';
-import { assignTier, scoreSimilarity, isTargetCopy, checkListingIdentityConsistency } from '../similarity';
+import { assignTier, scoreSimilarity, isTargetCopy, checkListingIdentityConsistency, isPhevVsPetrolMismatch, getQualitativeMatch } from '../similarity';
 import { dedupeExact, dedupeNear, iqrFences, flagOutliers, sanityCheck, detectTargetIdentityCluster } from '../outliers';
 import { adjustComparable, calibrate } from '../adjust';
 import { weightedMedian, weightedAvg, confidenceScore, computeWeight, computeDetailedWeight, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut, priceStats, calculateFMV } from '../price';
 import { generateDeterministicExplanation } from '../glm-intelligence';
+import { SOURCE_ADAPTERS } from '../sources';
 import type { Comparable, VehicleSpec, NormalizedListing } from '../types';
 
 const spec: VehicleSpec = {
@@ -646,3 +647,114 @@ describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () =>
     assert.ok(res.rangeDisclaimerAr && res.rangeDisclaimerAr.includes('محدودية الأدلة المباشرة'));
   });
 });
+
+describe('User Methodological Refinements (Public Separation, Powertrain, Depreciation, 7 Sources)', () => {
+  const bmwSpec: VehicleSpec = {
+    brand: 'بي ام دبليو', brandEn: 'bmw', model: 'X5', modelEn: 'X5',
+    year: 2018, trim: 'xDrive40i', kilometers: 100000, fuelType: 'PETROL',
+    transmission: 'AUTOMATIC', city: 'عمان',
+  };
+
+  it('20. PHEV vs Petrol Mismatch: PHEV is demoted to Tier 3 secondary evidence and cannot be Tier 1 or Tier 2', () => {
+    const phevListing = mkListing({
+      brand: 'BMW', brandEn: 'bmw', model: 'X5', modelEn: 'x5',
+      year: 2018, title: 'BMW X5 xDrive40e 2018 Plug-in Hybrid',
+      fuelType: 'Plug-in Hybrid',
+    });
+    const petrolListing = mkListing({
+      brand: 'BMW', brandEn: 'bmw', model: 'X5', modelEn: 'x5',
+      year: 2018, title: 'BMW X5 xDrive40i 2018 Petrol',
+      fuelType: 'PETROL', trim: 'xDrive40i',
+    });
+
+    assert.equal(isPhevVsPetrolMismatch(phevListing, bmwSpec), true);
+    assert.equal(isPhevVsPetrolMismatch(petrolListing, bmwSpec), false);
+
+    // PHEV gets demoted to Tier 3 max even though year matches 2018!
+    const phevTier = assignTier(phevListing, bmwSpec);
+    assert.equal(phevTier, 3);
+
+    // Pure petrol gets Tier 1
+    const petrolTier = assignTier(petrolListing, bmwSpec);
+    assert.equal(petrolTier, 1);
+
+    // Scored similarity for PHEV is capped at <= 65%
+    const phevScored = scoreSimilarity(phevListing, bmwSpec, 3);
+    assert.ok(phevScored.similarity <= 65);
+    assert.equal(phevScored.isPowertrainMismatch, true);
+  });
+
+  it('21. Petrol Dominance: When >= 3 Petrol comps exist, Petrol comps control >= 85% of total weight', () => {
+    const comps: Comparable[] = [
+      mkListing({ externalId: 'p1', tier: 1, yearDiff: 0, weight: 1.0, fuelType: 'PETROL', isPowertrainMismatch: false }),
+      mkListing({ externalId: 'p2', tier: 1, yearDiff: 0, weight: 1.0, fuelType: 'PETROL', isPowertrainMismatch: false }),
+      mkListing({ externalId: 'p3', tier: 2, yearDiff: 0, weight: 0.85, fuelType: 'PETROL', isPowertrainMismatch: false }),
+      mkListing({ externalId: 'h1', tier: 3, yearDiff: 0, weight: 0.70, fuelType: 'Plug-in Hybrid', isPowertrainMismatch: true }),
+      mkListing({ externalId: 'h2', tier: 3, yearDiff: 0, weight: 0.70, fuelType: 'Plug-in Hybrid', isPowertrainMismatch: true }),
+    ];
+
+    balancePrimarySecondaryWeights(comps);
+
+    const primaryComps = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch);
+    const secondaryComps = comps.filter((c) => c.tier > 2 || c.yearDiff > 0 || c.isPowertrainMismatch);
+
+    const primaryTotalWeight = primaryComps.reduce((acc, c) => acc + c.weight, 0);
+    const totalWeight = comps.reduce((acc, c) => acc + c.weight, 0);
+    const primaryShare = primaryTotalWeight / totalWeight;
+
+    assert.ok(primaryShare >= 0.85, `Expected primary share >= 0.85, got ${primaryShare}`);
+    assert.ok(secondaryComps.every((c) => c.contributionPercent! < 10));
+  });
+
+  it('22. Far-year evidence (|yearDiff| >= 3): has delta = 0, no compound annual depreciation', () => {
+    const cal = { perYearJod: 800, per10kKmJod: 180, calibrated: true, provenance: 'MARKET_DERIVED' as const, sampleSize: 10 };
+    const farOld = adjustComparable(mkListing({ year: 2014, priceJod: 18000, kilometers: 100000 }), bmwSpec, cal); // yearDiff = 4
+    const farNew = adjustComparable(mkListing({ year: 2022, priceJod: 38000, kilometers: 100000 }), bmwSpec, cal); // yearDiff = 4
+
+    const oldYearAdj = farOld.adjustments.find((a) => a.factor === 'year');
+    const newYearAdj = farNew.adjustments.find((a) => a.factor === 'year');
+
+    assert.equal(oldYearAdj?.delta, 0);
+    assert.equal(newYearAdj?.delta, 0);
+    assert.ok(oldYearAdj?.reason.includes('دون تطبيق نسب إهلاك تراكمية'));
+  });
+
+  it('23. Percentile Suppression: askingPricePercentile is suppressed (null) when valid comps < 4', () => {
+    const fewComps = [
+      mkListing({ adjustedPrice: 28000, weight: 1 }),
+      mkListing({ adjustedPrice: 29000, weight: 1 }),
+      mkListing({ adjustedPrice: 31000, weight: 1 }),
+    ]; // count = 3 (< 4)
+
+    const statsFew = priceStats(fewComps, 30000);
+    assert.equal(statsFew.askingPricePercentile, null);
+
+    const fourComps = [
+      ...fewComps,
+      mkListing({ adjustedPrice: 32000, weight: 1 }),
+    ]; // count = 4 (>= 4)
+    const statsFour = priceStats(fourComps, 30000);
+    assert.notEqual(statsFour.askingPricePercentile, null);
+    assert.equal(typeof statsFour.askingPricePercentile, 'number');
+  });
+
+  it('24. Qualitative Match Badges: assign appropriate qualitative level based on tier and similarity', () => {
+    assert.equal(getQualitativeMatch(1, 85, false), 'مطابقة قوية');
+    assert.equal(getQualitativeMatch(2, 75, false), 'مطابقة جيدة');
+    assert.equal(getQualitativeMatch(3, 60, false), 'مطابقة متوسطة');
+    assert.equal(getQualitativeMatch(4, 45, false), 'مطابقة محدودة');
+    // Powertrain mismatch caps at moderate or limited
+    assert.equal(getQualitativeMatch(3, 65, true), 'مطابقة متوسطة');
+    assert.equal(getQualitativeMatch(3, 50, true), 'مطابقة محدودة');
+  });
+
+  it('25. All 7 Market Sources registered: opensooq, jocars, ordonauto, karmal, waseet, autohub, facebook', () => {
+    const registeredIds = SOURCE_ADAPTERS.map((a) => a.id);
+    const expected = ['opensooq', 'jocars', 'ordonauto', 'karmal', 'waseet', 'autohub', 'facebook'];
+    for (const src of expected) {
+      assert.ok(registeredIds.includes(src), `Source ${src} must be registered in SOURCE_ADAPTERS`);
+    }
+    assert.equal(SOURCE_ADAPTERS.length, 7);
+  });
+});
+

@@ -96,7 +96,18 @@ async function main() {
       console.log(`  - ${l}`);
     }
   }
-  console.log('=== AUDIT COMPLETE ===');
+
+  console.log('\n--- 11. THE 7 MARKET SOURCES EXECUTION AUDIT TABLE ---');
+  const executions = result.marketSourceExecutions || result.auditTrace?.marketSourceExecutions || [];
+  console.log(`Recorded Executions: ${executions.length}/7`);
+  for (const mse of executions) {
+    console.log(`[${mse.sourceId}] ${mse.sourceLabel} -> Status: ${mse.status} | Duration: ${mse.durationMs}ms | Raw: ${mse.rawResults} | Valid: ${mse.validListings} | Rejected: ${mse.rejectedListings} | Accepted: ${mse.acceptedComparables} | Error: ${mse.error || 'None'}`);
+    if (mse.queriesExecuted?.length > 0) {
+      console.log(`    Queries: ${mse.queriesExecuted.join(' | ')}`);
+    }
+  }
+
+  console.log('\n=== AUDIT COMPLETE ===');
 }
 
 main().catch(console.error).finally(() => process.exit(0));

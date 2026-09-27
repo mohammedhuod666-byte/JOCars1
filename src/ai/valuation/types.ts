@@ -99,6 +99,9 @@ export interface Comparable extends NormalizedListing {
   tier: 1 | 2 | 3 | 4;
   yearDiff: number; // |listing year - target year| (0 when unknown)
   similarity: number; // 0-100
+  qualitativeMatch?: QualitativeMatchLevel;
+  isPowertrainMismatch?: boolean;
+  powertrainNote?: string;
   simBreakdown: Record<string, number>;
   adjustedPrice: number | null;
   adjustments: PriceAdjustment[];
@@ -214,12 +217,40 @@ export interface IdentityCheckResult {
   detectedBrand?: string;
 }
 
+export type QualitativeMatchLevel = 'مطابقة قوية' | 'مطابقة جيدة' | 'مطابقة متوسطة' | 'مطابقة محدودة';
+
+export type SourceExecutionStatus =
+  | 'SEARCHED'
+  | 'NO_RESULTS'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'RATE_LIMITED'
+  | 'TIMEOUT'
+  | 'DISABLED';
+
+export interface MarketSourceExecution {
+  sourceId: string;
+  sourceLabel: string;
+  searchStartedAt: string;
+  searchFinishedAt: string;
+  durationMs: number;
+  status: SourceExecutionStatus;
+  queriesExecuted: string[];
+  rawResults: number;
+  validListings: number;
+  rejectedListings: number;
+  rejectionReasons: Record<string, number>;
+  acceptedComparables: number;
+  error?: string | null;
+}
+
 export interface ValuationAuditTrace {
   targetSnapshot: Record<string, any>;
   dataQuality: DataQualityReport;
   targetCluster?: TargetIdentityCluster;
   identityConflictExclusions?: { title: string; source: string; reason: string }[];
   marketSearchResults: { total: number; sources: { source: string; count: number }[] };
+  marketSourceExecutions: MarketSourceExecution[];
   yearDistribution: Record<string, number>;
   targetExclusions: string[];
   suspiciousPriceExclusions: { title: string; price: number; reason: string }[];
@@ -267,6 +298,9 @@ export interface ValuationAuditTrace {
     identityStatus?: string;
     isPrimary: boolean;
     similarity: number;
+    qualitativeMatch?: QualitativeMatchLevel;
+    isPowertrainMismatch?: boolean;
+    powertrainNote?: string;
     simBreakdown: Record<string, number>;
     rawWeight: number;
     finalWeight: number;

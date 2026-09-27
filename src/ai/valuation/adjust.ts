@@ -75,49 +75,56 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
   // 1. Year Adjustment
   if (r.year !== null && r.year !== undefined && r.year !== spec.year) {
     const yearDiff = r.year - spec.year; // positive = comp is newer than target
-    let d: number;
-    let method: string;
-    let formula: string;
-    let provenance: AdjustmentProvenance = cal.calibrated ? 'MARKET_DERIVED' : 'CONSERVATIVE_HEURISTIC';
+    const absDiff = Math.abs(yearDiff);
 
-    if (cal.calibrated && cal.perYearJod > 0) {
-      d = -yearDiff * cal.perYearJod;
-      method = 'Corpus Median Year Step Regression';
-      formula = `delta = -(${yearDiff} years) * ${cal.perYearJod} JOD/year`;
-    } else {
-      // Percentage compound annual depreciation based on vehicle price
-      const rate = DEFAULT_ANNUAL_DEPRECIATION_RATE;
-      if (yearDiff > 0) {
-        // Comp is newer -> discount down to target year
-        d = -Math.round(r.priceJod * (1 - Math.pow(1 - rate, Math.min(yearDiff, 8))));
-        method = 'Compound Annual Segment Depreciation (Newer Comp Discount)';
-        formula = `delta = -round(price * (1 - (1 - ${rate})^${yearDiff}))`;
+    if (absDiff <= 2) {
+      // Near-year step (±1 to ±2 years): apply calibrated market step or conservative step
+      let d: number;
+      let method: string;
+      let formula: string;
+      const provenance: AdjustmentProvenance = cal.calibrated ? 'MARKET_DERIVED' : 'CONSERVATIVE_HEURISTIC';
+
+      if (cal.perYearJod > 0) {
+        d = -yearDiff * cal.perYearJod;
+        method = 'Corpus Median Year Step Regression';
+        formula = `delta = -(${yearDiff} years) * ${cal.perYearJod} JOD/year`;
       } else {
-        // Comp is older -> add back depreciation up to target year
-        const absDiff = Math.abs(yearDiff);
-        d = Math.round(r.priceJod * (Math.pow(1 + rate, Math.min(absDiff, 8)) - 1));
-        method = 'Compound Annual Segment Depreciation (Older Comp Appreciation)';
-        formula = `delta = +round(price * ((1 + ${rate})^${absDiff} - 1))`;
+        // Modest linear conservative step (5% per year)
+        const rate = 0.05 * absDiff;
+        d = yearDiff > 0 ? -Math.round(r.priceJod * rate) : Math.round(r.priceJod * rate);
+        method = 'Conservative Linear Year Market Step';
+        formula = `delta = ${yearDiff > 0 ? '-' : '+'}${rate * 100}% of price`;
       }
+
+      const cap = Math.round(r.priceJod * 0.20);
+      d = Math.max(-cap, Math.min(cap, d));
+      price += d;
+
+      adj.push({
+        factor: 'year',
+        factorAr: `تعديل فارق سنة الصنع (${r.year} ← ${spec.year})`,
+        delta: d,
+        provenance,
+        method,
+        formula,
+        reason: yearDiff > 0
+          ? `المقارنة أحدث بفارق (${absDiff} سنوات) عن (${spec.year})، تم خصم فارق السنة المعياري`
+          : `المقارنة أقدم بفارق (${absDiff} سنوات) عن (${spec.year})، تمت إضافة فارق السنة المعياري`,
+      });
+    } else {
+      // Far-year evidence (|yearDiff| >= 3):
+      // Strictly NO synthetic compound annual depreciation formula to manufacture a fake target price!
+      // Far-year evidence provides contextual market support without synthetic price deformation.
+      adj.push({
+        factor: 'year',
+        factorAr: `شاهد داعم من سنة بعيدة (${r.year}) دون تصنيع سعري`,
+        delta: 0,
+        provenance: 'CONSERVATIVE_HEURISTIC',
+        method: 'Directional Context Support (No Compounding Depreciation)',
+        formula: 'delta = 0 (preserved as raw market evidence)',
+        reason: `المقارنة من سنة بعيدة (${r.year} مقابل ${spec.year})؛ تم الإبقاء على سعرها دون تطبيق نسب إهلاك تراكمية مصنعة`,
+      });
     }
-
-    // Safety cap: single year adjustment cannot exceed 50% of the comp price to prevent artificial distortion
-    const cap = Math.round(r.priceJod * 0.50);
-    const uncapped = d;
-    d = Math.max(-cap, Math.min(cap, d));
-    price += d;
-
-    adj.push({
-      factor: 'year',
-      factorAr: `تعديل فارق سنة الصنع (${r.year} ← ${spec.year})`,
-      delta: d,
-      provenance,
-      method,
-      formula: uncapped !== d ? `${formula} [مقيّد بسقف 50%]` : formula,
-      reason: yearDiff > 0
-        ? `المقارنة أحدث بـ ${yearDiff} سنوات، تم خصم فارق الاستهلاك الزمني`
-        : `المقارنة أقدم بـ ${Math.abs(yearDiff)} سنوات، تمت إضافة قيمة حداثة سنة الصنع المستهدفة`,
-    });
   }
 
   // 2. Mileage Adjustment

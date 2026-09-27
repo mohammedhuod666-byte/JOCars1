@@ -5,7 +5,7 @@
  * Numbers come ONLY from here. The LLM only writes the explanation.
  */
 import prisma from '@/lib/prisma';
-import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec, ValuationAuditTrace } from './types';
+import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec, ValuationAuditTrace, MarketSourceExecution } from './types';
 import { roundDisplayPrice } from './types';
 import { collectAll, type SourceOutcome } from './sources';
 import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix, checkListingIdentityConsistency } from './similarity';
@@ -17,9 +17,17 @@ import { contentHash } from './normalize';
 import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
 
 const MODEL_VERSION = 'v1';
-// Sold archive + same-city JO sources are most trustworthy.
-// Dealer inventory (ordonauto) skews retail-high: slightly down-weighted.
-const SOURCE_TRUST: Record<string, number> = { jocars: 1, opensooq: 0.85, ordonauto: 0.75, manual: 0.95 };
+// Source trust weighting across all 7 market sources:
+const SOURCE_TRUST: Record<string, number> = {
+  jocars: 1.0,
+  opensooq: 0.85,
+  ordonauto: 0.80,
+  waseet: 0.80,
+  autohub: 0.75,
+  karmal: 0.70,
+  manual: 0.95,
+  facebook: 0.65,
+};
 
 export interface EngineResult {
   requestId: string;
@@ -219,63 +227,12 @@ export async function runValuation(
   try {
     const tuning = await getTuning();
     const funnel: FunnelStep[] = [];
-    // 0) Corpus-first shortcut (§4): fresh same-model archive ≤48h with ≥10
-    // rows skips live scraping entirely (2-3s instead of ~25s).
-    let listings: NormalizedListing[] = [];
-    let outcomes: SourceOutcome[] = [];
-    let liveSkipped = false;
-    try {
-      const freshSince48h = new Date(Date.now() - 48 * 60 * 60 * 1000);
-      const cached = await prisma.marketListing.findMany({
-        where: {
-          status: 'ACTIVE',
-          scrapedAt: { gte: freshSince48h },
-          OR: [
-            { AND: [{ brandEn: { equals: spec.brandEn || spec.brand } }, { modelEn: { equals: spec.modelEn || spec.model } }] },
-            { AND: [{ brand: { contains: spec.brand } }, { model: { contains: spec.model } }] },
-          ],
-        },
-        take: 120,
-        orderBy: { scrapedAt: 'desc' },
-      });
-      if (cached.length >= 10) {
-        liveSkipped = true;
-        const SRC_LABEL: Record<string, string> = {
-          opensooq: 'السوق المفتوح', jocars: 'سوق JO Cars',
-          ordonauto: 'أردن أوتو (وكيل)', manual: 'يدوي موثق', corpus: 'الأرشيف',
-        };
-        for (const s of cached) {
-          let specs: string[] = [];
-          try { specs = JSON.parse(s.specs || '[]'); } catch { specs = []; }
-          listings.push({
-            source: s.source, sourceLabel: SRC_LABEL[s.source] || s.source,
-            externalId: s.externalId, url: s.url,
-            brand: s.brand, brandEn: s.brandEn, model: s.model, modelEn: s.modelEn,
-            year: s.year, trim: s.trim, kilometers: s.kilometers,
-            price: s.price, currency: s.currency, priceJod: s.priceJod, fxRate: s.fxRate,
-            city: s.city, country: s.country, fuelType: s.fuelType,
-            transmission: s.transmission, condition: s.condition, specs,
-            drivetrain: (s as any).drivetrain || null,
-            horsepower: (s as any).horsepower || null,
-            priceType: ((s as any).priceType === 'sold' ? 'sold' : 'asking'),
-            listingDate: s.listingDate ? new Date(s.listingDate).toISOString() : null,
-            scrapedAt: new Date(s.scrapedAt).toISOString(),
-          });
-        }
-        outcomes.push({ id: 'corpus', label: 'أرشيف السوق (سريع)', ok: true, count: listings.length, ms: 0 });
-        funnel.push({
-          stage: 'collect', stageAr: 'الجمع', before: 0, after: listings.length, rejected: 0,
-          notes: [`مسار سريع: ${listings.length} إعلان طازج (≤48h) من الأرشيف — تخطي الكشط الحي`],
-        });
-      }
-    } catch { /* fall through to live collection */ }
-    if (!liveSkipped) {
-      // 1) Collect live (spec §1, §21) + merge fresh stored corpus (spec §6,
-      // §19: no re-scraping when recent market data already exists).
-      const live = await collectAll(spec);
-      listings = live.listings;
-      outcomes = live.outcomes;
-    }
+    // 1) Collect live across all 7 market portals (Requirement §7: no short-circuit)
+    const live = await collectAll(spec);
+    let listings: NormalizedListing[] = live.listings;
+    const outcomes: SourceOutcome[] = live.outcomes;
+    const marketSourceExecutions: MarketSourceExecution[] = live.sourceExecutions || [];
+
     const missingFields = (['trim', 'fuelType', 'transmission', 'drivetrain', 'condition', 'city', 'engineCapacity'] as const)
       .filter((k) => !(spec as any)[k]);
     const provenance: Record<string, 'USER_PROVIDED' | 'UNKNOWN'> = {};
@@ -283,12 +240,11 @@ export async function runValuation(
       provenance[k] = (spec as any)[k] ? 'USER_PROVIDED' : 'UNKNOWN';
     }
     const profile = { spec, missingFields: [...missingFields], provenance };
-    if (!liveSkipped) {
-      funnel.push({
-        stage: 'collect', stageAr: 'الجمع', before: 0, after: listings.length, rejected: 0,
-        notes: outcomes.map((o) => `${o.label}: ${o.ok ? o.count : 'فشل (' + (o.error || '') + ')'}`),
-      });
-    }
+
+    funnel.push({
+      stage: 'collect', stageAr: 'جمع المصادر الـ 7 الحية', before: 0, after: listings.length, rejected: 0,
+      notes: outcomes.map((o) => `${o.label}: ${o.ok ? o.count : 'فشل (' + (o.error || '') + ')'}`),
+    });
     try {
       const freshSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const stored = await prisma.marketListing.findMany({
@@ -744,6 +700,7 @@ export async function runValuation(
         total: listings.length,
         sources: outcomes.map((o) => ({ source: o.label, count: o.count })),
       },
+      marketSourceExecutions,
       yearDistribution,
       targetExclusions: leaked,
       suspiciousPriceExclusions: sanityOut.map((e) => ({
@@ -811,8 +768,11 @@ export async function runValuation(
                      c.tier === 3 ? 'ثانوي (Tier 3 - نفس الموديل ±1 سنة)' :
                      'داعم (Tier 4 - نفس الموديل بسنوات أبعد)',
           identityStatus: 'ELIGIBLE_SAME_MODEL',
-          isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0,
+          isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch,
           similarity: c.similarity,
+          qualitativeMatch: c.qualitativeMatch,
+          isPowertrainMismatch: c.isPowertrainMismatch,
+          powertrainNote: c.powertrainNote,
           simBreakdown: c.simBreakdown,
           rawWeight: (c as any).rawWeight ?? c.weight,
           finalWeight: Math.round(c.weight * 1000) / 1000,

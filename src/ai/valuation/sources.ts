@@ -3,11 +3,14 @@
  * SourceAdapter — adding a new site means adding one file + one
  * registry line, never touching the engine.
  */
-import type { NormalizedListing, VehicleSpec } from './types';
+import type { NormalizedListing, VehicleSpec, MarketSourceExecution, SourceExecutionStatus } from './types';
 import { parseKilometers, toJod, normalizeTrim, contentHash, enrichFromTitle } from './normalize';
 import { resolveCanonicalListingUrl, createSourceSnapshot } from './url-verifier';
 import { collectOrdonAuto } from './sources-ordonauto';
-import { collectFacebook, FACEBOOK_STATUS } from './sources-facebook';
+import { collectFacebook } from './sources-facebook';
+import { collectKarmal } from './sources-karmal';
+import { collectWaseet } from './sources-waseet';
+import { collectAutohub } from './sources-autohub';
 
 export interface SourceAdapter {
   id: string;          // stable id stored in DB
@@ -204,41 +207,153 @@ async function collectJoCars(spec: VehicleSpec, timeoutMs: number): Promise<Norm
   }
 }
 
-// ── Registry: add future sites here (one line each) ──
+// ── Registry: All 7 market sources in the Jordanian ecosystem ──
 export const SOURCE_ADAPTERS: SourceAdapter[] = [
   { id: 'opensooq', label: 'السوق المفتوح', country: 'JO', enabled: true, collect: collectOpenSooq },
   { id: 'jocars', label: 'سوق JO Cars', country: 'JO', enabled: true, collect: collectJoCars },
   { id: 'ordonauto', label: 'أردن أوتو (وكيل)', country: 'JO', enabled: true, collect: collectOrdonAuto },
-  // Facebook: slot reserved, collection disabled (ToS/bot-wall) — see sources-facebook.ts.
+  { id: 'karmal', label: 'كارمال الأردن', country: 'JO', enabled: true, collect: collectKarmal },
+  { id: 'waseet', label: 'الوسيط الأردن', country: 'JO', enabled: true, collect: collectWaseet },
+  { id: 'autohub', label: 'أوتوهاب الأردن', country: 'JO', enabled: true, collect: collectAutohub },
   { id: 'facebook', label: 'فيسبوك ماركت', country: 'JO', enabled: false, collect: collectFacebook },
-  // Source5..10 slots: implement SourceAdapter in a new file and register.
 ];
 
-/** Run all enabled adapters with per-source budgets; one failure never stops the rest (spec §21). */
+/** Run all adapters with per-source budgets; one failure never stops the rest (spec §21). */
 export async function collectAll(
   spec: VehicleSpec,
   perSourceMs = 9000,
-): Promise<{ listings: NormalizedListing[]; outcomes: SourceOutcome[] }> {
+): Promise<{
+  listings: NormalizedListing[];
+  outcomes: SourceOutcome[];
+  sourceExecutions: MarketSourceExecution[];
+}> {
   const listings: NormalizedListing[] = [];
   const outcomes: SourceOutcome[] = [];
-  await Promise.all(
-    SOURCE_ADAPTERS.filter((a) => a.enabled).map(async (a) => {
+  const sourceExecutions: MarketSourceExecution[] = [];
+
+  const baseQuery = `${spec.brand} ${spec.model} ${spec.year}`.trim();
+  const queriesExecuted = [
+    baseQuery,
+    `${spec.brand} ${spec.model}`,
+    spec.trim ? `${spec.brand} ${spec.model} ${spec.trim}` : null,
+  ].filter(Boolean) as string[];
+
+  const enabledAdapters = SOURCE_ADAPTERS.filter((a) => a.enabled);
+  const disabledAdapters = SOURCE_ADAPTERS.filter((a) => !a.enabled);
+
+  const results = await Promise.allSettled(
+    enabledAdapters.map(async (a) => {
+      const searchStartedAt = new Date().toISOString();
       const t0 = Date.now();
       try {
         const rows = await a.collect(spec, perSourceMs);
-        listings.push(...rows);
-        outcomes.push({ id: a.id, label: a.label, ok: true, count: rows.length, ms: Date.now() - t0 });
+        const searchFinishedAt = new Date().toISOString();
+        const durationMs = Date.now() - t0;
+        const status: SourceExecutionStatus = rows.length > 0 ? 'SEARCHED' : 'NO_RESULTS';
+
+        return {
+          rows,
+          execution: {
+            sourceId: a.id,
+            sourceLabel: a.label,
+            searchStartedAt,
+            searchFinishedAt,
+            durationMs,
+            status,
+            queriesExecuted,
+            rawResults: rows.length,
+            validListings: rows.length,
+            rejectedListings: 0,
+            rejectionReasons: {},
+            acceptedComparables: 0,
+            error: null,
+          } as MarketSourceExecution,
+          outcome: {
+            id: a.id,
+            label: a.label,
+            ok: true,
+            count: rows.length,
+            ms: durationMs,
+          } as SourceOutcome,
+        };
       } catch (e: any) {
-        outcomes.push({ id: a.id, label: a.label, ok: false, count: 0, ms: Date.now() - t0, error: e?.message || 'failed' });
+        const searchFinishedAt = new Date().toISOString();
+        const durationMs = Date.now() - t0;
+        const isTimeout = durationMs >= perSourceMs - 200 || e?.name === 'AbortError' || e?.message?.includes('timeout');
+        const status: SourceExecutionStatus = isTimeout ? 'TIMEOUT' : 'FAILED';
+        const errorMsg = isTimeout ? 'تجاوزت مهلة الاتصال بالخادم (Timeout)' : (e?.message || 'فشل الاتصال');
+
+        return {
+          rows: [],
+          execution: {
+            sourceId: a.id,
+            sourceLabel: a.label,
+            searchStartedAt,
+            searchFinishedAt,
+            durationMs,
+            status,
+            queriesExecuted,
+            rawResults: 0,
+            validListings: 0,
+            rejectedListings: 0,
+            rejectionReasons: {},
+            acceptedComparables: 0,
+            error: errorMsg,
+          } as MarketSourceExecution,
+          outcome: {
+            id: a.id,
+            label: a.label,
+            ok: false,
+            count: 0,
+            ms: durationMs,
+            error: errorMsg,
+          } as SourceOutcome,
+        };
       }
-    }),
+    })
   );
-  // Disabled slots are reported, never faked (spec §4, §21).
-  for (const a of SOURCE_ADAPTERS.filter((a) => !a.enabled)) {
+
+  for (const r of results) {
+    if (r.status === 'fulfilled') {
+      listings.push(...r.value.rows);
+      outcomes.push(r.value.outcome);
+      sourceExecutions.push(r.value.execution);
+    }
+  }
+
+  for (const a of disabledAdapters) {
+    const now = new Date().toISOString();
+    const isFb = a.id === 'facebook';
+    const status: SourceExecutionStatus = isFb ? 'BLOCKED' : 'DISABLED';
+    const errorMsg = isFb
+      ? 'مطلوب تسجيل دخول ومحمي بجدار حماية ضد التتبع الآلي (Meta Anti-Bot / Login Required)'
+      : 'المصدر معطل في الإعدادات';
+
     outcomes.push({
-      id: a.id, label: a.label, ok: false, count: 0, ms: 0,
-      error: a.id === 'facebook' ? FACEBOOK_STATUS : 'disabled',
+      id: a.id,
+      label: a.label,
+      ok: false,
+      count: 0,
+      ms: 0,
+      error: errorMsg,
+    });
+
+    sourceExecutions.push({
+      sourceId: a.id,
+      sourceLabel: a.label,
+      searchStartedAt: now,
+      searchFinishedAt: now,
+      durationMs: 0,
+      status,
+      queriesExecuted: isFb ? ['Facebook Marketplace JO Automotive Query'] : [],
+      rawResults: 0,
+      validListings: 0,
+      rejectedListings: 0,
+      rejectionReasons: {},
+      acceptedComparables: 0,
+      error: errorMsg,
     });
   }
-  return { listings, outcomes };
+
+  return { listings, outcomes, sourceExecutions };
 }

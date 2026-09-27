@@ -23,6 +23,9 @@ import type {
   UrlStatus,
   EvidenceStatus,
   SourceSnapshot,
+  QualitativeMatchLevel,
+  MarketSourceExecution,
+  ValuationAuditTrace,
 } from './types';
 import { runValuation } from './engine';
 import { buildSpecFromBody } from './request';
@@ -78,6 +81,9 @@ export interface Section24ComparableUsed {
   tierLabel?: string;
   identityStatus?: string;
   similarity: number;
+  qualitativeMatch?: QualitativeMatchLevel;
+  isPowertrainMismatch?: boolean;
+  powertrainNote?: string;
   weight: number;
   weightBreakdown?: WeightBreakdown;
   contributionPercent?: number;
@@ -149,6 +155,8 @@ export interface Section24OutputContract {
   warnings: string[];
   reasoning: string[];
   auditTrail: string[];
+  marketSourceExecutions?: MarketSourceExecution[];
+  auditTrace?: ValuationAuditTrace;
 }
 
 export interface RunIntelligenceValuationOptions {
@@ -311,6 +319,9 @@ export async function runIntelligenceValuation(
     tierLabel: c.tierLabel || (c.tier === 1 ? 'أساسي (Tier 1)' : c.tier === 2 ? 'أساسي (Tier 2)' : c.tier === 3 ? 'ثانوي (Tier 3)' : 'داعم (Tier 4)'),
     identityStatus: c.identityStatus || 'ELIGIBLE_SAME_MODEL',
     similarity: c.similarity,
+    qualitativeMatch: c.qualitativeMatch,
+    isPowertrainMismatch: c.isPowertrainMismatch,
+    powertrainNote: c.powertrainNote,
     weight: Math.round(c.finalWeight * 1000) / 1000,
     weightBreakdown: c.weightBreakdown,
     contributionPercent: c.contributionPercent ?? 0,
@@ -635,6 +646,8 @@ export async function runIntelligenceValuation(
     warnings,
     reasoning,
     auditTrail,
+    marketSourceExecutions: audit?.marketSourceExecutions || [],
+    auditTrace: audit,
   };
 
   return contractResult;

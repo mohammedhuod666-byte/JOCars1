@@ -46,7 +46,10 @@ export function computeDetailedWeight(
   }
 
   // 3. Technical weight: alignment of powertrain, trim, and specs
-  const simFraction = Math.max(0.35, Math.min(1.0, (c.similarity || 50) / 100));
+  let simFraction = Math.max(0.35, Math.min(1.0, (c.similarity || 50) / 100));
+  if (c.isPowertrainMismatch) {
+    simFraction *= 0.60;
+  }
   const technicalWeight = Math.round(simFraction * 100) / 100;
 
   // 4. Mileage weight: penalize extreme mileage discrepancies relative to target
@@ -121,8 +124,8 @@ export function computeWeight(
  * (Requirement §2 & §8)
  */
 export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[] {
-  const primary = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0);
-  const secondary = comps.filter((c) => c.tier > 2 || c.yearDiff > 0);
+  const primary = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch);
+  const secondary = comps.filter((c) => c.tier > 2 || c.yearDiff > 0 || c.isPowertrainMismatch);
 
   const primaryWeight = primary.reduce((sum, c) => sum + c.weight, 0);
   const secondaryWeight = secondary.reduce((sum, c) => sum + c.weight, 0);
@@ -232,11 +235,13 @@ export function priceStats(included: Comparable[], askingPrice?: number | null):
     if (wm > 0) {
       askingPricePremiumPercent = Math.round(((askingPrice - wm) / wm) * 1000) / 10;
     }
-    if (prices.length > 0) {
-      // Calculate percentile rank strictly within eligible comparables
+    // Calculate percentile rank strictly within eligible comparables (only when >= 4 comps)
+    if (prices.length >= 4) {
       const countBelow = prices.filter((p) => p < askingPrice).length;
       const countEqual = prices.filter((p) => p === askingPrice).length;
       askingPricePercentile = Math.round(((countBelow + 0.5 * countEqual) / prices.length) * 100);
+    } else {
+      askingPricePercentile = null;
     }
   }
 
@@ -271,10 +276,10 @@ export function calculateFMV(adjustedComps: Comparable[], askingPrice?: number |
   const hasDirectEvidence = adjustedComps.some((c) => c.tier <= 2 || (c.yearDiff !== undefined && c.yearDiff <= 1));
   const isWideRange = !hasDirectEvidence || ((maxPrice - minPrice) > estimated * 0.35);
   const rangeDisclaimerAr = !hasDirectEvidence
-    ? 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة والاعتماد على شواهد داعمة من سنوات أخرى'
+    ? 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية (نطاق واسع لمحدودية الأدلة المباشرة)'
     : isWideRange
-    ? 'نطاق استرشادي واسع نظراً لتباين عروض السوق'
-    : 'النطاق السعري المتوقع وفق عروض السوق المتوافقة';
+    ? 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية (تباين في أسعار العرض)'
+    : 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية';
 
   return { fmv: estimated, minPrice, maxPrice, stats, isWideRange, rangeDisclaimerAr };
 }

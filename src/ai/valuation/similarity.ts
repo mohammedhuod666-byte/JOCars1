@@ -9,11 +9,57 @@
  * Spec differences never delete a row — they lower similarity and get a
  * recorded price adjustment instead.
  */
-import type { Comparable, NormalizedListing, VehicleSpec } from './types';
+import type { Comparable, NormalizedListing, VehicleSpec, QualitativeMatchLevel } from './types';
 import { SIM_WEIGHTS } from './types';
 
 function norm(s: string | null | undefined): string {
   return (s || '').toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
+}
+
+export function isPhevVsPetrolMismatch(
+  a: NormalizedListing | { fuelType?: string | null; title?: string | null; trim?: string | null },
+  spec: VehicleSpec
+): boolean {
+  const normF = (fuel?: string | null, title?: string | null, trim?: string | null) => {
+    const s = `${fuel || ''} ${title || ''} ${trim || ''}`.toLowerCase();
+    if (s.includes('plug-in') || s.includes('plugin') || s.includes('phev') || s.includes('بلج ان') || s.includes('بلاج ان') || s.includes('40e') || s.includes('45e') || s.includes('50e')) {
+      return 'phev';
+    }
+    if (s.includes('hyb') || s.includes('هايبرد') || s.includes('هجين')) {
+      return 'hybrid';
+    }
+    if (s.includes('elec') || s.includes('كهرب')) {
+      return 'electric';
+    }
+    if (s.includes('diesel') || s.includes('ديزل')) {
+      return 'diesel';
+    }
+    if (s.includes('petrol') || s.includes('gas') || s.includes('بنزين')) {
+      return 'petrol';
+    }
+    return 'unknown';
+  };
+
+  const targetFuel = normF(spec.fuelType, '', spec.trim);
+  const compFuel = normF(a.fuelType, (a as any).title, a.trim);
+
+  if (targetFuel === 'petrol' && compFuel === 'phev') return true;
+  if (targetFuel === 'phev' && compFuel === 'petrol') return true;
+  return false;
+}
+
+export function getQualitativeMatch(
+  tier: Tier,
+  similarity: number,
+  isPowertrainMismatch = false
+): QualitativeMatchLevel {
+  if (isPowertrainMismatch) {
+    return similarity >= 60 ? 'مطابقة متوسطة' : 'مطابقة محدودة';
+  }
+  if (tier === 1 && similarity >= 80) return 'مطابقة قوية';
+  if ((tier === 1 || tier === 2) && similarity >= 70) return 'مطابقة جيدة';
+  if (tier <= 3 && similarity >= 55) return 'مطابقة متوسطة';
+  return 'مطابقة محدودة';
 }
 
 export function sameModel(a: NormalizedListing, spec: VehicleSpec): boolean {
@@ -214,13 +260,15 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
   if (!same) return 0;
 
   const yd = a.year === null || a.year === undefined ? null : Math.abs(a.year - spec.year);
-  const fuelMismatch = spec.fuelType && a.fuelType && norm(a.fuelType) !== norm(spec.fuelType);
+  const phevMismatch = isPhevVsPetrolMismatch(a, spec);
+  const fuelMismatch = (spec.fuelType && a.fuelType && norm(a.fuelType) !== norm(spec.fuelType)) || phevMismatch;
 
   if (yd === 0) {
+    if (phevMismatch) return 3; // Demote PHEV to Secondary/Support (Tier 3 max) when target is Petrol
     return specMatches(a, spec) ? 1 : 2;
   }
   if (yd === null) return c.allowAnyYear ? 4 : 0; // year unknown can NEVER be same-year Tier 1 or Tier 2
-  if (yd <= 1) return fuelMismatch ? 4 : 3;
+  if (yd <= 1) return fuelMismatch ? (phevMismatch ? 3 : 4) : 3;
   if (yd === 2 && c.allowPlus2) return 4;
   if (yd > 2 && yd <= 6 && c.allowAnyYear) return 4; // expansion: same model only!
   return 0;
@@ -351,7 +399,7 @@ export function matchMatrix(spec: VehicleSpec, c: NormalizedListing): MatchRow[]
     { factor: 'model', factorAr: 'الموديل', target: fmt(spec.modelEn || spec.model), comp: fmt(c.modelEn || c.model), verdict: eq(c.modelEn || c.model, spec.modelEn || spec.model) },
     { factor: 'year', factorAr: 'السنة', target: fmt(spec.year), comp: fmt(c.year), verdict: num(c.year, spec.year, 0) === 'MATCH' ? 'MATCH' : c.year == null ? 'UNKNOWN' : Math.abs(c.year - spec.year) <= 1 ? 'CLOSE' : 'DIFFERENT' },
     { factor: 'trim', factorAr: 'الفئة', target: fmt(spec.trim), comp: fmt(c.trim), verdict: eq(c.trim, spec.trim) },
-    { factor: 'fuel', factorAr: 'الوقود', target: fmt(spec.fuelType), comp: fmt(c.fuelType), verdict: eq(normFuel(c.fuelType), normFuel(spec.fuelType)) },
+    { factor: 'fuel', factorAr: 'الوقود', target: fmt(spec.fuelType), comp: fmt(c.fuelType), verdict: isPhevVsPetrolMismatch(c, spec) ? 'DIFFERENT' : eq(normFuel(c.fuelType), normFuel(spec.fuelType)) },
     { factor: 'transmission', factorAr: 'الجير', target: fmt(spec.transmission), comp: fmt(c.transmission), verdict: eq(normTrans(c.transmission), normTrans(spec.transmission)) },
     { factor: 'drivetrain', factorAr: 'الدفع', target: fmt(spec.drivetrain), comp: fmt(c.drivetrain), verdict: eq(c.drivetrain, spec.drivetrain) },
     { factor: 'engineCc', factorAr: 'سعة المحرك', target: fmt((spec as any).engineCapacity), comp: fmt((c as any).engineCc), verdict: num((c as any).engineCc, (spec as any).engineCapacity, 0.15) },
@@ -454,20 +502,33 @@ export function scoreSimilarity(
   };
   // Tier penalty: lower tiers can never outrank tier 1 (caps), and the
   // tier factor (1.00/0.85/0.70/0.50/0.30) multiplies the final weight.
+  const phevMismatch = isPhevVsPetrolMismatch(a, spec);
   const tierCap = tier === 1 ? 100 : tier === 2 ? 95 : tier === 3 ? 85 : 70;
+  const maxCap = phevMismatch ? Math.min(65, tierCap) : tierCap;
   let raw = 0;
   for (const [k, w] of Object.entries(weights)) raw += (parts[k] ?? 0.5) * (w as number);
   const wSum = Object.values(weights).reduce((x, y) => x + (y as number), 0) || 100;
   raw = (raw / wSum) * 100;
-  const similarity = Math.min(tierCap, Math.round(raw));
+  const similarity = Math.min(maxCap, Math.round(raw));
+
+  const qualitativeMatch = getQualitativeMatch(tier, similarity, phevMismatch);
 
   const breakdown: Record<string, number> = {};
   for (const k of Object.keys(weights)) breakdown[k] = Math.round((parts[k] ?? 0.5) * 100);
 
   return {
-    ...a, tier, yearDiff: a.year === null || a.year === undefined ? 0 : Math.abs(a.year - spec.year),
-    similarity, simBreakdown: breakdown,
-    adjustedPrice: null, adjustments: [], weight: 1,
-    included: true, ageDays,
+    ...a,
+    tier,
+    yearDiff: a.year === null || a.year === undefined ? 0 : Math.abs(a.year - spec.year),
+    similarity,
+    qualitativeMatch,
+    isPowertrainMismatch: phevMismatch,
+    powertrainNote: phevMismatch ? 'اختلاف في منظومة الدفع (بنزين مقابل هايبرد/PHEV) - مصنفة كدليل ثانوي' : undefined,
+    simBreakdown: breakdown,
+    adjustedPrice: null,
+    adjustments: [],
+    weight: 1,
+    included: true,
+    ageDays,
   };
 }
