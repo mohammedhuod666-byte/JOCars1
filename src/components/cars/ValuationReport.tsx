@@ -534,10 +534,23 @@ export function ValuationReport({
                           <p className="text-sm font-bold text-rose-400 mt-0.5">{evidence.excludedListings} إعلان</p>
                         </div>
                         <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                          <p className="text-[10px] text-slate-400">المصادر المستقلة</p>
-                          <p className="text-sm font-bold text-cyan-400 mt-0.5">{evidence.uniqueSources} مصادر</p>
+                          <p className="text-[10px] text-slate-400">المصادر المستقلة في FMV</p>
+                          <p className="text-sm font-bold text-cyan-400 mt-0.5">
+                            {(evidence.independentSourcesUsedInFMV ?? evidence.uniqueSources) === 1
+                              ? 'مصدر مستقل واحد'
+                              : `${evidence.independentSourcesUsedInFMV ?? evidence.uniqueSources} مصادر`}
+                          </p>
                         </div>
                       </div>
+
+                      {(evidence.independentSourcesUsedInFMV ?? evidence.uniqueSources) === 1 && (
+                        <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-center gap-2">
+                          <Info className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>
+                            تنبيه تنوع المصادر: يعتمد التقييم على مصدر مستقل واحد ({compsUsed[0]?.source || 'السوق المفتوح'}) بعد تصفية التكرارات وعنقود السيارة المستهدفة عبر ({evidence.sourcesSearched || 7}) مصادر مفحوصة، ما يحد من درجة الثقة لغياب مصادر مستقلة متعددة تدعم السعر.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -594,7 +607,7 @@ export function ValuationReport({
                           <FileCheck className="w-4 h-4 text-emerald-400" />
                           <span>السيارات المقارنة في السوق ({compsUsed.length})</span>
                         </p>
-                        <span className="text-[11px] text-slate-400">انقر على أي سيارة لعرض المواصفات ورابط المصدر</span>
+                        <span className="text-[11px] text-slate-400">انقر على أي سيارة لعرض تفاصيل المواصفات والمطابقة</span>
                       </div>
 
                       <table className="w-full text-xs">
@@ -706,70 +719,15 @@ export function ValuationReport({
                                       </div>
                                     </div>
 
-                                    {/* Source Evidence Card */}
-                                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
-                                      <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <div className="flex items-center gap-2">
-                                          <FileCheck className="w-4 h-4 text-blue-400" />
-                                          <span className="font-bold text-slate-200 text-xs">بطاقة توثيق الدليل والمصدر (Source Evidence Card)</span>
-                                        </div>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                                          c.urlStatus === 'VALID'
-                                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                            : c.urlStatus === 'REDIRECTED'
-                                            ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                                            : c.urlStatus === 'BLOCKED'
-                                            ? 'bg-slate-800 text-slate-300 border-slate-700'
-                                            : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                        }`}>
-                                          {c.urlStatus === 'VALID'
-                                            ? 'رابط نشط وصالح'
-                                            : c.urlStatus === 'REDIRECTED'
-                                            ? 'رابط معاد توجيهه للمنشور'
-                                            : c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE'
-                                            ? 'إعلان مؤرشف (الرابط لم يعد متاحاً)'
-                                            : 'المصدر محمي'}
-                                        </span>
+                                    {/* Clean Public Evidence Badge (No raw external links or scraped content) */}
+                                    <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                                      <div className="flex items-center gap-2 text-slate-300">
+                                        <FileCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        <span>بيانات الإعلان معتمدة ومطابقة لمعايير الأهلية السوقية (إعلان مبوب محلي موثق)</span>
                                       </div>
-
-                                      {/* Link box */}
-                                      <div className="flex items-center gap-2 bg-slate-900/80 p-2 rounded-lg border border-slate-800">
-                                        <span className="text-[10px] text-slate-400">الرابط:</span>
-                                        {(c.finalUrl || c.canonicalUrl || c.sourceUrl) ? (
-                                          <span className="text-slate-300 font-mono text-[10px] break-all select-all flex-1">
-                                            {c.finalUrl || c.canonicalUrl || c.sourceUrl}
-                                          </span>
-                                        ) : (
-                                          <span className="text-slate-500 text-[10px] flex-1">لا يوجد رابط مباشر متاح</span>
-                                        )}
-                                        {(c.finalUrl || c.canonicalUrl || c.sourceUrl) && (
-                                          <div className="flex items-center gap-1 shrink-0">
-                                            <button
-                                              type="button"
-                                              onClick={() => copyToClipboard(c.finalUrl || c.canonicalUrl || c.sourceUrl!)}
-                                              className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800"
-                                              title="نسخ الرابط"
-                                            >
-                                              {copiedUrl === (c.finalUrl || c.canonicalUrl || c.sourceUrl) ? (
-                                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                              ) : (
-                                                <Copy className="w-3.5 h-3.5" />
-                                              )}
-                                            </button>
-                                            {(c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') && (
-                                              <a
-                                                href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-blue-400 hover:text-blue-300 p-1 rounded hover:bg-slate-800"
-                                                title="فتح الرابط الأصلي"
-                                              >
-                                                <ExternalLink className="w-3.5 h-3.5" />
-                                              </a>
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
+                                      <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                                        بيانات محققة
+                                      </span>
                                     </div>
                                   </td>
                                 </tr>
@@ -808,6 +766,34 @@ export function ValuationReport({
                       </span>
                     </div>
 
+                    {/* The 4 Distinct Source Breakdown Counters (User Mandate §2) */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">المصادر المفحوصة (Searched)</span>
+                        <span className="font-bold text-white text-sm">
+                          {evidence?.sourcesSearched || marketSourceExecutions.length || 7}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">مصادر بنتائج (With Results)</span>
+                        <span className="font-bold text-blue-400 text-sm">
+                          {evidence?.sourcesWithResults ?? marketSourceExecutions.filter(m => m.rawResults > 0).length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">مصادر بمقارنات مؤهلة (Eligible)</span>
+                        <span className="font-bold text-emerald-400 text-sm">
+                          {evidence?.sourcesWithEligibleComparables ?? marketSourceExecutions.filter(m => (m.eligibleComparables ?? m.acceptedComparables) > 0).length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">مصادر مستقلة في FMV</span>
+                        <span className="font-bold text-purple-400 text-sm">
+                          {evidence?.independentSourcesUsedInFMV ?? 1}
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                       <table className="w-full text-[11px]">
                         <thead>
@@ -820,6 +806,7 @@ export function ValuationReport({
                             <th className="p-2.5">الصالحة</th>
                             <th className="p-2.5">المستبعدة</th>
                             <th className="p-2.5">المقبولة</th>
+                            <th className="p-2.5">في FMV؟</th>
                             <th className="p-2.5 rounded-l-lg">ملاحظات / أخطاء</th>
                           </tr>
                         </thead>
@@ -836,6 +823,13 @@ export function ValuationReport({
                               <td className="p-2.5 text-emerald-400">{mse.validListings}</td>
                               <td className="p-2.5 text-rose-400">{mse.rejectedListings}</td>
                               <td className="p-2.5 text-blue-400 font-bold">{mse.acceptedComparables}</td>
+                              <td className="p-2.5 font-sans">
+                                {mse.usedInFmv || mse.acceptedComparables > 0 ? (
+                                  <span className="text-emerald-400 font-bold">نعم ({mse.acceptedComparables})</span>
+                                ) : (
+                                  <span className="text-slate-500">لا (مستبعد)</span>
+                                )}
+                              </td>
                               <td className="p-2.5 font-sans text-[10px] text-slate-400 max-w-[160px] truncate" title={mse.error || ''}>
                                 {mse.error || '—'}
                               </td>

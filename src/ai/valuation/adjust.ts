@@ -77,8 +77,8 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
     const yearDiff = r.year - spec.year; // positive = comp is newer than target
     const absDiff = Math.abs(yearDiff);
 
-    if (absDiff <= 2) {
-      // Near-year step (±1 to ±2 years): apply calibrated market step or conservative step
+    if (absDiff === 1) {
+      // Secondary evidence (±1 year only): apply calibrated market step or conservative limited step
       let d: number;
       let method: string;
       let formula: string;
@@ -87,42 +87,42 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
       if (cal.perYearJod > 0) {
         d = -yearDiff * cal.perYearJod;
         method = 'Corpus Median Year Step Regression';
-        formula = `delta = -(${yearDiff} years) * ${cal.perYearJod} JOD/year`;
+        formula = `delta = -(${yearDiff} year) * ${cal.perYearJod} JOD/year`;
       } else {
-        // Modest linear conservative step (5% per year)
-        const rate = 0.05 * absDiff;
+        // Modest conservative step (capped at 5%)
+        const rate = 0.05;
         d = yearDiff > 0 ? -Math.round(r.priceJod * rate) : Math.round(r.priceJod * rate);
-        method = 'Conservative Linear Year Market Step';
-        formula = `delta = ${yearDiff > 0 ? '-' : '+'}${rate * 100}% of price`;
+        method = 'Conservative Linear Year Market Step (±1 Year)';
+        formula = `delta = ${yearDiff > 0 ? '-' : '+'}5% of price`;
       }
 
-      const cap = Math.round(r.priceJod * 0.20);
+      const cap = Math.round(r.priceJod * 0.08); // strict cap for ±1 year
       d = Math.max(-cap, Math.min(cap, d));
       price += d;
 
       adj.push({
         factor: 'year',
-        factorAr: `تعديل فارق سنة الصنع (${r.year} ← ${spec.year})`,
+        factorAr: `تعديل ثانوي لفارق سنة واحدة (${r.year} ← ${spec.year})`,
         delta: d,
         provenance,
         method,
         formula,
         reason: yearDiff > 0
-          ? `المقارنة أحدث بفارق (${absDiff} سنوات) عن (${spec.year})، تم خصم فارق السنة المعياري`
-          : `المقارنة أقدم بفارق (${absDiff} سنوات) عن (${spec.year})، تمت إضافة فارق السنة المعياري`,
+          ? `المقارنة أحدث بسنة واحدة عن (${spec.year})، تم تطبيق تعديل سنوي محدود`
+          : `المقارنة أقدم بسنة واحدة عن (${spec.year})، تم تطبيق تعديل سنوي محدود`,
       });
     } else {
-      // Far-year evidence (|yearDiff| >= 3):
+      // Far-year evidence (|yearDiff| >= 2):
       // Strictly NO synthetic compound annual depreciation formula to manufacture a fake target price!
-      // Far-year evidence provides contextual market support without synthetic price deformation.
+      // Far-year evidence provides contextual/support market evidence without synthetic price deformation.
       adj.push({
         factor: 'year',
-        factorAr: `شاهد داعم من سنة بعيدة (${r.year}) دون تصنيع سعري`,
+        factorAr: `شاهد داعم من سنة متباعدة (${r.year}) دون تصنيع سعري`,
         delta: 0,
         provenance: 'CONSERVATIVE_HEURISTIC',
         method: 'Directional Context Support (No Compounding Depreciation)',
         formula: 'delta = 0 (preserved as raw market evidence)',
-        reason: `المقارنة من سنة بعيدة (${r.year} مقابل ${spec.year})؛ تم الإبقاء على سعرها دون تطبيق نسب إهلاك تراكمية مصنعة`,
+        reason: `المقارنة من سنة متباعدة (${r.year} مقابل ${spec.year}، فارق ${absDiff} سنوات)؛ شواهد داعمة/سياقية فقط دون تطبيق نسب إهلاك تراكمية مصنعة`,
       });
     }
   }

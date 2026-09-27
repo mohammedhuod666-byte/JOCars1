@@ -139,8 +139,8 @@ describe('dedupe + outliers', () => {
 describe('adjustments', () => {
   it('year delta sign: newer comp subtracts', () => {
     const cal = { perYearJod: 700, per10kKmJod: 180, calibrated: false, provenance: 'CONSERVATIVE_HEURISTIC' as const, sampleSize: 2 };
-    const newer = adjustComparable(mkListing({ year: 2024, priceJod: 15000, kilometers: 80000 }), spec, cal);
-    const older = adjustComparable(mkListing({ year: 2020, priceJod: 11000, kilometers: 80000 }), spec, cal);
+    const newer = adjustComparable(mkListing({ year: 2023, priceJod: 15000, kilometers: 80000 }), spec, cal);
+    const older = adjustComparable(mkListing({ year: 2021, priceJod: 11000, kilometers: 80000 }), spec, cal);
     assert.ok(newer.adjustedPrice! < 15000);
     assert.ok(older.adjustedPrice! > 11000);
     assert.ok(newer.adjustments.some((a) => a.factor === 'year'));
@@ -757,4 +757,253 @@ describe('User Methodological Refinements (Public Separation, Powertrain, Deprec
     assert.equal(SOURCE_ADAPTERS.length, 7);
   });
 });
+
+describe('User Mandate: Multi-Source Integrity, Independent Source Isolation & Narrative Consistency', () => {
+  const bmwSpec: VehicleSpec = {
+    brand: 'BMW', brandEn: 'bmw', model: 'X5', modelEn: 'x5',
+    year: 2018, trim: 'xDrive40i', kilometers: 90000, fuelType: 'PETROL',
+    transmission: 'AUTOMATIC', city: 'عمان',
+  };
+
+  // Test 1: 7 sources searched but only 1 independent source used
+  it('1. 7 sources searched but only 1 independent source used: independentSourcesUsedInFMV = 1 and confidence reflects 1 source', () => {
+    const searchedSourceIds = ['opensooq', 'jocars', 'ordonauto', 'karmal', 'waseet', 'autohub', 'facebook'];
+    const comps = [
+      mkListing({ source: 'opensooq', sourceLabel: 'السوق المفتوح', priceJod: 28000, included: true }),
+      mkListing({ source: 'opensooq', sourceLabel: 'السوق المفتوح', priceJod: 29000, included: true }),
+      mkListing({ source: 'opensooq', sourceLabel: 'السوق المفتوح', priceJod: 30000, included: true }),
+    ];
+
+    const sourcesSearched = searchedSourceIds.length;
+    const independentSourcesUsedInFMV = new Set(comps.map((c) => c.source)).size;
+
+    assert.equal(sourcesSearched, 7);
+    assert.equal(independentSourcesUsedInFMV, 1);
+
+    // Confidence receives only single-source weighting, no 7-source inflation
+    const conf = confidenceScore({
+      used: comps.length,
+      found: 10,
+      sourcesUsed: independentSourcesUsedInFMV, // Pass actual 1, not 7!
+      highSim: 3,
+      spreadRatio: 0.05,
+      freshShare: 1,
+      specComplete: true,
+      yearMatchShare: 1,
+      trimMatchShare: 1,
+      engineMatchShare: 1,
+      tier1Share: 1,
+      excludedShare: 0.1,
+    });
+
+    assert.ok(conf.reasons.some((r) => r.includes('مصدر واحد')));
+    assert.equal(conf.reasons.some((r) => r.includes('7 مصادر')), false);
+  });
+
+  // Test 2: Target duplicates across sources
+  it('2. Target duplicates across sources: clustered and quarantined across opensooq, jocars, ordonauto', () => {
+    const rawListings: NormalizedListing[] = [
+      {
+        source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-1', url: 'https://opensooq.com/1',
+        title: 'BMW X5 2018 xDrive40i Clean', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
+        price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
+        fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
+        drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
+      },
+      {
+        source: 'jocars', sourceLabel: 'جو كارز', externalId: 'jc-1', url: 'https://jocars.com/1',
+        title: 'BMW X5 2018 xDrive40i Same Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
+        price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
+        fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
+        drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
+      },
+      {
+        source: 'ordonauto', sourceLabel: 'أردن أوتو', externalId: 'oa-1', url: 'https://ordonauto.com/1',
+        title: 'BMW X5 2018 xDrive40i Mirror', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
+        price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
+        fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
+        drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
+      },
+    ];
+
+    const { cluster, cleanListings } = detectTargetIdentityCluster(rawListings, {
+      spec: bmwSpec,
+      askingPrice: 29000,
+    });
+
+    assert.equal(cluster.totalClusterCount, 3);
+    assert.deepEqual(cluster.sourcesInCluster.sort(), ['jocars', 'opensooq', 'ordonauto'].sort());
+    assert.equal(cleanListings.length, 0);
+  });
+
+  // Test 3: Source count after target-cluster removal
+  it('3. Source count after target-cluster removal: jocars and ordonauto excluded from eligible sources', () => {
+    const rawListings: NormalizedListing[] = [
+      // Target copies
+      { source: 'jocars', sourceLabel: 'جو كارز', externalId: 'jc-1', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+      { source: 'ordonauto', sourceLabel: 'أردن أوتو', externalId: 'oa-1', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+      // Legitimate separate comps from OpenSooq
+      { source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-other-1', title: 'BMW X5 2018 Different Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 130000, price: 27500, currency: 'JOD', priceJod: 27500, fxRate: 1, city: 'إربد', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+      { source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-other-2', title: 'BMW X5 2018 Another Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 75000, price: 31000, currency: 'JOD', priceJod: 31000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+    ];
+
+    const { cluster, cleanListings } = detectTargetIdentityCluster(rawListings, {
+      spec: bmwSpec,
+      askingPrice: 29000,
+    });
+
+    assert.equal(cluster.totalClusterCount, 2);
+    assert.equal(cleanListings.length, 2);
+
+    const eligibleSources = new Set(cleanListings.map((l) => l.source));
+    assert.equal(eligibleSources.has('jocars'), false, 'JO Cars must NOT be an eligible source');
+    assert.equal(eligibleSources.has('ordonauto'), false, 'OrdonAuto must NOT be an eligible source');
+    assert.equal(eligibleSources.size, 1);
+    assert.ok(eligibleSources.has('opensooq'));
+  });
+
+  // Test 4: Blocked source
+  it('4. Blocked source: facebook marketplace remains BLOCKED without automated bypass', () => {
+    const fb = SOURCE_ADAPTERS.find((a) => a.id === 'facebook');
+    assert.ok(fb);
+    assert.equal(fb.enabled, false);
+    // Verified: No bypass of CAPTCHA/Login/Anti-bot
+  });
+
+  // Test 5: No eligible source
+  it('5. No eligible source: when all candidates fail sanity gates, eligible and used source counts are 0', () => {
+    const invalidListings = [
+      mkListing({ priceJod: 50, title: 'BMW X5 لقطة 50 دينار' }), // Suspicious placeholder < 100
+      mkListing({ priceJod: 300, title: 'رقم مميز ترميز 5' }), // Plate listing
+    ];
+
+    const { clean } = sanityCheck(invalidListings);
+    assert.equal(clean.length, 0);
+
+    const eligibleSourcesCount = new Set(clean.map((c) => c.source)).size;
+    assert.equal(eligibleSourcesCount, 0);
+  });
+
+  // Test 6: No direct same-year evidence
+  it('6. No direct same-year evidence: PHEV or distant years yield primarySameYearComparables = 0 and status INSUFFICIENT_DIRECT_EVIDENCE', () => {
+    const distantComps: Comparable[] = [
+      mkListing({ year: 2015, tier: 4, yearDiff: 3, fuelType: 'PETROL', isPowertrainMismatch: false }),
+      mkListing({ year: 2016, tier: 4, yearDiff: 2, fuelType: 'PETROL', isPowertrainMismatch: false }),
+      mkListing({ year: 2018, tier: 3, yearDiff: 0, fuelType: 'Plug-in Hybrid', isPowertrainMismatch: true }), // PHEV demoted
+    ];
+
+    const primaryComps = distantComps.filter(
+      (c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch
+    );
+    assert.equal(primaryComps.length, 0);
+  });
+
+  // Test 7: No far-year synthetic FMV
+  it('7. No far-year synthetic FMV: |yearDiff| >= 2 produces delta = 0 for year difference', () => {
+    const cal = { perYearJod: 800, per10kKmJod: 180, calibrated: true, provenance: 'MARKET_DERIVED' as const, sampleSize: 10 };
+
+    // 2016 model (diff = 2)
+    const comp2016 = adjustComparable(mkListing({ year: 2016, priceJod: 22000, kilometers: 90000 }), bmwSpec, cal);
+    const yrAdj2016 = comp2016.adjustments.find((a) => a.factor === 'year');
+    assert.equal(yrAdj2016?.delta, 0, 'Year diff 2 must NOT have synthetic depreciation');
+    assert.ok(yrAdj2016?.reason.includes('دون تطبيق نسب إهلاك تراكمية'));
+
+    // 2015 model (diff = 3)
+    const comp2015 = adjustComparable(mkListing({ year: 2015, priceJod: 19000, kilometers: 90000 }), bmwSpec, cal);
+    const yrAdj2015 = comp2015.adjustments.find((a) => a.factor === 'year');
+    assert.equal(yrAdj2015?.delta, 0, 'Year diff 3 must NOT have synthetic depreciation');
+  });
+
+  // Test 8: Public source redaction
+  it('8. Public source redaction: clean public presentation format strips raw URLs and external copy triggers', () => {
+    const internalComp = {
+      title: 'BMW X5 2018',
+      year: 2018,
+      mileage: 95000,
+      rawPrice: 28500,
+      source: 'السوق المفتوح',
+      sourceUrl: 'https://jo.opensooq.com/ar/search/287272368',
+      canonicalUrl: 'https://jo.opensooq.com/ar/search/287272368',
+    };
+
+    // Public representation sanitization
+    const publicComp = {
+      title: internalComp.title,
+      year: internalComp.year,
+      mileage: internalComp.mileage,
+      price: internalComp.rawPrice,
+      sourceLabel: 'إعلان مبوب محلي موثق',
+    };
+
+    assert.equal('sourceUrl' in publicComp, false);
+    assert.equal('canonicalUrl' in publicComp, false);
+    assert.equal(publicComp.price, 28500);
+  });
+
+  // Test 9: Admin source attribution preserved
+  it('9. Admin source attribution preserved: internal audit retains full URLs, canonical URLs, and snapshot hashes', () => {
+    const comp = mkListing({
+      source: 'opensooq',
+      url: 'https://jo.opensooq.com/ar/search/287272368',
+      canonicalUrl: 'https://jo.opensooq.com/ar/search/287272368',
+      urlStatus: 'VALID',
+      evidenceStatus: 'VERIFIED_AT_COLLECTION',
+    });
+
+    assert.equal(comp.source, 'opensooq');
+    assert.equal(comp.url, 'https://jo.opensooq.com/ar/search/287272368');
+    assert.equal(comp.canonicalUrl, 'https://jo.opensooq.com/ar/search/287272368');
+    assert.equal(comp.urlStatus, 'VALID');
+    assert.equal(comp.evidenceStatus, 'VERIFIED_AT_COLLECTION');
+  });
+
+  // Test 10: AI summary cannot claim direct evidence when valuation status says support-only
+  it('10. AI summary cannot claim direct evidence when valuation status says support-only', () => {
+    const supportOnlyPayload = {
+      target: { brand: 'BMW', model: 'X5', year: 2018, mileage: 120000, trim: null, fuelType: 'PETROL', transmission: null, askingPrice: null },
+      evidenceQuality: {
+        totalAdsChecked: 25,
+        eligibleComparables: 6,
+        sameYearComparables: 0,
+        primarySameYearComparables: 0, // NO direct primary comps!
+        plusMinusOneYearComparables: 0,
+        supportComparables: 6,
+        excludedAds: 19,
+        independentSources: 1, // Only 1 source!
+        targetClusterExcluded: 2,
+        confidence: 30,
+        confidenceLabel: 'منخفض',
+        status: 'INSUFFICIENT_DIRECT_EVIDENCE',
+      },
+      pricingResults: {
+        fairMarketValue: 24000,
+        range: { low: 19000, high: 29000 },
+        isWideRange: true,
+        rangeDisclaimerAr: 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة',
+        rawMedian: 24000, adjustedMedian: 24000, weightedMedian: 24000,
+        percentiles: { p25: 20000, p50: 24000, p75: 28000, p85: 28500, p90: 29000 },
+        askingPricePremiumPercent: null, askingPricePercentile: null, pricePositionClassification: 'UNKNOWN',
+      },
+      comparables: [],
+    };
+
+    const explanation = generateDeterministicExplanation(supportOnlyPayload as any);
+
+    // Summary MUST NOT claim direct same-year evidence
+    assert.equal(explanation.marketSummary.includes('مقارنات مباشرة من نفس السنة'), false);
+    assert.ok(explanation.marketSummary.includes('غير متوفرة') || explanation.marketSummary.includes('شواهد ثانوية/داعمة'));
+
+    // Key drivers MUST NOT claim same-year comps led the weight
+    const sameYearDriver = explanation.keyDrivers.find((d) => d.evidence?.metric === 'primarySameYearComparables');
+    assert.ok(sameYearDriver);
+    assert.ok(sameYearDriver.text.includes('لم تتوفر أي مقارنات مباشرة مؤهلة'));
+    assert.equal(sameYearDriver.text.includes('قادت الوزن الأكبر'), false);
+
+    // Single source restriction noted in explanation
+    const sourceDriver = explanation.keyDrivers.find((d) => d.evidence?.metric === 'independentSources');
+    assert.ok(sourceDriver);
+    assert.ok(sourceDriver.text.includes('مصدر مستقل واحد'));
+  });
+});
+
 

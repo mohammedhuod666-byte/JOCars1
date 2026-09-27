@@ -559,15 +559,36 @@ export async function runValuation(
     // Primary set controls >= 85% of total weight when present.
     balancePrimarySecondaryWeights(adjusted);
 
-    const primaryComparables = adjusted.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0);
-    const secondaryComparables = adjusted.filter((c) => !((c.tier === 1 || c.tier === 2) && c.yearDiff === 0));
+    const primaryComparables = adjusted.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch);
+    const secondaryComparables = adjusted.filter((c) => !((c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch));
     const hasPrimaryEvidence = primaryComparables.length > 0;
+
+    // Distinguish the 4 source metrics (User Mandate §1, §2, §3, §4, §5):
+    // 1. sourcesSearched: total sources queried/attempted
+    // 2. sourcesWithResults: sources that returned raw candidates
+    // 3. sourcesWithEligibleComparables: sources with comps passing sanity/identity/leakage gates
+    // 4. independentSourcesUsedInFMV: distinct independent sources represented in final FMV
+    const sourcesSearched = marketSourceExecutions.length > 0 ? marketSourceExecutions.length : outcomes.length;
+    const sourcesWithResults = new Set(listings.map((l) => l.source)).size;
+    const sourcesWithEligibleComparables = new Set(matched.filter((c) => c.included).map((c) => c.source)).size;
+    const independentSourcesUsedInFMV = new Set(adjusted.map((c) => c.source)).size;
+
+    for (const mse of marketSourceExecutions) {
+      const srcComps = adjusted.filter((c) => c.source === mse.sourceId);
+      mse.eligibleComparables = srcComps.length;
+      mse.acceptedComparables = srcComps.length;
+      mse.usedInFmv = srcComps.length > 0;
+    }
 
     stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod} (أساسي: ${primaryComparables.length} / ثانوي: ${secondaryComparables.length})`);
     t0 = Date.now();
 
     // 5) Price (spec §5): weighted median leads.
-    const stats = priceStats(adjusted, opts.targetPrice);
+    // Core pricing: if primary or ±1 year evidence exists with matching powertrain,
+    // far-year comps (|yearDiff| >= 2) provide contextual support and do not distort core FMV.
+    const coreCompsForPricing = adjusted.filter((c) => (c.yearDiff === undefined || c.yearDiff <= 1) && !c.isPowertrainMismatch);
+    const pricingSet = coreCompsForPricing.length >= 3 ? coreCompsForPricing : adjusted;
+    const stats = priceStats(pricingSet, opts.targetPrice);
     const estimated = stats.weightedMedian;
     const spread = Math.max(Math.round(stats.iqr / 2), Math.round(estimated * 0.03));
     const minPrice = Math.max(100, estimated - spread);
@@ -583,7 +604,7 @@ export async function runValuation(
     const n = adjusted.length;
     const hi = adjusted.filter((c) => c.similarity >= 80).length;
     const fresh = adjusted.filter((c) => c.ageDays <= 30).length;
-    const srcUsed = new Set(adjusted.map((c) => c.source)).size;
+    const srcUsed = independentSourcesUsedInFMV;
     const spreadRatio = stats.median > 0 ? stats.iqr / stats.median : 1;
     const specComplete = !!(spec.year && spec.kilometers && spec.fuelType && spec.transmission);
     const share = (fn: (c: (typeof adjusted)[number]) => boolean) => (n > 0 ? adjusted.filter(fn).length / n : 0);
@@ -701,6 +722,10 @@ export async function runValuation(
         sources: outcomes.map((o) => ({ source: o.label, count: o.count })),
       },
       marketSourceExecutions,
+      sourcesSearched,
+      sourcesWithResults,
+      sourcesWithEligibleComparables,
+      independentSourcesUsedInFMV,
       yearDistribution,
       targetExclusions: leaked,
       suspiciousPriceExclusions: sanityOut.map((e) => ({

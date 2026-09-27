@@ -241,6 +241,8 @@ export interface MarketSourceExecution {
   rejectedListings: number;
   rejectionReasons: Record<string, number>;
   acceptedComparables: number;
+  eligibleComparables?: number;
+  usedInFmv?: boolean;
   error?: string | null;
 }
 
@@ -251,6 +253,10 @@ export interface ValuationAuditTrace {
   identityConflictExclusions?: { title: string; source: string; reason: string }[];
   marketSearchResults: { total: number; sources: { source: string; count: number }[] };
   marketSourceExecutions: MarketSourceExecution[];
+  sourcesSearched?: number;
+  sourcesWithResults?: number;
+  sourcesWithEligibleComparables?: number;
+  independentSourcesUsedInFMV?: number;
   yearDistribution: Record<string, number>;
   targetExclusions: string[];
   suspiciousPriceExclusions: { title: string; price: number; reason: string }[];

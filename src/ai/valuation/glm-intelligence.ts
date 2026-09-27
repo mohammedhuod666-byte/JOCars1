@@ -63,10 +63,16 @@ export interface GlmInputPayload {
     totalAdsChecked: number;
     eligibleComparables: number;
     sameYearComparables: number;
+    primarySameYearComparables?: number;
+    sameYearMismatchedPowertrain?: number;
     plusMinusOneYearComparables: number;
     supportComparables: number;
     excludedAds: number;
+    sourcesSearched?: number;
+    sourcesWithResults?: number;
+    sourcesWithEligibleComparables?: number;
     independentSources: number;
+    independentSourcesUsedInFMV?: number;
     targetClusterExcluded: number;
     confidence: number;
     confidenceLabel: string;
@@ -134,12 +140,14 @@ export const GLM_SYSTEM_PROMPT = `أنت محرك التحليل والتفسي�
 2. ممنوع اختراع أسعار بيع نهائية (Sold Prices) أو افتراض نسب خصم وتفاوض جزافية (مثل "يوجد خصم 5%").
 3. ممنوع تغيير أو إعادة حساب: Fair Market Value، النطاق السعري، درجة الثقة، الشرائح المئوية، أو أوزان المقارنات.
 4. ممنوع إعادة إدخال أي إعلان مستبعد أو إعلان من عنقود سيارة الهدف (Target Cluster).
-5. إذا كانت مقارنات نفس السنة (sameYearComparables = 0):
-   - يجب التصريح بوضوح أن التقييم مبني على شواهد داعمة فقط (Support / Tier 4).
-   - ممنوع الادعاء بوجود سوق مباشر قوي لهذه السنة.
-6. يجب ربط كل استنتاج (Insight) بدليله الرقمي (Claim Grounding) عبر ذكر اسم المقياس وقيمته.
-7. التمييز الصارم بين علاوة السعر المطلوب عن السعر العادل (Premium vs FMV) وبين الشريحة المئوية في السوق (Percentile).
-8. أعد الناتج بصيغة JSON صالحة حصراً ومطابقة للعقد التالي دون أي نصوص تمهيدية:
+5. إذا كانت مقارنات نفس السنة المباشرة (primarySameYearComparables = 0) أو حالة التقييم INSUFFICIENT_DIRECT_EVIDENCE:
+   - يجب التصريح بوضوح بغياب المقارنات المباشرة وأن التقييم مبني على شواهد ثانوية/داعمة فقط.
+   - ممنوع منعاً باتاً الادعاء بوجود مقارنات مباشرة من نفس سنة الصنع تقود الوزن الأكبر في التقييم.
+6. إذا كان عدد المصادر المستقلة المستخدمة مصدر واحد (independentSources = 1):
+   - يجب التصريح بوضوح بأن التقييم مبني على مصدر مستقل واحد، مع الإشارة إلى أن هذا يحد من تنوع الأدلة.
+7. يجب ربط كل استنتاج (Insight) بدليله الرقمي (Claim Grounding) عبر ذكر اسم المقياس وقيمته.
+8. التمييز الصارم بين علاوة السعر المطلوب عن السعر العادل (Premium vs FMV) وبين الشريحة المئوية في السوق (Percentile).
+9. أعد الناتج بصيغة JSON صالحة حصراً ومطابقة للعقد التالي دون أي نصوص تمهيدية:
 
 {
   "marketSummary": "ملخص وضع السوق للسيارة بناءً على البيانات المتوفرة فقط",
@@ -166,34 +174,36 @@ export const GLM_SYSTEM_PROMPT = `أنت محرك التحليل والتفسي�
  */
 export function generateDeterministicExplanation(payload: GlmInputPayload): GlmIntelligenceOutput {
   const { target, evidenceQuality, pricingResults, comparables } = payload;
-  const sameYear = evidenceQuality.sameYearComparables;
+  const primarySameYear = evidenceQuality.primarySameYearComparables ?? evidenceQuality.sameYearComparables;
   const totalComps = evidenceQuality.eligibleComparables;
-  const isDirect = sameYear > 0;
+  const isDirect = evidenceQuality.status !== 'INSUFFICIENT_DIRECT_EVIDENCE' && primarySameYear > 0;
 
   const keyDrivers: GroundedClaim[] = [
     {
       text: isDirect
-        ? `توفرت ${sameYear} مقارنات من نفس سنة الصنع (${target.year}) قادت الوزن الأكبر في التقييم.`
-        : `لم تتوفر أي مقارنات معتمدة من نفس سنة الصنع (${target.year})، وتم الاعتماد كلياً على شواهد داعمة من سنوات أخرى (Tier 4).`,
-      evidence: { metric: 'sameYearComparables', value: sameYear },
+        ? `توفرت ${primarySameYear} مقارنات مباشرة من نفس سنة الصنع (${target.year}) قادت الوزن الأكبر في التقييم.`
+        : `لم تتوفر أي مقارنات مباشرة مؤهلة من نفس سنة الصنع (${target.year})، وتم الاعتماد على شواهد ثانوية/داعمة من فئات أو سنوات أخرى.`,
+      evidence: { metric: 'primarySameYearComparables', value: primarySameYear },
     },
     {
       text: `تم فحص وتدقيق ${evidenceQuality.totalAdsChecked} إعلاناً في السوق، واستبعاد ${evidenceQuality.excludedAds} إعلاناً عبر بوابات الهوية والسلامة السعرية.`,
       evidence: { metric: 'excludedAds', value: evidenceQuality.excludedAds },
     },
     {
-      text: `اعتمد التقييم على عينة من ${totalComps} مقارنات مؤهلة من ${evidenceQuality.independentSources} مصادر مستقلة.`,
-      evidence: { metric: 'eligibleComparables', value: totalComps },
+      text: evidenceQuality.independentSources <= 1
+        ? `اعتمد التقييم على مصدر مستقل واحد (${evidenceQuality.independentSources}) بعد تصفية التكرارات، مما يحد من تنوع العينة.`
+        : `اعتمد التقييم على عينة من ${totalComps} مقارنات مؤهلة من ${evidenceQuality.independentSources} مصادر مستقلة.`,
+      evidence: { metric: 'independentSources', value: evidenceQuality.independentSources },
     },
   ];
 
   const dataWarnings: DataWarning[] = [];
 
-  if (sameYear === 0) {
+  if (!isDirect) {
     dataWarnings.push({
       code: 'NO_SAME_YEAR_EVIDENCE',
       severity: 'HIGH',
-      text: `غياب إعلانات مباشرة من موديل ${target.year}؛ جميع المقارنات المعتمدة هي شواهد داعمة من سنوات أخرى تم تعديل قيمتها حسابياً.`,
+      text: `غياب إعلانات مباشرة مطابقة لموديل ${target.year} والمحرك؛ جميع المقارنات المعتمدة هي شواهد ثانوية أو داعمة.`,
     });
   }
 
@@ -256,11 +266,11 @@ export function generateDeterministicExplanation(payload: GlmInputPayload): GlmI
   return {
     marketSummary: isDirect
       ? `تحليل سوق سيارات ${target.brand} ${target.model} موديل ${target.year} في الأردن يظهر استقراراً مبنياً على مقارنات مباشرة من نفس السنة.`
-      : `الأدلة المباشرة لموديل ${target.brand} ${target.model} ${target.year} محدودة في المعروض الحالي. تم استخدام ${totalComps} مقارنات داعمة من نفس الموديل بسنوات مجاورة بعد تعديل فوارق الاستهلاك والممشى حسابياً.`,
+      : `الأدلة المباشرة لموديل ${target.brand} ${target.model} ${target.year} غير متوفرة في معروض السوق الحالي (غياب مقارنات مباشرة بنفس المحرك وسنة الصنع). تم الاعتماد على ${totalComps} شواهد ثانوية/داعمة كتقدير استرشادي${evidenceQuality.independentSources <= 1 ? ' من مصدر مستقل واحد' : ''}.`,
     keyDrivers,
     confidenceExplanation: isDirect
-      ? `درجة الثقة (${evidenceQuality.confidence}%) تعكس توفر مقارنات متطابقة في الموديل وسنة الصنع.`
-      : `درجة الثقة منخفضة (${evidenceQuality.confidence}%) لأن جميع المقارنات المتوفرة هي شواهد داعمة متباعدة زمنياً، مع عزل تام لإعلانات السيارة المستهدفة.`,
+      ? `درجة الثقة (${evidenceQuality.confidence}%) تعكس توفر مقارنات مباشرة متطابقة في الموديل وسنة الصنع.`
+      : `درجة الثقة (${evidenceQuality.confidence}%) محدودة لغياب مقارنات مباشرة من نفس سنة الصنع (${target.year}) والاعتماد على شواهد ثانوية/داعمة${evidenceQuality.independentSources <= 1 ? ' من مصدر مستقل واحد' : ''}.`,
     pricePositionExplanation,
     comparableInsights,
     dataWarnings,

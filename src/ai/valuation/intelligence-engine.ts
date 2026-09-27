@@ -47,7 +47,11 @@ export interface Section24MarketEvidence {
   usedComparables: number;
   excludedListings: number;
   sameYearShare: number;
-  uniqueSources: number;
+  sourcesSearched: number;
+  sourcesWithResults: number;
+  sourcesWithEligibleComparables: number;
+  independentSourcesUsedInFMV: number;
+  uniqueSources: number; // backward compatibility, identical to independentSourcesUsedInFMV
   percentiles?: {
     p25: number;
     p50: number;
@@ -275,8 +279,15 @@ export async function runIntelligenceValuation(
   const excludedCompsFromAudit = (audit?.comparablesAudit || []).filter(c => !c.included);
   const totalMarketCount = audit?.marketSearchResults?.total || (usedComps.length + excludedCompsFromAudit.length);
   const sameYearCount = usedComps.filter(c => c.year === spec.year).length;
+  const primarySameYearComps = usedComps.filter(c => c.year === spec.year && (c.tier === 1 || c.tier === 2) && !c.isPowertrainMismatch);
   const sameYearShare = usedComps.length > 0 ? Math.round((sameYearCount / usedComps.length) * 100) / 100 : 0;
-  const uniqueSources = new Set(usedComps.map(c => c.source)).size;
+
+  // Distinguish the 4 source metrics (User Mandate §1, §2, §3, §4, §5)
+  const sourcesSearched = audit?.sourcesSearched ?? (audit?.marketSourceExecutions?.length || 7);
+  const sourcesWithResults = audit?.sourcesWithResults ?? (audit?.marketSearchResults?.sources?.filter(s => s.count > 0).length || 1);
+  const sourcesWithEligibleComparables = audit?.sourcesWithEligibleComparables ?? new Set(usedComps.map(c => c.source)).size;
+  const independentSourcesUsedInFMV = audit?.independentSourcesUsedInFMV ?? new Set(usedComps.map(c => c.source)).size;
+  const uniqueSources = independentSourcesUsedInFMV;
 
   const marketEvidence: Section24MarketEvidence = {
     totalListings: totalMarketCount,
@@ -284,6 +295,10 @@ export async function runIntelligenceValuation(
     usedComparables: usedComps.length,
     excludedListings: totalMarketCount - usedComps.length,
     sameYearShare,
+    sourcesSearched,
+    sourcesWithResults,
+    sourcesWithEligibleComparables,
+    independentSourcesUsedInFMV,
     uniqueSources,
     percentiles: output.stats?.p50 !== undefined ? {
       p25: output.stats.p25,
@@ -483,17 +498,24 @@ export async function runIntelligenceValuation(
   // 11. Complete Audit Trail
   const auditTrail: string[] = [
     `Target vehicle validated: ${spec.brand} ${spec.model} (${spec.year}), askingPrice isolated: ${effectiveAskingPrice ?? 'NONE'}.`,
-    `Market search scanned ${totalMarketCount} candidate listings across sources.`,
+    `Market search scanned ${totalMarketCount} candidate listings across sources (${sourcesSearched} searched, ${sourcesWithResults} with results).`,
     `Sanity and identity gates quarantined ${comparablesExcluded.length} invalid, suspicious, duplicate, or conflicting listings.`,
-    `Matched ${usedComps.length} valid comparables into Tier hierarchy.`,
-    `Applied calibrated price adjustments (mileage, year depreciation).`,
+    `Matched ${usedComps.length} valid comparables into Tier hierarchy (${independentSourcesUsedInFMV} independent source${independentSourcesUsedInFMV > 1 ? 's' : ''} used in FMV).`,
+    (() => {
+      const hasYr = usedComps.some(c => (c.priceAdjustments || []).some(a => a.factor === 'year' && a.delta !== 0));
+      const hasKm = usedComps.some(c => (c.priceAdjustments || []).some(a => a.factor === 'mileage' && a.delta !== 0));
+      if (hasYr && hasKm) return 'Applied calibrated price adjustments (mileage, ±1-year limited step; far-year depreciation prohibited).';
+      if (hasKm) return 'Applied calibrated mileage adjustments (far-year synthetic depreciation prohibited).';
+      if (hasYr) return 'Applied ±1-year limited market step (far-year synthetic depreciation prohibited).';
+      return 'Direct unadjusted market evidence preserved (no synthetic price adjustments applied).';
+    })(),
     `Calculated robust weighted median: ${fmv} JOD.`,
     `Target price invariance verified: FMV remains invariant under asking price fluctuations.`,
     `Uncertainty display price rounded to ${fmv} JOD (confidence: ${output.confidence}%).`,
   ];
 
   // 12. Map engine status to contract status (Requirement §10)
-  const hasPrimaryComps = usedComps.some(c => (c.tier === 1 || c.tier === 2) && c.year === spec.year);
+  const hasPrimaryComps = primarySameYearComps.length > 0;
   const contractStatus: Section24ContractStatus =
     audit?.status === 'INSUFFICIENT_DIRECT_EVIDENCE' || !hasPrimaryComps
       ? 'INSUFFICIENT_DIRECT_EVIDENCE'
@@ -542,11 +564,17 @@ export async function runIntelligenceValuation(
     evidenceQuality: {
       totalAdsChecked: totalMarketCount,
       eligibleComparables: usedComps.length,
-      sameYearComparables: sameYearCount,
+      sameYearComparables: primarySameYearComps.length,
+      primarySameYearComparables: primarySameYearComps.length,
+      sameYearMismatchedPowertrain: usedComps.filter(c => c.year === spec.year && c.isPowertrainMismatch).length,
       plusMinusOneYearComparables: usedComps.filter(c => Math.abs((c.year || 0) - spec.year) === 1).length,
       supportComparables: usedComps.filter(c => Math.abs((c.year || 0) - spec.year) >= 2).length,
       excludedAds: comparablesExcluded.length,
-      independentSources: uniqueSources,
+      sourcesSearched,
+      sourcesWithResults,
+      sourcesWithEligibleComparables,
+      independentSources: independentSourcesUsedInFMV,
+      independentSourcesUsedInFMV,
       targetClusterExcluded: audit?.targetCluster?.totalClusterCount || 0,
       confidence: output.confidence,
       confidenceLabel: output.confidenceLabel,
@@ -680,6 +708,10 @@ function buildInsufficientDataContract(opts: {
       usedComparables: 0,
       excludedListings: opts.marketEvidenceTotal || 0,
       sameYearShare: 0,
+      sourcesSearched: 7,
+      sourcesWithResults: 0,
+      sourcesWithEligibleComparables: 0,
+      independentSourcesUsedInFMV: 0,
       uniqueSources: 0,
     },
     comparablesUsed: [],

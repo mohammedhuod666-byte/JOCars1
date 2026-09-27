@@ -258,7 +258,7 @@ export function sanityCheck(
   const excluded: SanityExclusion[] = [];
   for (const l of listings) {
     // 1) Filter non-car ads (license plates, parts, wanted ads)
-    const textToCheck = `${l.trim || ''} ${l.brand || ''} ${l.model || ''} ${(l.specs || []).join(' ')}`.toLowerCase();
+    const textToCheck = `${(l as any).title || ''} ${l.trim || ''} ${l.brand || ''} ${l.model || ''} ${(l.specs || []).join(' ')}`.toLowerCase();
     const nonCarPatterns = [
       'رقم مميز', 'ارقام مميزة', 'لوحة مميزة', 'ترميز', 'لوحة ارقام', 'نمرة سيارة', 'نمرة مميزة',
       'قطع غيار', 'جنطات', 'محرك للبيع', 'جير للبيع', 'قير للبيع', 'مطلوب للشراء', 'مطلوب سيارة',
