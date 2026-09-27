@@ -44,7 +44,8 @@ export function ValuationReport({
   askingPrice: number;
   onValuationLoaded?: (estimate: number) => void;
 }) {
-  const { token, isAuthenticated } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
+  const isAdmin = Boolean(isAuthenticated && (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN'));
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'public' | 'admin'>('public');
   const [loading, setLoading] = useState(false);
@@ -375,48 +376,50 @@ export function ValuationReport({
           {/* Main Valuation Content */}
           {fmv && !running && (
             <>
-              {/* Tab Selector: Public Report vs Admin Audit */}
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('public')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      activeTab === 'public'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    <BarChart3 className="w-3.5 h-3.5" />
-                    <span>التقرير العام للمستخدم</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('admin')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      activeTab === 'admin'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>لوحة التدقيق التقني (Admin Audit)</span>
-                    {marketSourceExecutions.length > 0 && (
-                      <span className="text-[10px] bg-purple-950 px-1.5 py-0.5 rounded-full border border-purple-400/40 text-purple-200">
-                        {marketSourceExecutions.length} مصادر
-                      </span>
-                    )}
-                  </button>
+              {/* Tab Selector: Only visible for Administrators */}
+              {isAdmin && (
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('public')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        activeTab === 'public'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      <span>التقرير العام للمستخدم</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('admin')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        activeTab === 'admin'
+                          ? 'bg-purple-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>لوحة التدقيق التقني (Admin Audit)</span>
+                      {marketSourceExecutions.length > 0 && (
+                        <span className="text-[10px] bg-purple-950 px-1.5 py-0.5 rounded-full border border-purple-400/40 text-purple-200">
+                          {marketSourceExecutions.length} مصادر
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-slate-500 hidden sm:block">
+                    {activeTab === 'public' ? 'عرض نظيف ومباشر للمستهلك' : 'تدقيق حسابي ومصادري كامل'}
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-500 hidden sm:block">
-                  {activeTab === 'public' ? 'عرض نظيف ومباشر للمستهلك' : 'تدقيق حسابي ومصادري كامل'}
-                </div>
-              </div>
+              )}
 
               {/* ────────────────────────────────────────────────────────── */}
               {/* VIEW 1: PUBLIC CONSUMER REPORT (Clean, Professional)       */}
               {/* ────────────────────────────────────────────────────────── */}
-              {activeTab === 'public' && (
+              {(!isAdmin || activeTab === 'public') && (
                 <div className="space-y-6">
                   {/* Market Reality Notice */}
                   <div className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-slate-300 text-xs flex items-center gap-2.5">
@@ -782,8 +785,9 @@ export function ValuationReport({
 
               {/* ────────────────────────────────────────────────────────── */}
               {/* VIEW 2: ADMIN AUDIT (Full Technical Audit & Math)          */}
+              {/* Strictly restricted to Administrator accounts only         */}
               {/* ────────────────────────────────────────────────────────── */}
-              {activeTab === 'admin' && (
+              {isAdmin && activeTab === 'admin' && (
                 <div className="space-y-6">
                   {/* The 7 Jordanian Market Sources Execution Audit Table */}
                   <div className="p-4 rounded-2xl bg-slate-900 border border-purple-500/30 space-y-3">
