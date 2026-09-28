@@ -32,6 +32,7 @@ export interface VehicleSpec {
   conditionCertainty?: string | null;
   askingPrice?: number | null;
   specs?: string[];   // extras: sunroof, leather, ...
+  description?: string | null;  // "الوصف التفصيلي للإعلان" — free-text listing description
 }
 
 export interface NormalizedListing {

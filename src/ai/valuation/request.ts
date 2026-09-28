@@ -41,6 +41,7 @@ export async function buildSpecFromBody(body: any): Promise<BuiltSpec> {
         vin: (car as any).vin || null,
         askingPrice: car.price,
         specs: sanitizeFeatures((car as any).features),
+        description: car.description || null,
       },
     };
   }
