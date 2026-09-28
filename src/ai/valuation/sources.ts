@@ -5,6 +5,7 @@
  */
 import type { NormalizedListing, VehicleSpec, MarketSourceExecution, SourceExecutionStatus } from './types';
 import { parseKilometers, toJod, normalizeTrim, contentHash, enrichFromTitle } from './normalize';
+import { sanitizeTrim } from './spec-extract';
 import { resolveCanonicalListingUrl, createSourceSnapshot } from './url-verifier';
 import { collectOrdonAuto } from './sources-ordonauto';
 import { collectFacebook } from './sources-facebook';
@@ -70,7 +71,7 @@ async function collectOpenSooq(spec: VehicleSpec, timeoutMs: number): Promise<No
         model: spec.model,
         modelEn: model || null,
         year: l.year,
-        trim: normalizeTrim(l.title),
+        trim: sanitizeTrim(normalizeTrim(l.title)),
         kilometers: km,
         price: l.price,
         currency: 'JOD',
@@ -176,7 +177,7 @@ async function collectJoCars(spec: VehicleSpec, timeoutMs: number): Promise<Norm
           model: c.model?.nameAr || spec.model,
           modelEn: c.model?.nameEn || null,
           year: c.year,
-          trim: normalizeTrim(c.trim),
+          trim: sanitizeTrim(normalizeTrim(c.trim)),
           kilometers: c.kilometers,
           price,
           currency: c.currency || 'JOD',

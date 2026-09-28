@@ -18,10 +18,14 @@ function mkListing(overrides: Partial<NormalizedListing>): NormalizedListing {
 }
 
 describe('powertrain priority', () => {
-  it('fuel mismatch demotes to tier 2 with capped similarity', () => {
+  it('PHEV target vs petrol comp demotes to tier 3 (secondary/support, never Direct)', () => {
+    // Corrected expectation (verified against git HEAD before Phase 2): since commit
+    // "demote PHEV powertrain" the PHEV/petrol same-year case returns tier 3, not 2.
+    // Tier 3 means supporting evidence only — it can never enter Direct/FMV.
     const t = assignTier(mkListing({ fuelType: 'PETROL' }), spec);
-    assert.equal(t, 2, 'Should be tier 2');
-    const s = scoreSimilarity(mkListing({ fuelType: 'PETROL' }), spec, 2);
+    assert.equal(t, 3, 'Should be tier 3 (secondary)');
+    const s = scoreSimilarity(mkListing({ fuelType: 'PETROL' }), spec, 3);
     assert.ok(s.similarity <= 95, 'Similarity should be <= 95');
+    assert.equal(s.isDirectEligible, false, 'PHEV/petrol mismatch must never be Direct');
   });
 });

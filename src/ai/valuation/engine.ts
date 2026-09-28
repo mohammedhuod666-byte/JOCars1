@@ -8,10 +8,10 @@ import prisma from '@/lib/prisma';
 import type { Comparable, DataQualityReport, FunnelStep, NormalizedListing, ValuationOutput, VehicleSpec, ValuationAuditTrace, MarketSourceExecution } from './types';
 import { roundDisplayPrice } from './types';
 import { collectAll, type SourceOutcome } from './sources';
-import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix, checkListingIdentityConsistency } from './similarity';
+import { assignTier, scoreSimilarity, sameBrand, sameModel, isTargetCopy, matchMatrix, checkListingIdentityConsistency, isDirectComparable } from './similarity';
 import { dedupeExact, dedupeNear, flagOutliers, iqrFences, sanityCheck, detectTargetIdentityCluster } from './outliers';
 import { adjustComparable, calibrate } from './adjust';
-import { computeWeight, confidenceScore, priceStats, weightedMedian, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut } from './price';
+import { computeWeight, confidenceScore, priceStats, weightedMedian, balancePrimarySecondaryWeights, buildMarketConsensusBand, computeLeaveOneOut, calculateFMV, sourcesDrivingNumber } from './price';
 import { getTuning } from './tuning';
 import { contentHash } from './normalize';
 import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
@@ -552,52 +552,68 @@ export async function runValuation(
     for (const c of adjusted) {
       c.weight = computeWeight(c, SOURCE_TRUST, spec);
       (c as any).rawWeight = c.weight;
-      (c as any).isPrimary = (c.tier === 1 || c.tier === 2) && c.yearDiff === 0;
+      (c as any).isPrimary = isDirectComparable(c);
     }
 
     // Balance primary and secondary sets (Requirement §2):
     // Primary set controls >= 85% of total weight when present.
     balancePrimarySecondaryWeights(adjusted);
 
-    const primaryComparables = adjusted.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch);
-    const secondaryComparables = adjusted.filter((c) => !((c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch));
+    const primaryComparables = adjusted.filter((c) => isDirectComparable(c));
+    const secondaryComparables = adjusted.filter((c) => !isDirectComparable(c));
     const hasPrimaryEvidence = primaryComparables.length > 0;
 
     // Distinguish the 4 source metrics (User Mandate §1, §2, §3, §4, §5):
     // 1. sourcesSearched: total sources queried/attempted
     // 2. sourcesWithResults: sources that returned raw candidates
     // 3. sourcesWithEligibleComparables: sources with comps passing sanity/identity/leakage gates
-    // 4. independentSourcesUsedInFMV: distinct independent sources represented in final FMV
+    // 4. independentSourcesUsedInFMV: computed AFTER the mode is known (Phase 5) —
+    //    see below; it counts only sources that actually drive the displayed number.
     const sourcesSearched = marketSourceExecutions.length > 0 ? marketSourceExecutions.length : outcomes.length;
     const sourcesWithResults = new Set(listings.map((l) => l.source)).size;
     const sourcesWithEligibleComparables = new Set(matched.filter((c) => c.included).map((c) => c.source)).size;
-    const independentSourcesUsedInFMV = new Set(adjusted.map((c) => c.source)).size;
-
-    for (const mse of marketSourceExecutions) {
-      const srcComps = adjusted.filter((c) => c.source === mse.sourceId);
-      mse.eligibleComparables = srcComps.length;
-      mse.acceptedComparables = srcComps.length;
-      mse.usedInFmv = srcComps.length > 0;
-    }
 
     stage(pipeline, 'adjust', 'التعديلات', t0, `معايرة ${cal.calibrated ? 'من السوق' : 'افتراضية'}: سنة ${cal.perYearJod} / 10k كم ${cal.per10kKmJod} (أساسي: ${primaryComparables.length} / ثانوي: ${secondaryComparables.length})`);
     t0 = Date.now();
 
-    // 5) Price (spec §5): weighted median leads.
-    // Core pricing: if primary or ±1 year evidence exists with matching powertrain,
-    // far-year comps (|yearDiff| >= 2) provide contextual support and do not distort core FMV.
-    const coreCompsForPricing = adjusted.filter((c) => (c.yearDiff === undefined || c.yearDiff <= 1) && !c.isPowertrainMismatch);
-    const pricingSet = coreCompsForPricing.length >= 3 ? coreCompsForPricing : adjusted;
-    const stats = priceStats(pricingSet, opts.targetPrice);
-    const estimated = stats.weightedMedian;
-    const spread = Math.max(Math.round(stats.iqr / 2), Math.round(estimated * 0.03));
-    const minPrice = Math.max(100, estimated - spread);
-    const maxPrice = estimated + spread;
-    stage(pipeline, 'price', 'التسعير', t0, `وسيط مرجح ${estimated.toLocaleString()} (متوسط مرجح ${stats.weightedAvg.toLocaleString()}، وسيط ${stats.median.toLocaleString()})`);
+    // 5) Price (spec §5): weighted median leads, strict Case A/B/C gating.
+    const fmvResult = calculateFMV(adjusted, opts.targetPrice);
+    const stats = fmvResult.stats;
+    const directCompsCount = fmvResult.directCompsCount;
+    const supportingCompsCount = fmvResult.supportingCompsCount;
+    const valuationMode = fmvResult.valuationMode;
+
+    // Phase 5 — metric 4 (only now, with the mode known): independentSourcesUsedInFMV
+    // counts ONLY the sources that actually drive the displayed number:
+    // FMV mode => direct comparables only (FMV = direct weighted median + direct dispersion);
+    // INDICATIVE/SUPPORTING => all included comparables (combined estimate uses all of them).
+    const independentSourcesUsedInFMV = sourcesDrivingNumber(valuationMode, adjusted);
+    const drivingSourceSet = new Set(
+      (valuationMode === 'FMV' ? adjusted.filter((c) => isDirectComparable(c)) : adjusted).map((c) => c.source),
+    );
+    for (const mse of marketSourceExecutions) {
+      const srcComps = adjusted.filter((c) => c.source === mse.sourceId);
+      mse.eligibleComparables = srcComps.length;
+      mse.acceptedComparables = srcComps.length;
+      mse.usedInFmv = drivingSourceSet.has(mse.sourceId);
+    }
+    const indicativePrice = fmvResult.indicativePrice;
+
+    // In Mode FMV: estimated is fmv. In Mode INDICATIVE: estimated is indicativePrice. In SUPPORTING_RANGE_ONLY: estimated is 0 or midpoint.
+    const estimated = valuationMode === 'FMV'
+      ? (fmvResult.fmv ?? stats.directWeightedMedian ?? stats.weightedMedian)
+      : valuationMode === 'INDICATIVE'
+      ? (indicativePrice ?? stats.combinedEstimate ?? stats.weightedMedian)
+      : (stats.combinedEstimate ?? stats.weightedMedian);
+
+    const minPrice = fmvResult.minPrice;
+    const maxPrice = fmvResult.maxPrice;
+
+    stage(pipeline, 'price', 'التسعير', t0, `نمط التسعير: ${valuationMode} (مباشر: ${directCompsCount}، داعم: ${supportingCompsCount}) — وسيط ${estimated.toLocaleString()} دينار`);
     t0 = Date.now();
 
     // 5b) Market Consensus Band & Leave-One-Out Analysis (Requirement §4)
-    const consensusBand = buildMarketConsensusBand(hasPrimaryEvidence ? primaryComparables : adjusted);
+    const consensusBand = buildMarketConsensusBand(directCompsCount > 0 ? primaryComparables : adjusted);
     const leaveOneOutAnalysis = computeLeaveOneOut(adjusted, estimated);
 
     // 6) Confidence (spec §11): count AND match quality, never count alone.
@@ -620,12 +636,19 @@ export async function runValuation(
       excludedShare: found > 0 ? (found - n) / found : 0,
     });
 
-    // Check if Tier 4 is trying to dictate FMV alone without primary comps (Requirement §2):
-    if (!hasPrimaryEvidence) {
-      // Tier 4 is supporting evidence only, cannot produce high confidence alone
+    // Enforce strict confidence caps according to valuation mode (Case A, B, C)
+    if (valuationMode === 'SUPPORTING_RANGE_ONLY') {
+      conf.score = Math.min(conf.score, 25);
+      conf.label = 'منخفض';
+      conf.reasons.unshift('غياب تام لمقارنات مباشرة (Direct Comps = 0) — النطاق المعروض استرشادي فقط للشواهد الداعمة');
+    } else if (valuationMode === 'INDICATIVE') {
+      conf.score = Math.min(conf.score, 45);
+      conf.label = 'منخفض';
+      conf.reasons.unshift('أدلة مباشرة محدودة (1-2 مقارنات) — القيمة استرشادية وليست FMV قاطع');
+    } else if (!hasPrimaryEvidence) {
       conf.score = Math.min(conf.score, 30);
       conf.label = 'منخفض';
-      conf.reasons.unshift('غياب مقارنات من نفس سنة الصنع — الاعتماد فقط على شواهد داعمة (Tier 4)');
+      conf.reasons.unshift('غياب مقارنات من نفس سنة الصنع والجيل — الاعتماد فقط على شواهد داعمة (Tier 4)');
     } else if (grade === 'approximate') {
       conf.score = Math.min(conf.score, 35);
       conf.label = 'منخفض';
@@ -744,6 +767,21 @@ export async function runValuation(
       },
       primaryComparablesCount: primaryComparables.length,
       secondaryComparablesCount: secondaryComparables.length,
+      directCompsCount,
+      supportingCompsCount,
+      valuationMode,
+      indicativePrice,
+      countsBreakdown: {
+        collected: listings.length,
+        deduplicated: matched.filter((c) => !c.included && c.excludeReason && (c.excludeReason.includes('مكرر') || c.excludeReason.includes('موقع آخر'))).length,
+        rejectedByDataQuality: dataQuality.passed ? 0 : 1,
+        rejectedByIdentity: identityConflictExclusions.length,
+        rejectedBySanity: sanityOut.length,
+        rejectedByMatching: matched.filter((c) => !c.included).length,
+        eligibleDirect: directCompsCount,
+        eligibleSupporting: supportingCompsCount,
+        usedInPricing: valuationMode === 'FMV' ? directCompsCount : adjusted.length,
+      },
       consensusBand,
       leaveOneOutAnalysis,
       effectiveComparableWeight: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
@@ -771,6 +809,13 @@ export async function runValuation(
           make: c.brandEn || c.brand,
           model: c.modelEn || c.model,
           trim: c.trim,
+          generation: c.generation || null,
+          chassisCode: c.chassisCode || null,
+          conditionScore: c.conditionScore ?? null,
+          conditionCertainty: c.conditionCertainty || 'UNKNOWN',
+          isGenerationMismatch: c.isGenerationMismatch || false,
+          generationNote: c.generationNote || null,
+          isDirectEligible: c.isDirectEligible ?? false,
           engine: (c as any).engineCc ? `${(c as any).engineCc} CC` : null,
           engineCc: (c as any).engineCc,
           horsepower: (c as any).horsepower,
@@ -793,11 +838,14 @@ export async function runValuation(
                      c.tier === 3 ? 'ثانوي (Tier 3 - نفس الموديل ±1 سنة)' :
                      'داعم (Tier 4 - نفس الموديل بسنوات أبعد)',
           identityStatus: 'ELIGIBLE_SAME_MODEL',
-          isPrimary: (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch,
+          isPrimary: isDirectComparable(c),
           similarity: c.similarity,
           qualitativeMatch: c.qualitativeMatch,
           isPowertrainMismatch: c.isPowertrainMismatch,
           powertrainNote: c.powertrainNote,
+          isFuelMismatch: c.isFuelMismatch,
+          isDrivetrainMismatch: c.isDrivetrainMismatch,
+          yearDiff: c.yearDiff,
           simBreakdown: c.simBreakdown,
           rawWeight: (c as any).rawWeight ?? c.weight,
           finalWeight: Math.round(c.weight * 1000) / 1000,
@@ -820,10 +868,10 @@ export async function runValuation(
       rawWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + ((c as any).rawWeight ?? c.weight), 0) * 1000) / 1000,
       finalWeightsSum: Math.round(adjusted.reduce((acc, c) => acc + c.weight, 0) * 1000) / 1000,
       robustStatistic: stats,
-      finalFmv: estimated,
-      displayFmv: roundedDisplayPrice,
+      finalFmv: valuationMode === 'FMV' ? estimated : null,
+      displayFmv: valuationMode === 'FMV' ? roundedDisplayPrice : null,
       confidence: conf.score,
-      status: !hasPrimaryEvidence ? 'INSUFFICIENT_DIRECT_EVIDENCE' : grade,
+      status: valuationMode === 'SUPPORTING_RANGE_ONLY' ? 'INSUFFICIENT_DIRECT_EVIDENCE' : !hasPrimaryEvidence ? 'INSUFFICIENT_DIRECT_EVIDENCE' : grade,
       sensitivity: {
         baselineFmv: estimated,
         removals,
@@ -831,18 +879,35 @@ export async function runValuation(
     };
 
     const output: ValuationOutput = {
-      estimatedPrice: estimated, minPrice, maxPrice, grade, funnel, profile,
+      estimatedPrice: estimated,
+      minPrice,
+      maxPrice,
+      valuationMode,
+      directCompsCount,
+      supportingCompsCount,
+      indicativePrice,
+      grade,
+      funnel,
+      profile,
       dataQuality,
       priceBasis: {
         sold: adjusted.filter((c) => c.priceType === 'sold').length,
         asking: adjusted.filter((c) => c.priceType !== 'sold').length,
       },
-      confidence: conf.score, confidenceLabel: conf.label, confidenceReasons: conf.reasons,
-      comparablesUsed: adjusted.length, comparablesFound: found,
-      sourcesUsed: srcUsed, sources,
-      method: 'weighted-median',
-      stats, factors, pipeline,
-      modelVersion: 'v1', dataVersion, targetDiffPct,
+      confidence: conf.score,
+      confidenceLabel: conf.label,
+      confidenceReasons: conf.reasons,
+      comparablesUsed: adjusted.length,
+      comparablesFound: found,
+      sourcesUsed: srcUsed,
+      sources,
+      method: valuationMode === 'FMV' ? 'direct-weighted-median' : 'indicative-combined-median',
+      stats,
+      factors,
+      pipeline,
+      modelVersion: 'v1',
+      dataVersion,
+      targetDiffPct,
       roundedDisplayPrice,
       auditTrace,
     };
@@ -865,11 +930,18 @@ export async function runValuation(
     });
     void saved;
 
-    // Sync fairPriceEstimate to the Car model (spec §13)
-    if (opts.carId && estimated > 0) {
+    // Sync fairPriceEstimate to the Car model (spec §13 + Phase-1 FMV gate).
+    // A number may only be stored when the run ACTUALLY produced an FMV
+    // (valuationMode === 'FMV'). INDICATIVE / SUPPORTING_RANGE_ONLY runs must
+    // clear the column so no stale number can ever surface as "السعر العادل".
+    if (opts.carId) {
+      // Store the SAME display-rounded value the Section-24 contract exposes
+      // (contract fmv = roundedDisplayPrice || estimated) so the Car row, the
+      // contract, and every UI surface show one identical FMV number.
+      const fmvForCar = valuationMode === 'FMV' && estimated > 0 ? (roundedDisplayPrice || estimated) : null;
       await prisma.car.update({
         where: { id: opts.carId },
-        data: { fairPriceEstimate: estimated },
+        data: { fairPriceEstimate: fmvForCar },
       }).catch(() => {});
     }
 
@@ -906,19 +978,20 @@ export async function runValuation(
     setStageListener(null);
     return { requestId: request.id, output, comparables: adjusted, outcomes, status: finalStatus, dataQuality, auditTrace };
   } catch (e: any) {
+    console.error('runValuation caught error:', e);
     await prisma.valuationRequest.update({
       where: { id: request.id },
       data: { status: 'FAILED', error: e?.message || 'فشل التحليل' },
     }).catch(() => {});
     setStageListener(null);
-    return { requestId: request.id, output: null, comparables: [], outcomes: [], status: 'FAILED', insufficientReason: 'فشل التحليل' };
+    return { requestId: request.id, output: null, comparables: [], outcomes: [], status: 'FAILED', insufficientReason: e?.message || 'فشل التحليل' };
   }
 }
 
 /** Latest successful result for a car (cached display, spec §13). */
 export async function latestResultForCar(carId: string) {
   const req = await prisma.valuationRequest.findFirst({
-    where: { carId, status: { in: ['RELIABLE', 'LIMITED', 'APPROXIMATE'] } },
+    where: { carId, status: { in: ['RELIABLE', 'LIMITED', 'APPROXIMATE', 'INSUFFICIENT_DIRECT_EVIDENCE'] } },
     orderBy: { createdAt: 'desc' },
     include: {
       result: true,
@@ -961,10 +1034,27 @@ export async function latestResultForCar(carId: string) {
   };
 }
 
+/**
+ * Extract the persisted valuation mode from a stored pipeline (the price
+ * stage detail always logs `نمط التسعير: <MODE> (مباشر: N، داعم: M)`).
+ * Returns null when the row predates the log or is unparseable (unknown mode).
+ */
+function modeFromPipeline(pipelineJson: string | null): 'FMV' | 'INDICATIVE' | 'SUPPORTING_RANGE_ONLY' | null {
+  try {
+    const steps = JSON.parse(pipelineJson || '[]');
+    if (!Array.isArray(steps)) return null;
+    for (const s of steps) {
+      const m = /نمط التسعير:\s*(FMV|INDICATIVE|SUPPORTING_RANGE_ONLY)/.exec(String(s?.detail || ''));
+      if (m) return m[1] as 'FMV' | 'INDICATIVE' | 'SUPPORTING_RANGE_ONLY';
+    }
+  } catch { /* unparseable → unknown */ }
+  return null;
+}
+
 /** Price history for the graph (spec §15): all DONE results for a car. */
 export async function historyForCar(carId: string) {
   const reqs = await prisma.valuationRequest.findMany({
-    where: { carId, status: { in: ['RELIABLE', 'LIMITED', 'APPROXIMATE'] } },
+    where: { carId, status: { in: ['RELIABLE', 'LIMITED', 'APPROXIMATE', 'INSUFFICIENT_DIRECT_EVIDENCE'] } },
     orderBy: { createdAt: 'asc' },
     include: { result: true },
     take: 50,
@@ -972,6 +1062,10 @@ export async function historyForCar(carId: string) {
   return reqs.filter((r) => r.result).map((r) => ({
     at: r.createdAt,
     estimated: r.result!.estimatedPrice,
+    // Phase-1 FMV gate: only runs proven to be FMV mode may be plotted as a
+    // "value over time" point. Unknown/legacy/INDICATIVE/SUPPORTING → false,
+    // so the UI can never draw a non-FMV number under the valuation chart.
+    fmv: modeFromPipeline(r.result!.pipeline) === 'FMV',
     min: r.result!.minPrice,
     max: r.result!.maxPrice,
     confidence: r.result!.confidence,

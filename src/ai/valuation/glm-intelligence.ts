@@ -79,7 +79,7 @@ export interface GlmInputPayload {
     status: string;
   };
   pricingResults: {
-    fairMarketValue: number;
+    fairMarketValue: number | null;
     range: { low: number; high: number };
     isWideRange: boolean;
     rangeDisclaimerAr: string;
@@ -231,18 +231,24 @@ export function generateDeterministicExplanation(payload: GlmInputPayload): GlmI
 
   let pricePositionExplanation = 'لم يتم تحديد سعر مطلوب للسيارة المستهدفة للمقارنة.';
   if (target.askingPrice && target.askingPrice > 0) {
-    const diffPct = pricingResults.askingPricePremiumPercent ?? 0;
-    const diffAmt = Math.abs(target.askingPrice - pricingResults.fairMarketValue);
-    const pRank = pricingResults.askingPricePercentile;
+    if (pricingResults.fairMarketValue !== null) {
+      const diffPct = pricingResults.askingPricePremiumPercent ?? 0;
+      const diffAmt = Math.abs(target.askingPrice - pricingResults.fairMarketValue);
+      const pRank = pricingResults.askingPricePercentile;
 
-    if (diffPct > 5) {
-      pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) أعلى بـ ${diffPct}% (${diffAmt.toLocaleString()} د.أ) عن السعر العادل التقديري (${pricingResults.fairMarketValue.toLocaleString()} د.أ). ` +
-        (pRank !== null ? `ويقع عند الشريحة المئوية P${pRank} بين عروض السوق المتاحة.` : '');
-    } else if (diffPct < -5) {
-      pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) أقل بـ ${Math.abs(diffPct)}% (${diffAmt.toLocaleString()} د.أ) عن السعر العادل التقديري (${pricingResults.fairMarketValue.toLocaleString()} د.أ) ويعتبر فرصة سعرية.` +
-        (pRank !== null ? ` ويقع عند الشريحة المئوية P${pRank}.` : '');
+      if (diffPct > 5) {
+        pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) أعلى بـ ${diffPct}% (${diffAmt.toLocaleString()} د.أ) عن السعر العادل التقديري (${pricingResults.fairMarketValue.toLocaleString()} د.أ). ` +
+          (pRank !== null ? `ويقع عند الشريحة المئوية P${pRank} بين عروض السوق المتاحة.` : '');
+      } else if (diffPct < -5) {
+        pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) أقل بـ ${Math.abs(diffPct)}% (${diffAmt.toLocaleString()} د.أ) عن السعر العادل التقديري (${pricingResults.fairMarketValue.toLocaleString()} د.أ) ويعتبر فرصة سعرية.` +
+          (pRank !== null ? ` ويقع عند الشريحة المئوية P${pRank}.` : '');
+      } else {
+        pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) متوافق تماماً مع النطاق العادل للقيمة السوقية.`;
+      }
     } else {
-      pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) متوافق تماماً مع النطاق العادل للقيمة السوقية.`;
+      const pRank = pricingResults.askingPricePercentile;
+      pricePositionExplanation = `السعر المطلوب (${target.askingPrice.toLocaleString()} د.أ) لا يمكن مقارنته بقيمة سوقية عادلة قاطعة لغياب مقارنات مباشرة متطابقة، وتم الاستناد إلى نطاق شواهد داعمة` +
+        (pRank !== null ? ` (يقع السعر عند الشريحة P${pRank} من مجمل الشواهد).` : '.');
     }
   }
 

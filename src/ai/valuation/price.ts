@@ -5,6 +5,7 @@
  */
 import type { Comparable, PriceStats, ConsensusBand, LeaveOneOutResult, WeightBreakdown, VehicleSpec } from './types';
 import { MIN_INCLUDED_FOR_ESTIMATE, MIN_INCLUDED_FOR_RANGE_ONLY } from './types';
+import { isDirectComparable, isConfirmedDrivetrainMismatch } from './similarity';
 
 function quantile(sorted: number[], q: number): number {
   if (sorted.length === 0) return 0;
@@ -45,10 +46,16 @@ export function computeDetailedWeight(
     yearWeight = Math.max(0.10, Math.round((0.40 - (yearDiff - 2) * 0.05) * 100) / 100);
   }
 
-  // 3. Technical weight: alignment of powertrain, trim, and specs
+  // 3. Technical weight: alignment of powertrain, trim, generation, and specs
   let simFraction = Math.max(0.35, Math.min(1.0, (c.similarity || 50) / 100));
+  if (c.isGenerationMismatch) {
+    simFraction *= 0.35; // Generation mismatch cannot be direct or high weight
+  }
   if (c.isPowertrainMismatch) {
     simFraction *= 0.60;
+  }
+  if (spec?.drivetrain && isConfirmedDrivetrainMismatch(c, spec)) {
+    simFraction *= 0.85; // Confirmed drivetrain mismatch (canonically different families)
   }
   const technicalWeight = Math.round(simFraction * 100) / 100;
 
@@ -124,8 +131,8 @@ export function computeWeight(
  * (Requirement §2 & §8)
  */
 export function balancePrimarySecondaryWeights(comps: Comparable[]): Comparable[] {
-  const primary = comps.filter((c) => (c.tier === 1 || c.tier === 2) && c.yearDiff === 0 && !c.isPowertrainMismatch);
-  const secondary = comps.filter((c) => c.tier > 2 || c.yearDiff > 0 || c.isPowertrainMismatch);
+  const primary = comps.filter((c) => isDirectComparable(c));
+  const secondary = comps.filter((c) => !isDirectComparable(c));
 
   const primaryWeight = primary.reduce((sum, c) => sum + c.weight, 0);
   const secondaryWeight = secondary.reduce((sum, c) => sum + c.weight, 0);
@@ -223,25 +230,65 @@ export function weightedAvg(items: { price: number; weight: number }[]): number 
   return Math.round(items.reduce((x, y) => x + y.price * y.weight, 0) / tw);
 }
 
+/**
+ * Multiple Internal Estimates calculation (Phase 3 Requirement):
+ * Separates direct vs supporting comparables and calculates both robust and indicative statistics.
+ */
 export function priceStats(included: Comparable[], askingPrice?: number | null): PriceStats {
   const prices = included.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
   const items = included.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: c.weight }));
   const wm = weightedMedian(items);
 
+  // Partition into direct vs supporting comparables (single shared predicate)
+  const directComps = included.filter((c) => isDirectComparable(c));
+  const supportingComps = included.filter((c) => !directComps.includes(c));
+
+  const directPrices = directComps.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
+  const directItems = directComps.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: c.weight }));
+
+  const supportingPrices = supportingComps.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
+
+  const directWeightedMedian = directItems.length > 0 ? weightedMedian(directItems) : null;
+  const directMedian = directPrices.length > 0 ? Math.round(quantile(directPrices, 0.5)) : null;
+  const directWeightedMean = directItems.length > 0 ? weightedAvg(directItems) : null;
+  const supportingMedian = supportingPrices.length > 0 ? Math.round(quantile(supportingPrices, 0.5)) : null;
+  const combinedEstimate = wm;
+
+  const iqr = prices.length >= 2 ? Math.round(quantile(prices, 0.75) - quantile(prices, 0.25)) : 0;
+  const dispersionIqr = directPrices.length >= 2
+    ? Math.round(quantile(directPrices, 0.75) - quantile(directPrices, 0.25))
+    : iqr;
+  const medianVal = directMedian ?? (prices.length > 0 ? Math.round(quantile(prices, 0.5)) : 0);
+  const dispersionRatio = medianVal > 0 ? Math.round((dispersionIqr / medianVal) * 1000) / 1000 : 0;
+
+  // Strict Percentile Scoping:
+  // Never compute a misleading "P92" or "أعلى 15%" from mixed or distant supporting comps!
+  // Percentile is scoped to direct comps when >= 4 direct comps exist.
+  // When direct evidence is limited, percentile is explicitly scoped to supporting observations or null.
   let askingPricePercentile: number | null = null;
   let askingPricePremiumPercent: number | null = null;
+  let percentileScope: 'DIRECT' | 'SUPPORTING' | null = null;
+
+  const baselinePrice = directWeightedMedian ?? combinedEstimate;
 
   if (askingPrice != null && askingPrice > 0) {
-    if (wm > 0) {
-      askingPricePremiumPercent = Math.round(((askingPrice - wm) / wm) * 1000) / 10;
+    if (baselinePrice > 0) {
+      askingPricePremiumPercent = Math.round(((askingPrice - baselinePrice) / baselinePrice) * 1000) / 10;
     }
-    // Calculate percentile rank strictly within eligible comparables (only when >= 4 comps)
-    if (prices.length >= 4) {
+
+    if (directPrices.length >= 4) {
+      const countBelow = directPrices.filter((p) => p < askingPrice).length;
+      const countEqual = directPrices.filter((p) => p === askingPrice).length;
+      askingPricePercentile = Math.round(((countBelow + 0.5 * countEqual) / directPrices.length) * 100);
+      percentileScope = 'DIRECT';
+    } else if (prices.length >= 4) {
       const countBelow = prices.filter((p) => p < askingPrice).length;
       const countEqual = prices.filter((p) => p === askingPrice).length;
       askingPricePercentile = Math.round(((countBelow + 0.5 * countEqual) / prices.length) * 100);
+      percentileScope = 'SUPPORTING';
     } else {
       askingPricePercentile = null;
+      percentileScope = null;
     }
   }
 
@@ -254,34 +301,116 @@ export function priceStats(included: Comparable[], askingPrice?: number | null):
     p75: Math.round(quantile(prices, 0.75)),
     p85: Math.round(quantile(prices, 0.85)),
     p90: Math.round(quantile(prices, 0.90)),
-    iqr: Math.round(quantile(prices, 0.75) - quantile(prices, 0.25)),
+    iqr,
+    directWeightedMedian,
+    directMedian,
+    directWeightedMean,
+    supportingMedian,
+    combinedEstimate,
+    dispersionIqr,
+    dispersionRatio,
+    percentileScope,
     askingPricePercentile,
     askingPricePremiumPercent,
   };
 }
 
+/**
+ * Phase 5 — Source accounting that matches the displayed number:
+ * - FMV mode: the FMV (and its range) is computed ONLY from direct comparables
+ *   (directWeightedMedian + direct dispersion) -> count only their sources.
+ * - INDICATIVE / SUPPORTING modes: the combined estimate uses ALL included
+ *   comparables -> count every included source.
+ * Never counts sources that merely produced listings which did not enter the number.
+ */
+export function sourcesDrivingNumber(
+  valuationMode: import('./types').ValuationMode,
+  comps: Comparable[],
+): number {
+  const driving = valuationMode === 'FMV' ? comps.filter((c) => isDirectComparable(c)) : comps;
+  return new Set(driving.map((c) => c.source)).size;
+}
+
 export function calculateFMV(adjustedComps: Comparable[], askingPrice?: number | null): {
-  fmv: number;
+  fmv: number | null;
+  indicativePrice: number | null;
+  valuationMode: import('./types').ValuationMode;
   minPrice: number;
   maxPrice: number;
   stats: PriceStats;
   isWideRange: boolean;
   rangeDisclaimerAr: string;
+  directCompsCount: number;
+  supportingCompsCount: number;
 } {
   const stats = priceStats(adjustedComps, askingPrice);
-  const estimated = stats.weightedMedian;
-  const spread = Math.max(Math.round(stats.iqr / 2), Math.round(estimated * 0.03));
-  const minPrice = Math.max(100, estimated - spread);
-  const maxPrice = estimated + spread;
-  const hasDirectEvidence = adjustedComps.some((c) => c.tier <= 2 || (c.yearDiff !== undefined && c.yearDiff <= 1));
-  const isWideRange = !hasDirectEvidence || ((maxPrice - minPrice) > estimated * 0.35);
-  const rangeDisclaimerAr = !hasDirectEvidence
-    ? 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية (نطاق واسع لمحدودية الأدلة المباشرة)'
-    : isWideRange
-    ? 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية (تباين في أسعار العرض)'
-    : 'النطاق الاسترشادي للقيمة بناءً على عروض السوق الحالية';
+  const directComps = adjustedComps.filter((c) => isDirectComparable(c));
+  const directCompsCount = directComps.length;
+  const supportingCompsCount = adjustedComps.length - directCompsCount;
+  const prices = adjustedComps.map((c) => c.adjustedPrice ?? c.priceJod).sort((a, b) => a - b);
 
-  return { fmv: estimated, minPrice, maxPrice, stats, isWideRange, rangeDisclaimerAr };
+  // CASE A: Direct Evidence >= 3 => FMV allowed
+  if (directCompsCount >= 3) {
+    const fmv = stats.directWeightedMedian ?? stats.weightedMedian;
+    const spread = Math.max(Math.round((stats.dispersionIqr || stats.iqr) / 2), Math.round(fmv * 0.03));
+    const minPrice = Math.max(100, fmv - spread);
+    const maxPrice = fmv + spread;
+    const isWideRange = (maxPrice - minPrice) > fmv * 0.25;
+    const rangeDisclaimerAr = isWideRange
+      ? 'نطاق القيمة السوقية العادلة (تباين في أسعار العروض المباشرة)'
+      : 'نطاق القيمة السوقية العادلة بناءً على مقارنات مباشرة من نفس الموديل والجيل ونظام المحرك';
+
+    return {
+      fmv,
+      indicativePrice: null,
+      valuationMode: 'FMV',
+      minPrice,
+      maxPrice,
+      stats,
+      isWideRange,
+      rangeDisclaimerAr,
+      directCompsCount,
+      supportingCompsCount,
+    };
+  }
+
+  // CASE B: Direct Evidence = 1 or 2 => INDICATIVE only (FMV is null)
+  if (directCompsCount === 1 || directCompsCount === 2) {
+    const indicativePrice = stats.combinedEstimate ?? stats.weightedMedian;
+    const spread = Math.max(Math.round(stats.iqr / 2), Math.round(indicativePrice * 0.05));
+    const minPrice = Math.max(100, indicativePrice - spread);
+    const maxPrice = indicativePrice + spread;
+
+    return {
+      fmv: null,
+      indicativePrice,
+      valuationMode: 'INDICATIVE',
+      minPrice,
+      maxPrice,
+      stats,
+      isWideRange: true,
+      rangeDisclaimerAr: 'قيمة استرشادية تقديرية فقط — عدد المقارنات المباشرة (1-2) غير كافٍ لاعتماد FMV مؤكد',
+      directCompsCount,
+      supportingCompsCount,
+    };
+  }
+
+  // CASE C: Direct Evidence = 0 => SUPPORTING_RANGE_ONLY (FMV and indicativePrice are null)
+  const minPrice = stats.p25 > 0 ? stats.p25 : (prices[0] || 100);
+  const maxPrice = stats.p75 > 0 ? stats.p75 : (prices[prices.length - 1] || 100);
+
+  return {
+    fmv: null,
+    indicativePrice: null,
+    valuationMode: 'SUPPORTING_RANGE_ONLY',
+    minPrice,
+    maxPrice,
+    stats,
+    isWideRange: true,
+    rangeDisclaimerAr: 'نطاق استرشادي للشواهد الداعمة فقط — لا يتوفر FMV لعدم وجود أي مقارنة مباشرة متطابقة الجيل والمحرك والسنة (محدودية الأدلة المباشرة)',
+    directCompsCount: 0,
+    supportingCompsCount,
+  };
 }
 
 export interface ConfidenceInput {

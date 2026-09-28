@@ -20,8 +20,10 @@ const DEFAULT_ANNUAL_DEPRECIATION_RATE = 0.075; // 7.5% annual depreciation base
 const DEFAULT_PER_10K_KM = 180;
 
 export function calibrate(rows: Comparable[]): Calibration {
+  // Only calibrate on homogeneous comparables (same powertrain and generation)
   const same = rows.filter(
-    (r) => r.included && r.year !== null && r.year !== undefined && r.kilometers && r.priceJod > 0,
+    (r) => r.included && r.year !== null && r.year !== undefined && r.kilometers && r.priceJod > 0 &&
+      !r.isPowertrainMismatch && !r.isGenerationMismatch,
   );
   if (same.length < 8) {
     return {
@@ -60,6 +62,7 @@ export function calibrate(rows: Comparable[]): Calibration {
   const per10kKmJod = lo.length && hi.length
     ? Math.max(50, Math.min(600, Math.round(((med(lo) - med(hi)) / kmGap) * 10000)))
     : DEFAULT_PER_10K_KM;
+
   return { perYearJod, per10kKmJod, calibrated: true, provenance: 'MARKET_DERIVED', sampleSize: same.length };
 }
 
@@ -135,6 +138,7 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
       : Math.max(120, Math.min(450, Math.round(r.priceJod * 0.005))); // ~0.5% per 10k km
 
     const d = Math.round((kmDiff / 10000) * ratePer10k);
+
     if (Math.abs(d) >= 50) {
       price += d;
       adj.push({
@@ -170,25 +174,52 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
     }
   }
 
-  // 4. Condition Adjustment
-  const COND_RANK: Record<string, number> = {
-    EXCELLENT: 5, VERY_GOOD: 4, GOOD: 3, FAIR: 2, NEEDS_MAINTENANCE: 1, NEEDS_INSPECTION: 1,
-  };
-  const rc = COND_RANK[(r.condition || '').toUpperCase()] ?? null;
-  const sc = COND_RANK[(spec.condition || '').toUpperCase()] ?? null;
-  if (rc !== null && sc !== null && rc !== sc) {
-    const d = Math.round(Math.max(-r.priceJod * 0.1, Math.min(r.priceJod * 0.1, (sc - rc) * r.priceJod * 0.03)));
-    if (Math.abs(d) >= 50) {
-      price += d;
-      adj.push({
-        factor: 'condition',
-        factorAr: `تعديل فارق الحالة العامة (${r.condition} ← ${spec.condition})`,
-        delta: d,
-        provenance: 'CONSERVATIVE_HEURISTIC',
-        method: 'Condition Step Differential (3% per tier rank)',
-        formula: `delta = (${sc} - ${rc}) * ${r.priceJod} * 0.03`,
-        reason: `تعديل فارق الحالة الفنية التقديرية بين المركبتين`,
-      });
+  // 4. Condition / Technical Inspection Adjustment
+  // Use normalized conditionScore (0-100) if available with CONFIRMED/INFERRED certainty
+  if (r.conditionScore != null && spec.conditionScore != null) {
+    const scoreDiff = spec.conditionScore - r.conditionScore; // positive = target is cleaner than comp
+    if (Math.abs(scoreDiff) >= 10) {
+      // 0.15% per point difference, max capped at 8% of price or 2,000 JOD
+      const rate = 0.0015;
+      const rawDelta = Math.round(r.priceJod * scoreDiff * rate);
+      const condCap = Math.min(2000, Math.round(r.priceJod * 0.08));
+      const d = Math.max(-condCap, Math.min(condCap, rawDelta));
+      if (Math.abs(d) >= 50) {
+        price += d;
+        adj.push({
+          factor: 'condition',
+          factorAr: `تعديل فارق الفحص الفني (${r.conditionScore}/100 ← ${spec.conditionScore}/100)`,
+          delta: d,
+          provenance: r.conditionCertainty === 'CONFIRMED' ? 'MARKET_DERIVED' : 'CONSERVATIVE_HEURISTIC',
+          method: 'Jordan Inspection Condition Score Differential',
+          formula: `delta = clamp((${spec.conditionScore} - ${r.conditionScore}) * ${rate} * ${r.priceJod}, ±${condCap})`,
+          reason: scoreDiff > 0
+            ? `سيارة الهدف بحالة فحص أفضل (${spec.conditionScore}/100 مقابل ${r.conditionScore}/100 للمقارنة)`
+            : `المقارنة بحالة فحص أفضل (${r.conditionScore}/100 مقابل ${spec.conditionScore}/100 للهدف)`,
+        });
+      }
+    }
+  } else {
+    // Fallback to text condition ranking
+    const COND_RANK: Record<string, number> = {
+      EXCELLENT: 5, VERY_GOOD: 4, GOOD: 3, FAIR: 2, NEEDS_MAINTENANCE: 1, NEEDS_INSPECTION: 1,
+    };
+    const rc = COND_RANK[(r.condition || '').toUpperCase()] ?? null;
+    const sc = COND_RANK[(spec.condition || '').toUpperCase()] ?? null;
+    if (rc !== null && sc !== null && rc !== sc) {
+      const d = Math.round(Math.max(-r.priceJod * 0.06, Math.min(r.priceJod * 0.06, (sc - rc) * r.priceJod * 0.02)));
+      if (Math.abs(d) >= 50) {
+        price += d;
+        adj.push({
+          factor: 'condition',
+          factorAr: `تعديل فارق الحالة العامة (${r.condition} ← ${spec.condition})`,
+          delta: d,
+          provenance: 'CONSERVATIVE_HEURISTIC',
+          method: 'Condition Step Differential (2% per rank, capped 6%)',
+          formula: `delta = (${sc} - ${rc}) * ${r.priceJod} * 0.02`,
+          reason: `تعديل فارق الحالة الفنية التقديرية بين المركبتين`,
+        });
+      }
     }
   }
 

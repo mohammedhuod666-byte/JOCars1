@@ -31,6 +31,7 @@ import { runValuation } from './engine';
 import { buildSpecFromBody } from './request';
 import { runGlmIntelligence, type GlmIntelligenceOutput, type GlmInputPayload } from './glm-intelligence';
 import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
+import { isDirectComparable } from './similarity';
 
 export interface Section24PricePosition {
   classification: 'BELOW_MARKET' | 'FAIR' | 'ABOVE_MARKET' | 'UNKNOWN';
@@ -39,6 +40,18 @@ export interface Section24PricePosition {
   percentileRank?: number | null;
   percentileLabel?: string | null;
   premiumLabelAr?: string | null;
+  /** TRUE scope of the percentile calculation — DIRECT only when >=4 direct comps. */
+  percentileScope?: 'DIRECT' | 'SUPPORTING' | null;
+}
+
+/**
+ * Phase 3: truthful percentile scope wording — the text MUST match the real scope.
+ * DIRECT text is only legal when percentileScope === 'DIRECT'.
+ */
+export function percentileScopeLabelAr(scope: 'DIRECT' | 'SUPPORTING' | null | undefined): string {
+  return scope === 'DIRECT'
+    ? 'من عروض المقارنات المباشرة'
+    : 'من الشواهد الداعمة العامة (نطاق استرشادي — لا يُعتمد كـ FMV)';
 }
 
 export interface Section24MarketEvidence {
@@ -88,6 +101,10 @@ export interface Section24ComparableUsed {
   qualitativeMatch?: QualitativeMatchLevel;
   isPowertrainMismatch?: boolean;
   powertrainNote?: string;
+  isFuelMismatch?: boolean;
+  isDrivetrainMismatch?: boolean;
+  isGenerationMismatch?: boolean;
+  yearDiff?: number;
   weight: number;
   weightBreakdown?: WeightBreakdown;
   contributionPercent?: number;
@@ -134,6 +151,10 @@ export interface Section24OutputContract {
   status: Section24ContractStatus;
   statusLabelAr?: string;
   fairMarketValue: number | null;
+  indicativePrice?: number | null;
+  valuationMode?: import('./types').ValuationMode;
+  directCompsCount?: number;
+  supportingCompsCount?: number;
   currency: 'JOD';
   range: {
     low: number | null;
@@ -143,8 +164,12 @@ export interface Section24OutputContract {
   rangeDisclaimerAr?: string;
   confidence: number;
   confidenceLabel?: string;
+  /** Confidence reasons from the estimator (evidence-based, never LLM-authored). */
+  confidenceReasons?: string[];
   askingPrice: number | null;
   pricePosition: Section24PricePosition;
+  /** TRUE percentile scope of this valuation ('DIRECT' only when >=4 direct comps). */
+  percentileScope?: 'DIRECT' | 'SUPPORTING' | null;
   marketEvidence: Section24MarketEvidence;
   comparablesUsed: Section24ComparableUsed[];
   comparablesExcluded: Section24ComparableExcluded[];
@@ -243,35 +268,90 @@ export async function runIntelligenceValuation(
     premiumLabelAr: null,
   };
 
-  const fmv = output.roundedDisplayPrice || output.estimatedPrice;
+  const valuationMode = output.valuationMode || 'FMV';
+  const directCompsCount = output.directCompsCount ?? (audit?.directCompsCount ?? 0);
+  const supportingCompsCount = output.supportingCompsCount ?? (audit?.supportingCompsCount ?? 0);
+  const indicativePrice = valuationMode === 'INDICATIVE' ? (output.indicativePrice || output.estimatedPrice) : null;
+  const fmv = valuationMode === 'FMV' ? (output.roundedDisplayPrice || output.estimatedPrice) : null;
 
-  if (effectiveAskingPrice !== null && effectiveAskingPrice > 0 && fmv > 0) {
-    const diffAmount = effectiveAskingPrice - fmv;
-    const diffPercent = Math.round((diffAmount / fmv) * 1000) / 10; // 1 decimal place
+  if (effectiveAskingPrice !== null && effectiveAskingPrice > 0) {
+    if (valuationMode === 'FMV' && fmv !== null && fmv > 0) {
+      const diffAmount = effectiveAskingPrice - fmv;
+      const diffPercent = Math.round((diffAmount / fmv) * 1000) / 10; // 1 decimal place
 
-    let classification: Section24PricePosition['classification'] = 'FAIR';
-    if (diffPercent <= -5) classification = 'BELOW_MARKET';
-    else if (diffPercent >= 5) classification = 'ABOVE_MARKET';
+      let classification: Section24PricePosition['classification'] = 'FAIR';
+      if (diffPercent <= -5) classification = 'BELOW_MARKET';
+      else if (diffPercent >= 5) classification = 'ABOVE_MARKET';
 
-    const pRank = output.stats?.askingPricePercentile ?? null;
-    const premiumLabelAr = diffPercent > 0
-      ? `أعلى بـ ${Math.abs(diffPercent)}% عن السعر العادل`
-      : diffPercent < 0
-      ? `أقل بـ ${Math.abs(diffPercent)}% عن السعر العادل`
-      : 'مطابق للسعر العادل';
+      const pRank = output.stats?.askingPricePercentile ?? null;
+      // Phase 3: percentile scope must be truthful — 'DIRECT' wording ONLY when
+      // the computation actually ran on direct comps (>=4), otherwise SUPPORTING.
+      const pScope = output.stats?.percentileScope ?? null;
+      const scopeText = percentileScopeLabelAr(pScope);
+      const premiumLabelAr = diffPercent > 0
+        ? `أعلى بـ ${Math.abs(diffPercent)}% عن السعر العادل (FMV)`
+        : diffPercent < 0
+        ? `أقل بـ ${Math.abs(diffPercent)}% عن السعر العادل (FMV)`
+        : 'مطابق للسعر العادل';
 
-    const percentileLabel = pRank !== null
-      ? `الشريحة السوقية: P${Math.round(pRank)} (${pRank >= 50 ? `أعلى من ${Math.round(pRank)}%` : `أقل من ${Math.round(100 - pRank)}%`} من عروض السوق المماثلة)`
-      : null;
+      const percentileLabel = pRank !== null
+        ? `الشريحة السوقية: P${Math.round(pRank)} (${pRank >= 50 ? `أعلى من ${Math.round(pRank)}%` : `أقل من ${Math.round(100 - pRank)}%`} ${scopeText})`
+        : null;
 
-    pricePosition = {
-      classification,
-      differenceAmount: diffAmount,
-      differencePercent: diffPercent,
-      percentileRank: pRank,
-      percentileLabel,
-      premiumLabelAr,
-    };
+      pricePosition = {
+        classification,
+        differenceAmount: diffAmount,
+        differencePercent: diffPercent,
+        percentileRank: pRank,
+        percentileLabel,
+        premiumLabelAr,
+        percentileScope: pScope,
+      };
+    } else if (valuationMode === 'INDICATIVE' && indicativePrice !== null && indicativePrice > 0) {
+      const diffAmount = effectiveAskingPrice - indicativePrice;
+      const diffPercent = Math.round((diffAmount / indicativePrice) * 1000) / 10;
+
+      let classification: Section24PricePosition['classification'] = 'FAIR';
+      if (diffPercent <= -5) classification = 'BELOW_MARKET';
+      else if (diffPercent >= 5) classification = 'ABOVE_MARKET';
+
+      const pRank = output.stats?.askingPricePercentile ?? null;
+      const premiumLabelAr = diffPercent > 0
+        ? `أعلى بـ ${Math.abs(diffPercent)}% عن القيمة الاسترشادية`
+        : diffPercent < 0
+        ? `أقل بـ ${Math.abs(diffPercent)}% عن القيمة الاسترشادية`
+        : 'مطابق للقيمة الاسترشادية';
+
+      const percentileLabel = pRank !== null
+        ? `الشريحة ضمن الشواهد الداعمة: P${Math.round(pRank)} (استرشادي — غير معتمد كـ FMV)`
+        : null;
+
+      pricePosition = {
+        classification,
+        differenceAmount: diffAmount,
+        differencePercent: diffPercent,
+        percentileRank: pRank,
+        percentileLabel,
+        premiumLabelAr,
+        percentileScope: output.stats?.percentileScope ?? 'SUPPORTING',
+      };
+    } else {
+      // Case C: SUPPORTING_RANGE_ONLY
+      const pRank = output.stats?.askingPricePercentile ?? null;
+      const percentileLabel = pRank !== null
+        ? `الشريحة ضمن الشواهد الداعمة العامة: P${Math.round(pRank)} (غير معتمدة كـ FMV)`
+        : null;
+
+      pricePosition = {
+        classification: 'UNKNOWN',
+        differenceAmount: null,
+        differencePercent: null,
+        percentileRank: pRank,
+        percentileLabel,
+        premiumLabelAr: 'السعر العادل غير متاح لعدم توفر مقارنات مباشرة (شواهد داعمة فقط)',
+        percentileScope: output.stats?.percentileScope ?? 'SUPPORTING',
+      };
+    }
   }
 
   // 3. Collect Market Evidence stats
@@ -279,14 +359,19 @@ export async function runIntelligenceValuation(
   const excludedCompsFromAudit = (audit?.comparablesAudit || []).filter(c => !c.included);
   const totalMarketCount = audit?.marketSearchResults?.total || (usedComps.length + excludedCompsFromAudit.length);
   const sameYearCount = usedComps.filter(c => c.year === spec.year).length;
-  const primarySameYearComps = usedComps.filter(c => c.year === spec.year && (c.tier === 1 || c.tier === 2) && !c.isPowertrainMismatch);
+  const primarySameYearComps = usedComps.filter(c => isDirectComparable(c, spec.year));
   const sameYearShare = usedComps.length > 0 ? Math.round((sameYearCount / usedComps.length) * 100) / 100 : 0;
 
   // Distinguish the 4 source metrics (User Mandate §1, §2, §3, §4, §5)
   const sourcesSearched = audit?.sourcesSearched ?? (audit?.marketSourceExecutions?.length || 7);
   const sourcesWithResults = audit?.sourcesWithResults ?? (audit?.marketSearchResults?.sources?.filter(s => s.count > 0).length || 1);
   const sourcesWithEligibleComparables = audit?.sourcesWithEligibleComparables ?? new Set(usedComps.map(c => c.source)).size;
-  const independentSourcesUsedInFMV = audit?.independentSourcesUsedInFMV ?? new Set(usedComps.map(c => c.source)).size;
+  // Phase 5: fallback (audit absent) counts only sources driving the displayed number —
+  // direct comps in FMV mode, all included comps otherwise (same rule as the engine).
+  const drivingCompsForSources = valuationMode === 'FMV'
+    ? usedComps.filter(c => isDirectComparable(c, spec.year))
+    : usedComps;
+  const independentSourcesUsedInFMV = audit?.independentSourcesUsedInFMV ?? new Set(drivingCompsForSources.map(c => c.source)).size;
   const uniqueSources = independentSourcesUsedInFMV;
 
   const marketEvidence: Section24MarketEvidence = {
@@ -337,6 +422,10 @@ export async function runIntelligenceValuation(
     qualitativeMatch: c.qualitativeMatch,
     isPowertrainMismatch: c.isPowertrainMismatch,
     powertrainNote: c.powertrainNote,
+    isFuelMismatch: c.isFuelMismatch,
+    isDrivetrainMismatch: c.isDrivetrainMismatch,
+    isGenerationMismatch: c.isGenerationMismatch,
+    yearDiff: c.yearDiff,
     weight: Math.round(c.finalWeight * 1000) / 1000,
     weightBreakdown: c.weightBreakdown,
     contributionPercent: c.contributionPercent ?? 0,
@@ -472,6 +561,10 @@ export async function runIntelligenceValuation(
   const warnings: string[] = [
     'التقييم مبني على أسعار الإعلانات والعروض المتاحة، وليس بالضرورة أسعار البيع النهائية المنفذة.',
   ];
+  // Phase 3: percentile scope SUPPORTING must be explicitly visible in the contract.
+  if (pricePosition.percentileScope === 'SUPPORTING') {
+    warnings.push('نسبة مقارنة السعر المعروض (Percentile) محسوبة على الشواهد الداعمة العامة وليست على مقارنات مباشرة معتمدة — استرشادية فقط.');
+  }
   if (sameYearShare < 0.5) {
     warnings.push(`تمت الاستعانة بمقارنات من فئات وسنوات مجاورة (Tier 4) نظراً لعدم توفر معروض كافٍ من نفس سنة ${spec.year}.`);
   }
@@ -492,7 +585,11 @@ export async function runIntelligenceValuation(
     `تم استخراج وتحليل بيانات السيارة: ${spec.brand} ${spec.model} موديل ${spec.year} مع عزل السعر المطلوب (${effectiveAskingPrice ? effectiveAskingPrice.toLocaleString() + ' JOD' : 'غير محدد'}) تماماً من معادلة FMV.`,
     `تم استبعاد الإعلانات المشبوهة وإعلانات اللوحات وتناقضات الموديلات عبر بوابتي السلامة والتحقق من الهوية (Sanity & Identity Gate).`,
     `تم احتساب مصفوفة المطابقة الفنية (Match Matrix) وتعديل فوارق الممشى وسنة الصنع لجميع المقارنات المعتمدة.`,
-    `القيمة السوقية العادلة المحسوبة هي ${fmv.toLocaleString()} دينار أردني بنطاق سعري يتراوح بين ${output.minPrice.toLocaleString()} و ${output.maxPrice.toLocaleString()} دينار أردني، مع درجة موثوقية ${output.confidence}%.`,
+    valuationMode === 'FMV' && fmv !== null
+      ? `القيمة السوقية العادلة المحسوبة هي ${fmv.toLocaleString()} دينار أردني بنطاق سعري يتراوح بين ${output.minPrice.toLocaleString()} و ${output.maxPrice.toLocaleString()} دينار أردني، مع درجة موثوقية ${output.confidence}%.`
+      : valuationMode === 'INDICATIVE' && indicativePrice !== null
+      ? `القيمة الاسترشادية التقديرية هي ${indicativePrice.toLocaleString()} دينار أردني بنطاق استرشادي يتراوح بين ${output.minPrice.toLocaleString()} و ${output.maxPrice.toLocaleString()} دينار أردني (أدلة مباشرة محدودة).`
+      : `القيمة السوقية العادلة (FMV) غير متاحة لغياب مقارنات مباشرة متطابقة، وتم تحديد نطاق استرشادي للشواهد الداعمة يتراوح بين ${output.minPrice.toLocaleString()} و ${output.maxPrice.toLocaleString()} دينار أردني.`,
   ];
 
   // 11. Complete Audit Trail
@@ -509,38 +606,41 @@ export async function runIntelligenceValuation(
       if (hasYr) return 'Applied ±1-year limited market step (far-year synthetic depreciation prohibited).';
       return 'Direct unadjusted market evidence preserved (no synthetic price adjustments applied).';
     })(),
-    `Calculated robust weighted median: ${fmv} JOD.`,
+    `Valuation Mode: ${valuationMode}, Direct evidence count: ${directCompsCount}, Supporting evidence count: ${supportingCompsCount}.`,
+    `Calculated FMV: ${fmv !== null ? fmv + ' JOD' : 'NULL (insufficient direct evidence)'}.`,
     `Target price invariance verified: FMV remains invariant under asking price fluctuations.`,
-    `Uncertainty display price rounded to ${fmv} JOD (confidence: ${output.confidence}%).`,
+    `Uncertainty display: ${fmv !== null ? fmv + ' JOD' : 'Supporting Range Only'} (confidence: ${output.confidence}%).`,
   ];
 
   // 12. Map engine status to contract status (Requirement §10)
-  const hasPrimaryComps = primarySameYearComps.length > 0;
   const contractStatus: Section24ContractStatus =
-    audit?.status === 'INSUFFICIENT_DIRECT_EVIDENCE' || !hasPrimaryComps
+    valuationMode === 'SUPPORTING_RANGE_ONLY' || audit?.status === 'INSUFFICIENT_DIRECT_EVIDENCE' || directCompsCount === 0
       ? 'INSUFFICIENT_DIRECT_EVIDENCE'
+      : valuationMode === 'INDICATIVE' || directCompsCount < 3
+      ? 'LIMITED'
       : output.confidence >= 65
       ? 'RELIABLE'
       : output.confidence >= 35
       ? 'LIMITED'
-      : output.confidence > 0
-      ? 'APPROXIMATE'
-      : 'INSUFFICIENT_DATA';
+      : 'APPROXIMATE';
 
   const statusLabelAr =
-    contractStatus === 'RELIABLE'
-      ? 'تقييم موثوق'
-      : contractStatus === 'LIMITED'
-      ? 'تقييم محدود'
-      : contractStatus === 'INSUFFICIENT_DIRECT_EVIDENCE'
-      ? 'شواهد داعمة فقط (غياب مقارنات مباشرة)'
-      : contractStatus === 'APPROXIMATE'
-      ? 'تقدير تقريبي'
-      : 'بيانات غير كافية';
+    valuationMode === 'SUPPORTING_RANGE_ONLY' || directCompsCount === 0
+      ? 'نطاق استرشادي للشواهد الداعمة (Direct = 0)'
+      : valuationMode === 'INDICATIVE' || directCompsCount < 3
+      ? 'قيمة استرشادية تقديرية (Direct 1-2)'
+      : contractStatus === 'RELIABLE'
+      ? 'تقييم موثوق (FMV)'
+      : 'تقييم محدود (FMV)';
 
-  const isWideRange = (output.maxPrice - output.minPrice) > fmv * 0.50;
-  const rangeDisclaimerAr = isWideRange
-    ? 'نطاق استرشادي واسع نظراً لمحدودية الأدلة المباشرة وتباين أسعار المقارنات'
+  const baselineRef = fmv || indicativePrice || output.estimatedPrice;
+  const isWideRange = baselineRef > 0 && (output.maxPrice - output.minPrice) > baselineRef * 0.40;
+  const rangeDisclaimerAr = valuationMode === 'SUPPORTING_RANGE_ONLY'
+    ? 'نطاق استرشادي للشواهد الداعمة فقط — لا يتوفر FMV لعدم وجود مقارنات مباشرة متطابقة'
+    : valuationMode === 'INDICATIVE'
+    ? 'نطاق استرشادي تقديري — عدد المقارنات المباشرة (1-2) غير كافٍ لاعتماد FMV قاطع'
+    : isWideRange
+    ? 'نطاق استرشادي واسع نظراً لتباين أسعار المقارنات في السوق'
     : 'النطاق السعري المتوقع وفق عروض السوق المتوافقة';
 
   // 13. Exclusions count for GLM payload
@@ -649,6 +749,10 @@ export async function runIntelligenceValuation(
     status: contractStatus,
     statusLabelAr,
     fairMarketValue: fmv,
+    indicativePrice,
+    valuationMode,
+    directCompsCount,
+    supportingCompsCount,
     currency: 'JOD',
     range: {
       low: output.minPrice,
@@ -658,6 +762,8 @@ export async function runIntelligenceValuation(
     rangeDisclaimerAr,
     confidence: output.confidence,
     confidenceLabel: output.confidenceLabel,
+    confidenceReasons: Array.isArray(output.confidenceReasons) ? output.confidenceReasons : [],
+    percentileScope: pricePosition.percentileScope ?? output.stats?.percentileScope ?? null,
     askingPrice: effectiveAskingPrice,
     pricePosition,
     marketEvidence,

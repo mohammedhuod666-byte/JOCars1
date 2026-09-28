@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma';
 import { sanitizeFeatures } from '@/lib/car-features';
+import { normalizeTargetCondition, sanitizeTrim, drivetrainFromTrim } from './spec-extract';
 import type { VehicleSpec } from './types';
 
 export interface BuiltSpec {
@@ -16,16 +17,21 @@ export async function buildSpecFromBody(body: any): Promise<BuiltSpec> {
       include: { brand: true, model: true, city: true },
     });
     if (!car) throw Object.assign(new Error('السيارة غير موجودة'), { status: 404 });
+    // Phase 4: target condition -> normalized conditionScore/provenance.
+    // Unknown/absent stays UNKNOWN (null score) — never assumes EXCELLENT.
+    const cond = normalizeTargetCondition(car.condition);
     return {
       carId: car.id,
       targetPrice: typeof body.targetPrice === 'number' ? body.targetPrice : car.price,
       spec: {
         brand: car.brand?.nameAr || '', brandEn: car.brand?.nameEn || null,
         model: car.model?.nameAr || '', modelEn: car.model?.nameEn || null,
-        year: car.year, trim: car.trim || null, kilometers: car.kilometers,
+        year: car.year, trim: sanitizeTrim(car.trim), kilometers: car.kilometers,
         fuelType: car.fuelType || null, transmission: car.transmission || null,
-        drivetrain: (car as any).drivetrain || null,
+        drivetrain: (car as any).drivetrain || drivetrainFromTrim(car.trim),
         condition: car.condition || null, city: car.city?.nameAr || null,
+        conditionScore: cond.conditionScore,
+        conditionCertainty: cond.conditionCertainty,
         engineCapacity: (car as any).engineCapacity ? Math.round(Number((car as any).engineCapacity)) : null,
         horsepower: (car as any).horsepower ? Math.round(Number((car as any).horsepower)) : null,
         cylinders: (car as any).cylinders ? Math.round(Number((car as any).cylinders)) : null,
@@ -45,16 +51,20 @@ export async function buildSpecFromBody(body: any): Promise<BuiltSpec> {
     if (!s.brand || !s.model || !Number.isFinite(year) || !Number.isFinite(km)) {
       throw Object.assign(new Error('المواصفات ناقصة أو غير صالحة (brand/model/year/kilometers مطلوبة)'), { status: 400 });
     }
+    // Phase 4: same condition data flow for free-form specs.
+    const cond = normalizeTargetCondition(s.condition);
     return {
       carId: null,
       targetPrice: typeof body.targetPrice === 'number' && Number.isFinite(body.targetPrice) ? body.targetPrice : null,
       spec: {
         brand: String(s.brand), brandEn: s.brandEn || null,
         model: String(s.model), modelEn: s.modelEn || null,
-        year, trim: s.trim || null,
+        year, trim: sanitizeTrim(s.trim),
         kilometers: km,
         fuelType: s.fuelType || null, transmission: s.transmission || null,
-        drivetrain: s.drivetrain || null, condition: s.condition || null,
+        drivetrain: s.drivetrain || drivetrainFromTrim(s.trim), condition: s.condition || null,
+        conditionScore: cond.conditionScore,
+        conditionCertainty: cond.conditionCertainty,
         city: s.city || null, engineCapacity: s.engineCapacity ? Math.round(Number(s.engineCapacity)) : null,
         cylinders: s.cylinders ? Math.round(Number(s.cylinders)) : null,
         horsepower: s.horsepower ? Math.round(Number(s.horsepower)) : null,

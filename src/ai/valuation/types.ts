@@ -26,6 +26,10 @@ export interface VehicleSpec {
   doors?: number | null;
   bodyType?: string | null;
   vin?: string | null;
+  generation?: string | null;
+  chassisCode?: string | null;
+  conditionScore?: number | null;
+  conditionCertainty?: string | null;
   askingPrice?: number | null;
   specs?: string[];   // extras: sunroof, leather, ...
 }
@@ -42,6 +46,8 @@ export interface NormalizedListing {
   modelEn?: string | null;
   year: number | null;
   trim?: string | null;
+  generation?: string | null;
+  chassisCode?: string | null;
   kilometers: number | null;
   price: number;      // original currency
   currency: string;
@@ -58,6 +64,8 @@ export interface NormalizedListing {
   specProvenance?: Record<string, 'FEED' | 'DERIVED'>;
   priceType: 'asking' | 'sold' | 'unknown';
   condition?: string | null;
+  conditionScore?: number | null;
+  conditionCertainty?: 'CONFIRMED' | 'INFERRED' | 'UNKNOWN';
   specs: string[];
   listingDate?: string | null;
   scrapedAt: string;  // ISO
@@ -102,6 +110,13 @@ export interface Comparable extends NormalizedListing {
   qualitativeMatch?: QualitativeMatchLevel;
   isPowertrainMismatch?: boolean;
   powertrainNote?: string;
+  isGenerationMismatch?: boolean;
+  generationNote?: string;
+  /** Confirmed fuel mismatch (both sides known & different canonically). */
+  isFuelMismatch?: boolean;
+  /** Confirmed drivetrain mismatch (both sides known & different canonically). */
+  isDrivetrainMismatch?: boolean;
+  isDirectEligible?: boolean;
   simBreakdown: Record<string, number>;
   adjustedPrice: number | null;
   adjustments: PriceAdjustment[];
@@ -125,6 +140,14 @@ export interface PriceStats {
   p85: number;
   p90: number;
   iqr: number;
+  directWeightedMedian?: number | null;
+  directMedian?: number | null;
+  directWeightedMean?: number | null;
+  supportingMedian?: number | null;
+  combinedEstimate?: number | null;
+  dispersionRatio?: number | null;
+  dispersionIqr?: number | null;
+  percentileScope?: 'DIRECT' | 'SUPPORTING' | null;
   askingPricePercentile?: number | null;
   askingPricePremiumPercent?: number | null;
 }
@@ -135,10 +158,16 @@ export interface DataQualityReport {
   checks: { field: string; labelAr: string; status: 'VALID' | 'MISSING' | 'INVALID'; detail?: string }[];
 }
 
+export type ValuationMode = 'FMV' | 'INDICATIVE' | 'SUPPORTING_RANGE_ONLY';
+
 export interface ValuationOutput {
   estimatedPrice: number;
   minPrice: number;
   maxPrice: number;
+  valuationMode: ValuationMode;
+  directCompsCount: number;
+  supportingCompsCount: number;
+  indicativePrice?: number | null;
   grade: 'approximate' | 'limited' | 'full';
   funnel: FunnelStep[];
   profile: {
@@ -264,6 +293,21 @@ export interface ValuationAuditTrace {
   tierAssignments: { tier1: number; tier2: number; tier3: number; tier4: number };
   primaryComparablesCount: number;
   secondaryComparablesCount: number;
+  directCompsCount?: number;
+  supportingCompsCount?: number;
+  valuationMode?: ValuationMode;
+  indicativePrice?: number | null;
+  countsBreakdown?: {
+    collected: number;
+    deduplicated: number;
+    rejectedByDataQuality: number;
+    rejectedByIdentity: number;
+    rejectedBySanity: number;
+    rejectedByMatching: number;
+    eligibleDirect: number;
+    eligibleSupporting: number;
+    usedInPricing: number;
+  };
   consensusBand?: ConsensusBand;
   leaveOneOutAnalysis?: LeaveOneOutResult[];
   effectiveComparableWeight: number;
@@ -283,6 +327,11 @@ export interface ValuationAuditTrace {
     make: string;
     model: string;
     trim?: string | null;
+    generation?: string | null;
+    chassisCode?: string | null;
+    conditionScore?: number | null;
+    isGenerationMismatch?: boolean;
+    generationNote?: string | null;
     engine?: string | null;
     engineCc?: number | null;
     horsepower?: number | null;
@@ -307,6 +356,9 @@ export interface ValuationAuditTrace {
     qualitativeMatch?: QualitativeMatchLevel;
     isPowertrainMismatch?: boolean;
     powertrainNote?: string;
+    isFuelMismatch?: boolean;
+    isDrivetrainMismatch?: boolean;
+    yearDiff?: number;
     simBreakdown: Record<string, number>;
     rawWeight: number;
     finalWeight: number;
@@ -328,8 +380,8 @@ export interface ValuationAuditTrace {
   rawWeightsSum: number;
   finalWeightsSum: number;
   robustStatistic: PriceStats;
-  finalFmv: number;
-  displayFmv: number;
+  finalFmv: number | null;
+  displayFmv: number | null;
   confidence: number;
   status: string;
   sensitivity: {

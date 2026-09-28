@@ -16,32 +16,112 @@ function norm(s: string | null | undefined): string {
   return (s || '').toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
 }
 
+/**
+ * ---------------------------------------------------------------------------
+ * Phase 2 — ONE canonical fuel / drivetrain definition shared by tiering,
+ * similarity scoring, Direct-eligibility and every pricing partition.
+ * ---------------------------------------------------------------------------
+ * Rule: a "confirmed mismatch" exists ONLY when BOTH sides resolve to a known
+ * canonical value AND those values differ. UNKNOWN on either side is NEVER a
+ * mismatch (missing evidence must not auto-reject a comparable).
+ */
+
+export type CanonFuel = 'phev' | 'hybrid' | 'electric' | 'diesel' | 'petrol' | 'unknown';
+export type CanonDrivetrain = 'awd' | 'fwd' | 'rwd' | 'unknown';
+
+/** Canonical fuel keyword resolution — identical logic to the legacy normF helper. */
+export function canonFuel(fuel?: string | null, title?: string | null, trim?: string | null): CanonFuel {
+  const s = `${fuel || ''} ${title || ''} ${trim || ''}`.toLowerCase();
+  if (s.includes('plug-in') || s.includes('plugin') || s.includes('phev') || s.includes('بلج ان') || s.includes('بلاج ان') || s.includes('40e') || s.includes('45e') || s.includes('50e')) {
+    return 'phev';
+  }
+  if (s.includes('hyb') || s.includes('هايبرد') || s.includes('هجين')) {
+    return 'hybrid';
+  }
+  if (s.includes('elec') || s.includes('كهرب')) {
+    return 'electric';
+  }
+  if (s.includes('diesel') || s.includes('ديزل')) {
+    return 'diesel';
+  }
+  if (s.includes('petrol') || s.includes('gas') || s.includes('بنزين')) {
+    return 'petrol';
+  }
+  return 'unknown';
+}
+
+/** Canonical drivetrain family — awd/fwd/rwd families collapse synonyms (4WD/AWD/دفع رباعي...). */
+export function canonDrivetrain(dt?: string | null): CanonDrivetrain {
+  const s = (dt || '').toLowerCase().replace(/[\s\-_/]+/g, '');
+  if (!s) return 'unknown';
+  if (s === 'unknown' || s === 'غير معروف' || s === 'غيرمعلوم' || s === 'n/a' || s === 'na' || s === '2wd') return 'unknown';
+  if (s.includes('awd') || s.includes('4wd') || s.includes('4x4') || s.includes('fourwd') || s.includes('allwheel') || s.includes('quattro') || s.includes('xdrive') || s.includes('4matic') || s.includes('دفعرباعي') || s.includes('رباعي')) return 'awd';
+  if (s.includes('fwd') || s.includes('frontwheel') || s.includes('دفعأمامي') || s.includes('أمامي')) return 'fwd';
+  if (s.includes('rwd') || s.includes('rearwheel') || s.includes('دفعخلفي') || s.includes('خلفي')) return 'rwd';
+  return 'unknown';
+}
+
+/** Confirmed fuel mismatch (both sides known and different). */
+export function isConfirmedFuelMismatch(
+  a: NormalizedListing | { fuelType?: string | null; title?: string | null; trim?: string | null },
+  spec: VehicleSpec
+): boolean {
+  const targetFuel = canonFuel(spec.fuelType, '', spec.trim);
+  const compFuel = canonFuel(a.fuelType, (a as any).title, a.trim);
+  return targetFuel !== 'unknown' && compFuel !== 'unknown' && targetFuel !== compFuel;
+}
+
+/** Confirmed drivetrain mismatch (both sides known and different). */
+export function isConfirmedDrivetrainMismatch(
+  a: NormalizedListing | { drivetrain?: string | null },
+  spec: VehicleSpec
+): boolean {
+  const targetDrive = canonDrivetrain(spec.drivetrain);
+  const compDrive = canonDrivetrain((a as any).drivetrain);
+  return targetDrive !== 'unknown' && compDrive !== 'unknown' && targetDrive !== compDrive;
+}
+
+/** Minimal shape accepted by the single Direct-eligibility predicate. */
+export interface DirectEligibilityInput {
+  tier?: number | null;
+  yearDiff?: number | null;
+  year?: number | null;
+  isPowertrainMismatch?: boolean;
+  isGenerationMismatch?: boolean;
+  isFuelMismatch?: boolean;
+  isDrivetrainMismatch?: boolean;
+}
+
+/**
+ * THE single Direct-comparable eligibility definition.
+ * Used by: scoreSimilarity (isDirectEligible), engine.ts (isPrimary / primary set),
+ * price.ts (weight balancing + priceStats + calculateFMV) and intelligence-engine
+ * (contract evidence). A comparable is Direct ONLY when:
+ *   tier 1 or 2, same year (yearDiff === 0), and NO confirmed mismatch of any kind
+ *   (powertrain / generation / fuel / drivetrain).
+ * Missing flags (undefined on legacy rows / hand-built fixtures) are treated as
+ * "no confirmed mismatch" — never as an auto-rejection.
+ */
+export function isDirectComparable(c: DirectEligibilityInput, specYear?: number): boolean {
+  if (c.tier !== 1 && c.tier !== 2) return false;
+  let yearDiff = c.yearDiff;
+  if (yearDiff == null && c.year != null) {
+    yearDiff = specYear != null ? Math.abs(c.year - specYear) : null;
+  }
+  if (yearDiff !== 0) return false;
+  if (c.isPowertrainMismatch) return false;
+  if (c.isGenerationMismatch) return false;
+  if (c.isFuelMismatch) return false;
+  if (c.isDrivetrainMismatch) return false;
+  return true;
+}
+
 export function isPhevVsPetrolMismatch(
   a: NormalizedListing | { fuelType?: string | null; title?: string | null; trim?: string | null },
   spec: VehicleSpec
 ): boolean {
-  const normF = (fuel?: string | null, title?: string | null, trim?: string | null) => {
-    const s = `${fuel || ''} ${title || ''} ${trim || ''}`.toLowerCase();
-    if (s.includes('plug-in') || s.includes('plugin') || s.includes('phev') || s.includes('بلج ان') || s.includes('بلاج ان') || s.includes('40e') || s.includes('45e') || s.includes('50e')) {
-      return 'phev';
-    }
-    if (s.includes('hyb') || s.includes('هايبرد') || s.includes('هجين')) {
-      return 'hybrid';
-    }
-    if (s.includes('elec') || s.includes('كهرب')) {
-      return 'electric';
-    }
-    if (s.includes('diesel') || s.includes('ديزل')) {
-      return 'diesel';
-    }
-    if (s.includes('petrol') || s.includes('gas') || s.includes('بنزين')) {
-      return 'petrol';
-    }
-    return 'unknown';
-  };
-
-  const targetFuel = normF(spec.fuelType, '', spec.trim);
-  const compFuel = normF(a.fuelType, (a as any).title, a.trim);
+  const targetFuel = canonFuel(spec.fuelType, '', spec.trim);
+  const compFuel = canonFuel(a.fuelType, (a as any).title, a.trim);
 
   if (targetFuel === 'petrol' && compFuel === 'phev') return true;
   if (targetFuel === 'phev' && compFuel === 'petrol') return true;
@@ -223,11 +303,117 @@ export function checkListingIdentityConsistency(
   return { consistent: true };
 }
 
+export interface GenerationDefinition {
+  generation: string;
+  chassisCode: string;
+  startYear: number;
+  endYear: number;
+  crossoverYears?: number[];
+  keywords: string[];
+}
+
+export const KNOWN_MODEL_GENERATIONS: Record<string, GenerationDefinition[]> = {
+  'x5': [
+    { generation: 'E53', chassisCode: 'E53', startYear: 1999, endYear: 2006, keywords: ['e53'] },
+    { generation: 'E70', chassisCode: 'E70', startYear: 2007, endYear: 2013, crossoverYears: [2013], keywords: ['e70'] },
+    { generation: 'F15', chassisCode: 'F15', startYear: 2013, endYear: 2018, crossoverYears: [2013, 2018], keywords: ['f15'] },
+    { generation: 'G05', chassisCode: 'G05', startYear: 2019, endYear: 2026, crossoverYears: [2018, 2019], keywords: ['g05'] },
+  ],
+  '5-series': [
+    { generation: 'E39', chassisCode: 'E39', startYear: 1995, endYear: 2003, keywords: ['e39'] },
+    { generation: 'E60', chassisCode: 'E60', startYear: 2003, endYear: 2010, keywords: ['e60'] },
+    { generation: 'F10', chassisCode: 'F10', startYear: 2010, endYear: 2016, keywords: ['f10', 'f11'] },
+    { generation: 'G30', chassisCode: 'G30', startYear: 2017, endYear: 2023, keywords: ['g30', 'g31'] },
+  ],
+  '3-series': [
+    { generation: 'E46', chassisCode: 'E46', startYear: 1998, endYear: 2005, keywords: ['e46'] },
+    { generation: 'E90', chassisCode: 'E90', startYear: 2005, endYear: 2012, keywords: ['e90', 'e91', 'e92', 'e93'] },
+    { generation: 'F30', chassisCode: 'F30', startYear: 2012, endYear: 2018, keywords: ['f30', 'f31'] },
+    { generation: 'G20', chassisCode: 'G20', startYear: 2019, endYear: 2026, keywords: ['g20'] },
+  ],
+  'e-class': [
+    { generation: 'W211', chassisCode: 'W211', startYear: 2002, endYear: 2009, keywords: ['w211'] },
+    { generation: 'W212', chassisCode: 'W212', startYear: 2009, endYear: 2016, keywords: ['w212'] },
+    { generation: 'W213', chassisCode: 'W213', startYear: 2016, endYear: 2023, keywords: ['w213'] },
+  ],
+  'c-class': [
+    { generation: 'W203', chassisCode: 'W203', startYear: 2000, endYear: 2007, keywords: ['w203'] },
+    { generation: 'W204', chassisCode: 'W204', startYear: 2007, endYear: 2014, keywords: ['w204'] },
+    { generation: 'W205', chassisCode: 'W205', startYear: 2014, endYear: 2021, keywords: ['w205'] },
+    { generation: 'W206', chassisCode: 'W206', startYear: 2021, endYear: 2026, keywords: ['w206'] },
+  ],
+};
+
+export function resolveGeneration(
+  brand?: string | null,
+  model?: string | null,
+  year?: number | null,
+  text?: string | null
+): string | null {
+  if (!model) return null;
+  const normM = norm(model);
+  const t = (text || '').toLowerCase();
+
+  let gens: GenerationDefinition[] | undefined;
+  for (const [k, v] of Object.entries(KNOWN_MODEL_GENERATIONS)) {
+    if (normM.includes(k) || k.includes(normM)) {
+      gens = v;
+      break;
+    }
+  }
+  if (!gens) return null;
+
+  // 1. Explicit keyword match in text has highest precedence
+  for (const g of gens) {
+    if (g.keywords.some((kw) => new RegExp(`\\b${kw}\\b`, 'i').test(t))) {
+      return g.generation;
+    }
+  }
+
+  // 2. Year mapping if year is valid
+  if (year && Number.isInteger(year)) {
+    const matches = gens.filter((g) => year >= g.startYear && year <= g.endYear);
+    if (matches.length === 1) {
+      return matches[0].generation;
+    }
+    if (matches.length > 1) {
+      // Transition year: several generations' ranges cover this model year.
+      // Phase 5: deterministic rule that NEVER depends on declaration order
+      // (the old `matches[0]` silently changed meaning whenever entries were
+      // reordered). Default = longest-established generation (earliest startYear),
+      // tie-break = later endYear (the generation still in production longer).
+      // Keyword evidence above already overrides this when explicitly stated
+      // (e.g. title says "f15" -> F15 regardless of year ambiguity).
+      const established = [...matches].sort(
+        (a, b) => (a.startYear - b.startYear) || (b.endYear - a.endYear),
+      )[0];
+      return established.generation;
+    }
+  }
+
+  return null;
+}
+
+export function isGenerationMismatch(
+  a: NormalizedListing | { year?: number | null; title?: string | null; trim?: string | null; generation?: string | null },
+  spec: VehicleSpec
+): boolean {
+  const targetGen = spec.generation || resolveGeneration(spec.brand, spec.model, spec.year, `${spec.trim || ''} ${(spec.specs || []).join(' ')}`);
+  const compGen = (a as any).generation || resolveGeneration((a as any).brand || spec.brand, (a as any).model || spec.model, a.year, `${(a as any).title || ''} ${(a as any).trim || ''}`);
+
+  if (targetGen && compGen && targetGen.toUpperCase() !== compGen.toUpperCase()) {
+    return true;
+  }
+  return false;
+}
+
 function specMatches(a: NormalizedListing, spec: VehicleSpec): boolean {
   const trimOk = !spec.trim || !a.trim || norm(a.trim) === norm(spec.trim);
-  const fuelOk = !spec.fuelType || !a.fuelType || norm(a.fuelType) === norm(spec.fuelType);
+  // Canonical compare: بنزين ≡ PETROL, 4WD ≡ AWD (synonyms must not demote tier).
+  const fuelOk = !spec.fuelType || !a.fuelType || !isConfirmedFuelMismatch(a, spec);
   const transOk = !spec.transmission || !a.transmission || norm(a.transmission) === norm(spec.transmission);
-  return trimOk && fuelOk && transOk;
+  const driveOk = !spec.drivetrain || !a.drivetrain || !isConfirmedDrivetrainMismatch(a, spec);
+  return trimOk && fuelOk && transOk && driveOk;
 }
 
 export type Tier = 1 | 2 | 3 | 4;
@@ -261,10 +447,28 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
 
   const yd = a.year === null || a.year === undefined ? null : Math.abs(a.year - spec.year);
   const phevMismatch = isPhevVsPetrolMismatch(a, spec);
-  const fuelMismatch = (spec.fuelType && a.fuelType && norm(a.fuelType) !== norm(spec.fuelType)) || phevMismatch;
+  const genMismatch = isGenerationMismatch(a, spec);
+  // Canonical confirmed-mismatch helpers (UNKNOWN on either side is never a mismatch).
+  const fuelMismatch = isConfirmedFuelMismatch(a, spec) || phevMismatch;
 
+  // Drivetrain: explicit mismatch (e.g. AWD vs RWD) prevents Tier 1
+  const driveMismatch = isConfirmedDrivetrainMismatch(a, spec);
+
+  // GENERATION MISMATCH RULE:
+  // A generation mismatch (e.g. F15 vs G05) can NEVER be a Direct Comparable (Tier 1 or Tier 2)!
+  // It is relegated to Tier 4 (supporting evidence only) if within ±3 years, otherwise excluded.
+  if (genMismatch) {
+    if (yd !== null && yd <= 3 && (c.allowPlus2 || c.allowTier4)) {
+      return 4; // Supporting evidence across generations
+    }
+    return 0; // Excluded
+  }
+
+  // POWERTRAIN MISMATCH RULE:
+  // Petrol vs PHEV can NEVER be Direct (Tier 1 or 2). Relegated to Tier 3 (secondary).
   if (yd === 0) {
     if (phevMismatch) return 3; // Demote PHEV to Secondary/Support (Tier 3 max) when target is Petrol
+    if (driveMismatch) return 2; // Drivetrain mismatch drops Tier 1 to Tier 2
     return specMatches(a, spec) ? 1 : 2;
   }
   if (yd === null) return c.allowAnyYear ? 4 : 0; // year unknown can NEVER be same-year Tier 1 or Tier 2
@@ -299,12 +503,14 @@ function engineTransScore(a: NormalizedListing, spec: VehicleSpec): number {
 
   if (spec.fuelType) {
     count++;
-    if (a.fuelType && norm(a.fuelType) === norm(spec.fuelType)) {
-      s += 1.0;
-    } else if (a.fuelType) {
-      s += 0.0; // explicit mismatch
-    } else {
+    const tFuel = canonFuel(spec.fuelType, '', spec.trim);
+    const cFuel = canonFuel(a.fuelType, (a as any).title, a.trim);
+    if (tFuel === 'unknown' || cFuel === 'unknown') {
       s += 0.5; // UNKNOWN = neutral missing evidence
+    } else if (tFuel === cFuel) {
+      s += 1.0;
+    } else {
+      s += 0.0; // confirmed mismatch
     }
   }
 
@@ -321,12 +527,14 @@ function engineTransScore(a: NormalizedListing, spec: VehicleSpec): number {
 
   if (spec.drivetrain) {
     count++;
-    if (a.drivetrain && norm(a.drivetrain) === norm(spec.drivetrain)) {
-      s += 1.0;
-    } else if (a.drivetrain) {
-      s += 0.0; // explicit mismatch
-    } else {
+    const tDrive = canonDrivetrain(spec.drivetrain);
+    const cDrive = canonDrivetrain(a.drivetrain);
+    if (tDrive === 'unknown' || cDrive === 'unknown') {
       s += 0.5; // UNKNOWN = neutral missing evidence
+    } else if (tDrive === cDrive) {
+      s += 1.0;
+    } else {
+      s += 0.0; // confirmed mismatch
     }
   }
 
@@ -468,6 +676,10 @@ function specsScore(a: NormalizedListing, spec: VehicleSpec): number {
 }
 
 function conditionScore(a: NormalizedListing, spec: VehicleSpec): number {
+  if (spec.conditionScore != null && a.conditionScore != null) {
+    const diff = Math.abs(spec.conditionScore - a.conditionScore);
+    return Math.max(0.2, 1 - (diff / 100) * 0.8);
+  }
   if (!spec.condition || !a.condition) return 0.5;
   return norm(a.condition) === norm(spec.condition) ? 1 : 0.5;
 }
@@ -489,13 +701,21 @@ export function scoreSimilarity(
   const scraped = a.scrapedAt ? new Date(a.scrapedAt).getTime() : now;
   const ageDays = Math.max(0, Math.round((now - scraped) / 86400000));
 
+  // Phase 2: dynamic drivetrain evidence (no more hardcoded 0.5):
+  // both sides known & equal -> 1, confirmed mismatch -> 0, either UNKNOWN -> 0.5.
+  const tDrive = canonDrivetrain(spec.drivetrain);
+  const cDrive = canonDrivetrain(a.drivetrain);
+  const driveMismatch = tDrive !== 'unknown' && cDrive !== 'unknown' && tDrive !== cDrive;
+  const drivePart = tDrive === 'unknown' || cDrive === 'unknown' ? 0.5 : tDrive === cDrive ? 1 : 0;
+  const fuelMismatch = isConfirmedFuelMismatch(a, spec);
+
   const parts: Record<string, number> = {
     brandModel: 1, // guaranteed by tier gating
     year: a.year === null || a.year === undefined ? 0.6 : a.year === spec.year ? 1 : Math.max(0.2, 1 - Math.abs(a.year - spec.year) * 0.35),
     trim: trimScore(a, spec),
     kilometers: kmScore(a, spec),
     engineTrans: engineTransScore(a, spec),
-    drivetrain: 0.5, // drivetrain rarely present in external feeds
+    drivetrain: drivePart,
     specs: specsScore(a, spec),
     condition: conditionScore(a, spec),
     market: marketScore(a, spec),
@@ -503,8 +723,12 @@ export function scoreSimilarity(
   // Tier penalty: lower tiers can never outrank tier 1 (caps), and the
   // tier factor (1.00/0.85/0.70/0.50/0.30) multiplies the final weight.
   const phevMismatch = isPhevVsPetrolMismatch(a, spec);
+  const genMismatch = isGenerationMismatch(a, spec);
   const tierCap = tier === 1 ? 100 : tier === 2 ? 95 : tier === 3 ? 85 : 70;
-  const maxCap = phevMismatch ? Math.min(65, tierCap) : tierCap;
+  let maxCap = phevMismatch ? Math.min(65, tierCap) : tierCap;
+  if (genMismatch) {
+    maxCap = Math.min(55, maxCap);
+  }
   let raw = 0;
   for (const [k, w] of Object.entries(weights)) raw += (parts[k] ?? 0.5) * (w as number);
   const wSum = Object.values(weights).reduce((x, y) => x + (y as number), 0) || 100;
@@ -524,6 +748,18 @@ export function scoreSimilarity(
     qualitativeMatch,
     isPowertrainMismatch: phevMismatch,
     powertrainNote: phevMismatch ? 'اختلاف في منظومة الدفع (بنزين مقابل هايبرد/PHEV) - مصنفة كدليل ثانوي' : undefined,
+    isGenerationMismatch: genMismatch,
+    generationNote: genMismatch ? 'اختلاف في جيل / شاصي المركبة - مصنفة كشاهد داعم فقط' : undefined,
+    isFuelMismatch: fuelMismatch,
+    isDrivetrainMismatch: driveMismatch,
+    isDirectEligible: isDirectComparable({
+      tier,
+      yearDiff: a.year === null || a.year === undefined ? 0 : Math.abs(a.year - spec.year),
+      isPowertrainMismatch: phevMismatch,
+      isGenerationMismatch: genMismatch,
+      isFuelMismatch: fuelMismatch,
+      isDrivetrainMismatch: driveMismatch,
+    }),
     simBreakdown: breakdown,
     adjustedPrice: null,
     adjustments: [],

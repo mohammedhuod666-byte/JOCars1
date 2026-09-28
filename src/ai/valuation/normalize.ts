@@ -94,18 +94,32 @@ export function normalizeTrim(raw: unknown): string | null {
 }
 
 import type { NormalizedListing } from './types';
-import { extractSpecsFromTitle } from './spec-extract';
+import { extractSpecsFromTitle, sanitizeTrim, drivetrainFromTrim } from './spec-extract';
 
 /** Enrich a listing with title-parsed specs ONLY where structured data is absent. */
 export function enrichFromTitle(l: NormalizedListing, title: string): NormalizedListing {
   const x = extractSpecsFromTitle(title);
   const prov: Record<string, 'FEED' | 'DERIVED'> = { ...(l.specProvenance || {}) };
-  if (!l.trim && x.trim) { l.trim = x.trim; prov.trim = 'DERIVED'; }
+  // Phase 5: trim must never hold drivetrain tokens; if it does, the value
+  // belongs to drivetrain (and trim stays UNKNOWN instead of polluting matches).
+  const xTrim = sanitizeTrim(x.trim);
+  if (!l.trim && xTrim) { l.trim = xTrim; prov.trim = 'DERIVED'; }
+  if (!l.drivetrain && x.trim) {
+    const xDrive = drivetrainFromTrim(x.trim);
+    if (xDrive) { l.drivetrain = xDrive; prov.drivetrain = 'DERIVED'; }
+  }
+  if (!l.generation && x.generation) { l.generation = x.generation; prov.generation = 'DERIVED'; }
+  if (!l.chassisCode && x.chassisCode) { l.chassisCode = x.chassisCode; prov.chassisCode = 'DERIVED'; }
   if (!l.fuelType && x.fuel) { l.fuelType = x.fuel === 'PHEV' ? 'PLUGIN_HYBRID' : x.fuel; prov.fuelType = 'DERIVED'; }
   if (!l.drivetrain && x.drivetrain) { l.drivetrain = x.drivetrain; prov.drivetrain = 'DERIVED'; }
   if (x.engineCc != null) { (l as any).engineCc = x.engineCc; prov.engineCc = 'DERIVED'; }
   if (x.cylinders != null) { (l as any).cylinders = x.cylinders; prov.cylinders = 'DERIVED'; }
   if (x.horsepower != null) { l.horsepower = x.horsepower; prov.horsepower = 'DERIVED'; }
+  if (l.conditionScore == null && x.conditionScore != null) {
+    l.conditionScore = x.conditionScore;
+    l.conditionCertainty = x.conditionCertainty;
+    prov.condition = 'DERIVED';
+  }
   l.specProvenance = prov;
   return l;
 }
