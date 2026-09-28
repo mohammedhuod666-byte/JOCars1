@@ -29,10 +29,16 @@ function norm(s: string | null | undefined): string {
 export type CanonFuel = 'phev' | 'hybrid' | 'electric' | 'diesel' | 'petrol' | 'unknown';
 export type CanonDrivetrain = 'awd' | 'fwd' | 'rwd' | 'unknown';
 
-/** Canonical fuel keyword resolution — identical logic to the legacy normF helper. */
+/** Canonical fuel keyword resolution — context-aware PHEV detection. */
 export function canonFuel(fuel?: string | null, title?: string | null, trim?: string | null): CanonFuel {
   const s = `${fuel || ''} ${title || ''} ${trim || ''}`.toLowerCase();
-  if (s.includes('plug-in') || s.includes('plugin') || s.includes('phev') || s.includes('بلج ان') || s.includes('بلاج ان') || s.includes('40e') || s.includes('45e') || s.includes('50e')) {
+  // PHEV detection: explicit PHEV phrases OR (40e/45e/50e AND BMW X5 context)
+  const hasExplicitPhev = s.includes('plug-in') || s.includes('plugin') || s.includes('phev') ||
+    s.includes('بلج ان') || s.includes('بلاج ان') || s.includes('هايبرد قابل للشحن');
+  const has40eVariant = s.includes('40e') || s.includes('45e') || s.includes('50e');
+  const isBmwX5Context = s.includes('x5') || s.includes('اكس 5') || s.includes('اكس فايف');
+
+  if (hasExplicitPhev || (has40eVariant && isBmwX5Context)) {
     return 'phev';
   }
   if (s.includes('hyb') || s.includes('هايبرد') || s.includes('هجين')) {
@@ -143,12 +149,31 @@ export function getQualitativeMatch(
 }
 
 export function sameModel(a: NormalizedListing, spec: VehicleSpec): boolean {
+  // Token-aware matching: NO substring matching
+  // "X5" must NOT match "RX5", "EX5", "X50", "X5M", "X6"
   const lm = norm(a.model);
   const sm = norm(spec.model);
   const lmEn = norm(a.modelEn);
   const smEn = norm(spec.modelEn);
-  if (!lm || !sm) return !!lmEn && !!smEn && (lmEn === smEn || lmEn.includes(smEn) || smEn.includes(lmEn));
-  return lm === sm || lm.includes(sm) || sm.includes(lm) || (!!lmEn && !!smEn && (lmEn === smEn));
+
+  // Exact match after normalization
+  if (lm && sm && lm === sm) return true;
+  if (lmEn && smEn && lmEn === smEn) return true;
+
+  // Token-aware match: all tokens in shorter must exist in longer
+  const at = new Set(lm.split(' ').concat(lmEn.split(' ')).filter(Boolean));
+  const st = new Set(sm.split(' ').concat(smEn.split(' ')).filter(Boolean));
+  if (at.size === 0 || st.size === 0) return false;
+
+  // For single-token models (X5, X6, etc.), require exact token match
+  if (st.size === 1) {
+    const token = [...st][0];
+    return at.has(token);
+  }
+
+  // For multi-token models, require all tokens to match
+  const hit = [...st].filter(t => at.has(t)).length;
+  return hit === st.size;
 }
 
 function closeModel(a: NormalizedListing, spec: VehicleSpec): boolean {
