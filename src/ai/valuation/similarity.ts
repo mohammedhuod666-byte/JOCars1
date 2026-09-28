@@ -11,7 +11,7 @@
  */
 import type { Comparable, NormalizedListing, VehicleSpec, QualitativeMatchLevel } from './types';
 import { SIM_WEIGHTS } from './types';
-import { strictModelEquals } from './identity-matching';
+import { strictModelEquals, buildCanonicalIdentity, compareIdentities } from './identity-matching';
 
 function norm(s: string | null | undefined): string {
   return (s || '').toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
@@ -73,7 +73,10 @@ export function isConfirmedFuelMismatch(
   a: NormalizedListing | { fuelType?: string | null; title?: string | null; trim?: string | null },
   spec: VehicleSpec
 ): boolean {
-  const targetFuel = canonFuel(spec.fuelType, '', spec.trim);
+  // Target side: use the target's own title/description evidence (not just the
+  // coarse DB fuelType label) so a PHEV target described as "40e/plug-in" is
+  // not falsely flagged against PHEV comparables.
+  const targetFuel = canonFuel(spec.fuelType, (spec as any).title || (spec as any).description || '', spec.trim);
   const compFuel = canonFuel(a.fuelType, (a as any).title, a.trim);
   return targetFuel !== 'unknown' && compFuel !== 'unknown' && targetFuel !== compFuel;
 }
@@ -127,7 +130,10 @@ export function isPhevVsPetrolMismatch(
   a: NormalizedListing | { fuelType?: string | null; title?: string | null; trim?: string | null },
   spec: VehicleSpec
 ): boolean {
-  const targetFuel = canonFuel(spec.fuelType, '', spec.trim);
+  // Target side: use the target's own title/description evidence so a PHEV
+  // target (e.g. X5 40e described as "Plug-in hybrid") is correctly
+  // recognised even when the DB fuelType label is the coarse "HYBRID".
+  const targetFuel = canonFuel(spec.fuelType, (spec as any).title || (spec as any).description || '', spec.trim);
   const compFuel = canonFuel(a.fuelType, (a as any).title, a.trim);
 
   if (targetFuel === 'petrol' && compFuel === 'phev') return true;
@@ -296,7 +302,7 @@ export function checkListingIdentityConsistency(
       const mentionsX5 = /\bx5\b|اكس\s*فايف|اكس\s*5/i.test(title) || /\bx5\b/i.test(listingModel);
       for (const m of BMW_NON_X5_MODELS) {
         if (m.re.test(title) || m.re.test(listingModel)) {
-          if (!mentionsX5 || m.re.test(listingModel) || /\b(5\s*series|7\s*series|3\s*series|520|f10|320|f30|z4|i3|x1|x3)\b/i.test(title)) {
+          if (!mentionsX5 || m.re.test(listingModel) || /\b(5\s*series|7\s*series|3\s*series|5\d{2}|7\d{2}|3\d{2}|f10|f11|g30|f01|g11|e46|e90|f30|g20|z4|i3|x1|x3)\b/i.test(title)) {
             return {
               consistent: false,
               reason: `IDENTITY_CONFLICT: تناقض في الموديل (الهدف X5 ولكن الإعلان يشير إلى ${m.model})`,
@@ -439,7 +445,9 @@ function specMatches(a: NormalizedListing, spec: VehicleSpec): boolean {
   const fuelOk = !spec.fuelType || !a.fuelType || !isConfirmedFuelMismatch(a, spec);
   const transOk = !spec.transmission || !a.transmission || norm(a.transmission) === norm(spec.transmission);
   const driveOk = !spec.drivetrain || !a.drivetrain || !isConfirmedDrivetrainMismatch(a, spec);
-  return trimOk && fuelOk && transOk && driveOk;
+  // Variant check: if both have variant, they must match
+  const variantOk = !spec.trim || !a.trim || norm(a.trim) === norm(spec.trim);
+  return trimOk && fuelOk && transOk && driveOk && variantOk;
 }
 
 export type Tier = 1 | 2 | 3 | 4;
@@ -481,6 +489,20 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
   // Drivetrain: explicit mismatch (e.g. AWD vs RWD) prevents Tier 1
   const driveMismatch = isConfirmedDrivetrainMismatch(a, spec);
 
+  // CANONICAL IDENTITY INTEGRATION:
+  // Build canonical identities for target and comparable
+  const targetIdentity = buildCanonicalIdentity(
+    spec.brand, spec.model, spec.year, spec.trim, spec.fuelType,
+    spec.drivetrain, spec.transmission, spec.engineCapacity, spec.horsepower,
+    undefined, spec.description
+  );
+  const compIdentity = buildCanonicalIdentity(
+    a.brand, a.model, a.year, a.trim, a.fuelType,
+    a.drivetrain, a.transmission, (a as any).engineCc, a.horsepower,
+    (a as any).title, undefined
+  );
+  const identityResult = compareIdentities(targetIdentity, compIdentity);
+
   // GENERATION MISMATCH RULE:
   // A generation mismatch (e.g. F15 vs G05) can NEVER be a Direct Comparable (Tier 1 or Tier 2)!
   // It is relegated to Tier 4 (supporting evidence only) if within ±3 years, otherwise excluded.
@@ -491,11 +513,22 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
     return 0; // Excluded
   }
 
-  // POWERTRAIN MISMATCH RULE:
-  // Petrol vs PHEV can NEVER be Direct (Tier 1 or 2). Relegated to Tier 3 (secondary).
+  // CANONICAL IDENTITY TIER ASSIGNMENT:
+  // Use identity comparison result to determine tier
+  // L1 = Exact configuration match (make, model, year, variant, powertrain, drivetrain)
+  // L2 = Same model + powertrain family
+  // L3 = Same model + year + compatible powertrain
+  // L4 = Neighboring years same configuration family
+  // L5 = Same model family + powertrain-compatible
   if (yd === 0) {
     if (phevMismatch) return 3; // Demote PHEV to Secondary/Support (Tier 3 max) when target is Petrol
     if (driveMismatch) return 2; // Drivetrain mismatch drops Tier 1 to Tier 2
+    
+    // Use canonical identity for tier assignment
+    if (identityResult.matchLevel === 'L1') return 1; // Exact configuration match
+    if (identityResult.matchLevel === 'L2') return 2; // Same model + powertrain family
+    if (identityResult.matchLevel === 'L3') return 2; // Same model + year + compatible powertrain
+    
     return specMatches(a, spec) ? 1 : 2;
   }
   if (yd === null) return c.allowAnyYear ? 4 : 0; // year unknown can NEVER be same-year Tier 1 or Tier 2

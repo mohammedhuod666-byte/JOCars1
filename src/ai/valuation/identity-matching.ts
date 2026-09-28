@@ -344,8 +344,8 @@ export function buildCanonicalIdentity(
 ): CanonicalIdentity {
   const conflicts: string[] = [];
 
-  // Detect variant from title/description (use both for better detection)
-  const combinedText = `${title || ''} ${description || ''}`.trim();
+  // Detect variant from title/description AND structured trim (trim is explicit variant evidence)
+  const combinedText = `${title || ''} ${description || ''} ${trim || ''}`.trim();
   const variantResult = detectVariant(combinedText, model);
 
   // Detect powertrain with conflict resolution
@@ -450,15 +450,23 @@ export function compareIdentities(
   }
 
   // Determine match level
-  // UNKNOWN is never EXACT - require explicit matches for L1
+  // UNKNOWN is never EXACT on a dimension where only ONE side declares a value:
+  // a declared value on one side cannot be confirmed against an unknown on the other.
+  // HOWEVER, when NEITHER side declares a value (both unknown) the dimension does not
+  // contradict exactness — exactness then rests on the explicitly confirmed dimensions
+  // (model + year + explicit powertrain + any declared drivetrain/variant).
   const hasExplicitVariant = target.variant && comp.variant;
   const hasExplicitPowertrain = target.powertrain && comp.powertrain;
   const hasExplicitDrivetrain = target.drivetrain && comp.drivetrain;
+  const variantKnownnessMatched =
+    (target.variant && comp.variant) || (!target.variant && !comp.variant);
+  const drivetrainKnownnessMatched =
+    (target.drivetrain && comp.drivetrain) || (!target.drivetrain && !comp.drivetrain);
 
   const isDirectCandidate = isSameModel && isSameYear && isSameVariant && isSamePowertrain && isSameDrivetrain;
 
   let matchLevel: IdentityComparison['matchLevel'];
-  if (isDirectCandidate && hasExplicitVariant && hasExplicitPowertrain && hasExplicitDrivetrain) {
+  if (isDirectCandidate && hasExplicitPowertrain && variantKnownnessMatched && drivetrainKnownnessMatched) {
     matchLevel = 'L1';
   } else if (isSameModel && isSameYear && isSamePowertrain && hasExplicitPowertrain) {
     matchLevel = 'L2';

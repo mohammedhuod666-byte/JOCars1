@@ -160,9 +160,9 @@ describe('Phase 2: mandated eligibility cases', () => {
 
   it('Case 6 — matching fuel + drivetrain + year/spec => Direct possible (FMV allowed)', () => {
     const comps = build(baseSpec, [
-      { kilometers: 165000 },
-      { kilometers: 172000 },
-      { kilometers: 168000 },
+      { kilometers: 165000, trim: 'AWD' },
+      { kilometers: 172000, trim: 'AWD' },
+      { kilometers: 168000, trim: 'AWD' },
     ]);
     for (const c of comps) {
       assert.equal(c.tier, 1, 'fully matching comparable must be Tier 1');

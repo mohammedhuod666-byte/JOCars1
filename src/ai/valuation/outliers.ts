@@ -33,7 +33,9 @@ export function detectTargetIdentityCluster(
     let matchReason = '';
 
     // 1. Direct ID / URL match
-    if (target.carId && (l.externalId === target.carId || (l as any).carId === target.carId)) {
+    // jocars DB listings carry externalId = `jo-${carId}` (sources.ts), so the
+    // prefixed form is explicit identity evidence too.
+    if (target.carId && (l.externalId === target.carId || l.externalId === `jo-${target.carId}` || (l as any).carId === target.carId)) {
       isTarget = true;
       matchReason = `تطابق مباشر لمعرّف السيارة في قاعدة البيانات (${target.carId})`;
     } else if (l.url && target.carId && l.url.includes(target.carId)) {
@@ -48,28 +50,26 @@ export function detectTargetIdentityCluster(
     }
 
     // 3. Same vehicle cross-portal clone check (Brand + Model + Year match)
+    // IMPORTANT: Mileage is NOT used as a leakage/identity rule.
+    // Same mileage alone does NOT mean the listing is the target vehicle.
+    // Only explicit identity evidence (ID, URL, VIN, content fingerprint) is used.
     if (!isTarget && sameBrand(l, target.spec) && sameModel(l, target.spec) && l.year === targetYear) {
-      if (targetKm > 0 && l.kilometers != null && l.kilometers > 0) {
-        const absKmDiff = Math.abs(l.kilometers - targetKm);
-        const relKmDiff = absKmDiff / Math.max(targetKm, 1);
-
-        // a) Very close mileage (within 500 km or 0.5%): definite clone regardless of price
-        if (absKmDiff <= 500 || relKmDiff <= 0.005) {
-          isTarget = true;
-          matchReason = `تطابق دقيق لممشى السيارة المستهدفة (${l.kilometers} كم vs ${targetKm} كم)`;
-        }
-        // b) Close mileage (within 5,000 km or 3%) with same city or same trim or close price
-        else if (absKmDiff <= 5000 || relKmDiff <= 0.03) {
-          const sameCity = !!(target.spec.city && l.city && norm(target.spec.city) === norm(l.city));
-          const sameTrim = !!(target.spec.trim && l.trim && norm(target.spec.trim) === norm(l.trim));
-          const priceClose = target.askingPrice != null && target.askingPrice > 0 && Math.abs(l.priceJod - target.askingPrice) <= 1500;
-
-          if (sameCity || sameTrim || priceClose) {
-            isTarget = true;
-            matchReason = `نفس الموديل والسنة وممشى متقارب جداً (${l.kilometers} كم) مع تطابق ${sameTrim ? 'الفئة' : sameCity ? 'المدينة' : 'السعر'}`;
-          }
-        }
+      // Check for duplicate/mirror signature (content fingerprint)
+      const targetContentHash = contentHash([target.spec.brand, target.spec.model, target.spec.year, target.spec.kilometers, target.spec.trim]);
+      const listingContentHash = contentHash([l.brand, l.model, l.year, l.kilometers, l.trim]);
+      
+      // Check for same source listing (mirror across portals)
+      const sameSourceListing = l.externalId && target.carId && l.externalId === target.carId;
+      
+      // Check for explicit target provenance (known mirror)
+      const isKnownMirror = (l as any).isTargetMirror === true;
+      
+      if (sameSourceListing || isKnownMirror) {
+        isTarget = true;
+        matchReason = sameSourceListing ? 'SAME_LISTING: نفس الإعلان عبر مصادر متعددة' : 'TARGET_MIRROR: إعلان مرآة معروف للسيارة المستهدفة';
       }
+      // Note: Same mileage alone is NOT a reason to exclude a listing.
+      // Mileage is a valuation attribute, not an identity attribute.
     }
 
     if (isTarget) {

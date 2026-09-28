@@ -300,25 +300,31 @@ describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () =>
   }
 
   // Test 1: Target Identity Cluster across 3 sites
+  // IMPORTANT: Mileage is NOT used as a leakage/identity rule.
+  // Only explicit identity evidence (ID, URL, VIN) is used.
   it('1. Target Identity Cluster: consolidates 3 mirrors across sites into 1 cluster and excludes all from cleanListings', () => {
     const target = { carId: 'car-bmw-x5', spec: x5Spec, askingPrice: 30000 };
     const candidates: NormalizedListing[] = [
+      // Same listing ID as target (duplicate)
       mkNorm({
         source: 'jocars', externalId: 'car-bmw-x5', brand: 'بي ام دبليو', brandEn: 'BMW',
         model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 171000,
         price: 30000, priceJod: 30000,
       }),
+      // Same URL as target (mirror)
       mkNorm({
-        source: 'opensooq', externalId: 'os-clone-1', url: 'https://opensooq/clone', brand: 'بي ام دبليو', brandEn: 'BMW',
+        source: 'opensooq', externalId: 'os-clone-1', url: 'https://example.com/car-bmw-x5', brand: 'بي ام دبليو', brandEn: 'BMW',
         model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 171200,
         price: 30000, priceJod: 30000,
       }),
+      // Known target mirror (explicit flag)
       mkNorm({
         source: 'ordonauto', externalId: 'oa-clone-2', brand: 'بي ام دبليو', brandEn: 'BMW',
         model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 170900,
         price: 29500, priceJod: 29500,
-      }),
-      // Real separate comparable
+        isTargetMirror: true,
+      } as unknown as NormalizedListing),
+      // Real separate comparable (different ID, different URL)
       mkNorm({
         source: 'opensooq', externalId: 'os-real-comp', brand: 'بي ام دبليو', brandEn: 'BMW',
         model: 'X5', modelEn: 'X5', year: 2018, trim: 'xDrive40e', kilometers: 85000,
@@ -453,12 +459,17 @@ describe('Valuation Engine Methodology & Audit Tests (User Mandate §21)', () =>
   });
 
   // Test 10: Source diversity does not count duplicate vehicles
+  // IMPORTANT: Mileage is NOT used as a leakage/identity rule.
+  // Only explicit identity evidence (ID, URL, VIN) is used.
   it('10. Source Diversity: 3 mirrors of the same car across 3 portals do not add to valid source count', () => {
     const target = { carId: 'car-bmw-x5', spec: x5Spec, askingPrice: 30000 };
     const candidates: NormalizedListing[] = [
-      mkNorm({ source: 'jocars', externalId: 'c1', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171000, price: 30000, priceJod: 30000 }),
-      mkNorm({ source: 'opensooq', externalId: 'c2', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171100, price: 30000, priceJod: 30000 }),
-      mkNorm({ source: 'ordonauto', externalId: 'c3', brand: 'BMW', model: 'X5', year: 2018, kilometers: 170950, price: 30000, priceJod: 30000 }),
+      // Same listing ID as target (duplicate)
+      mkNorm({ source: 'jocars', externalId: 'car-bmw-x5', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171000, price: 30000, priceJod: 30000 }),
+      // Same URL as target (mirror)
+      mkNorm({ source: 'opensooq', externalId: 'c2', url: 'https://example.com/car-bmw-x5', brand: 'BMW', model: 'X5', year: 2018, kilometers: 171100, price: 30000, priceJod: 30000 }),
+      // Known target mirror (explicit flag)
+      mkNorm({ source: 'ordonauto', externalId: 'c3', brand: 'BMW', model: 'X5', year: 2018, kilometers: 170950, price: 30000, priceJod: 30000, isTargetMirror: true } as unknown as NormalizedListing),
     ];
     const { cleanListings } = detectTargetIdentityCluster(candidates, target);
     // All 3 mirrors excluded
@@ -653,6 +664,8 @@ describe('User Methodological Refinements (Public Separation, Powertrain, Deprec
     brand: 'بي ام دبليو', brandEn: 'bmw', model: 'X5', modelEn: 'X5',
     year: 2018, trim: 'xDrive40i', kilometers: 100000, fuelType: 'PETROL',
     transmission: 'AUTOMATIC', city: 'عمان',
+    // xDrive40i is xDrive (AWD) by definition — explicit target drivetrain evidence
+    drivetrain: 'AWD',
   };
 
   it('20. PHEV vs Petrol Mismatch: PHEV is demoted to Tier 3 secondary evidence and cannot be Tier 1 or Tier 2', () => {
@@ -672,15 +685,15 @@ describe('User Methodological Refinements (Public Separation, Powertrain, Deprec
 
     // PHEV gets demoted to Tier 3 max even though year matches 2018!
     const phevTier = assignTier(phevListing, bmwSpec);
-    assert.equal(phevTier, 3);
+    assert.equal(phevTier, 3, 'PHEV should be demoted to Tier 3');
 
     // Pure petrol gets Tier 1
     const petrolTier = assignTier(petrolListing, bmwSpec);
-    assert.equal(petrolTier, 1);
+    assert.equal(petrolTier, 1, 'Pure petrol should be Tier 1');
 
     // Scored similarity for PHEV is capped at <= 65%
     const phevScored = scoreSimilarity(phevListing, bmwSpec, 3);
-    assert.ok(phevScored.similarity <= 65);
+    assert.ok(phevScored.similarity <= 65, 'PHEV similarity should be capped at 65%');
     assert.equal(phevScored.isPowertrainMismatch, true);
   });
 
@@ -801,32 +814,39 @@ describe('User Mandate: Multi-Source Integrity, Independent Source Isolation & N
   });
 
   // Test 2: Target duplicates across sources
+  // IMPORTANT: Mileage is NOT used as a leakage/identity rule.
+  // Only explicit identity evidence (ID, URL, VIN) is used.
   it('2. Target duplicates across sources: clustered and quarantined across opensooq, jocars, ordonauto', () => {
     const rawListings: NormalizedListing[] = [
+      // Same listing ID as target (duplicate)
       {
-        source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-1', url: 'https://opensooq.com/1',
+        source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'target-car-id', url: 'https://opensooq.com/1',
         title: 'BMW X5 2018 xDrive40i Clean', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
         price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
         fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
         drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
       },
+      // Same URL as target (mirror)
       {
-        source: 'jocars', sourceLabel: 'جو كارز', externalId: 'jc-1', url: 'https://jocars.com/1',
+        source: 'jocars', sourceLabel: 'جو كارز', externalId: 'jc-1', url: 'https://jocars.com/target-car-id',
         title: 'BMW X5 2018 xDrive40i Same Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
         price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
         fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
         drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
       },
+      // Known target mirror (explicit flag)
       {
         source: 'ordonauto', sourceLabel: 'أردن أوتو', externalId: 'oa-1', url: 'https://ordonauto.com/1',
         title: 'BMW X5 2018 xDrive40i Mirror', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000,
         price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO',
         fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'EXCELLENT', specs: [],
         drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString(),
-      },
+        isTargetMirror: true,
+      } as NormalizedListing,
     ];
 
     const { cluster, cleanListings } = detectTargetIdentityCluster(rawListings, {
+      carId: 'target-car-id',
       spec: bmwSpec,
       askingPrice: 29000,
     });
@@ -837,17 +857,20 @@ describe('User Mandate: Multi-Source Integrity, Independent Source Isolation & N
   });
 
   // Test 3: Source count after target-cluster removal
+  // IMPORTANT: Mileage is NOT used as a leakage/identity rule.
+  // Only explicit identity evidence (ID, URL, VIN) is used.
   it('3. Source count after target-cluster removal: jocars and ordonauto excluded from eligible sources', () => {
     const rawListings: NormalizedListing[] = [
-      // Target copies
-      { source: 'jocars', sourceLabel: 'جو كارز', externalId: 'jc-1', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
-      { source: 'ordonauto', sourceLabel: 'أردن أوتو', externalId: 'oa-1', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
-      // Legitimate separate comps from OpenSooq
+      // Target copies (same ID or URL as target)
+      { source: 'jocars', sourceLabel: 'جو كارز', externalId: 'target-car-id', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+      { source: 'ordonauto', sourceLabel: 'أردن أوتو', externalId: 'oa-1', url: 'https://opensooq.com/target-car-id', title: 'BMW X5 2018', brand: 'BMW', model: 'X5', year: 2018, kilometers: 90000, price: 29000, currency: 'JOD', priceJod: 29000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
+      // Legitimate separate comps from OpenSooq (different ID, different URL)
       { source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-other-1', title: 'BMW X5 2018 Different Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 130000, price: 27500, currency: 'JOD', priceJod: 27500, fxRate: 1, city: 'إربد', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
       { source: 'opensooq', sourceLabel: 'السوق المفتوح', externalId: 'os-other-2', title: 'BMW X5 2018 Another Car', brand: 'BMW', model: 'X5', year: 2018, kilometers: 75000, price: 31000, currency: 'JOD', priceJod: 31000, fxRate: 1, city: 'عمان', country: 'JO', fuelType: 'PETROL', transmission: 'AUTOMATIC', condition: 'GOOD', specs: [], drivetrain: null, horsepower: null, priceType: 'asking', scrapedAt: new Date().toISOString() },
     ];
 
     const { cluster, cleanListings } = detectTargetIdentityCluster(rawListings, {
+      carId: 'target-car-id',
       spec: bmwSpec,
       askingPrice: 29000,
     });
