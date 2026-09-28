@@ -11,6 +11,7 @@
  */
 import type { Comparable, NormalizedListing, VehicleSpec, QualitativeMatchLevel } from './types';
 import { SIM_WEIGHTS } from './types';
+import { strictModelEquals } from './identity-matching';
 
 function norm(s: string | null | undefined): string {
   return (s || '').toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
@@ -466,7 +467,8 @@ export function assignTier(a: NormalizedListing, spec: VehicleSpec, ctx: Partial
   if (!identityCheck.consistent) return 0;
 
   if (!sameBrand(a, spec)) return 0;
-  const same = sameModel(a, spec);
+  // Use strictModelEquals from identity-matching.ts (token-aware, NO substring)
+  const same = strictModelEquals(a.model || a.modelEn, spec.model || spec.modelEn);
   // CRITICAL REQUIREMENT: A comparable MUST be the same model. Different models can NEVER be comparables!
   if (!same) return 0;
 
