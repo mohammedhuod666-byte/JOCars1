@@ -9,8 +9,9 @@ interface PriceData {
   query: { brand: string; model: string; year: number; kilometers: number; condition: string };
   stats: {
     totalListings: number;
-    priceRange: { min: number; max: number; avg: number; median: number };
-    estimatedPrice: number;
+    // Phase-1 FMV gate: every price below is null when the engine produced no FMV.
+    priceRange: { min: number | null; max: number | null; avg: number | null; median: number | null };
+    estimatedPrice: number | null;
     pricePosition: { label: string; color: string; icon: string };
     conditionAdjustment: number;
     sources: string[];
@@ -68,12 +69,16 @@ export function PriceEvaluation({ brandId, modelId, year, kilometers, condition,
   const getPriceDiff = () => {
     if (!data || !currentPrice) return null;
     const avg = data.stats.priceRange.avg;
-    if (avg === 0) return null;
+    // No FMV / no market average → no comparison may be claimed.
+    if (avg === null || avg === undefined || avg === 0) return null;
     const diff = ((currentPrice - avg) / avg) * 100;
     return diff;
   };
 
   const diff = getPriceDiff();
+  const rangeMin = data?.stats.priceRange.min ?? null;
+  const rangeMax = data?.stats.priceRange.max ?? null;
+  const hasRange = rangeMin !== null && rangeMax !== null && rangeMax > rangeMin;
 
   return (
     <div className="space-y-4">
@@ -101,23 +106,24 @@ export function PriceEvaluation({ brandId, modelId, year, kilometers, condition,
                 {data.stats.sources.length > 0 && (
                   <div className="flex items-center gap-1.5 mt-2 text-xs text-white/70">
                     <Globe className="w-3.5 h-3.5" />
-                    <span>مصادر: {data.stats.sources.join(' • ')}</span>
+                    <span>مصادر: {data.stats.sources.join(' •')}</span>
                   </div>
                 )}
               </div>
 
-              {/* Price Range Bar */}
+              {/* Price Range Bar — only when a real FMV-backed range exists */}
               <div className="p-5">
+                {hasRange ? (
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    <span>{data.stats.priceRange.min.toLocaleString()} د.أ</span>
-                    <span>{data.stats.priceRange.max.toLocaleString()} د.أ</span>
+                    <span>{rangeMin!.toLocaleString()} د.أ</span>
+                    <span>{rangeMax!.toLocaleString()} د.أ</span>
                   </div>
                   <div className="relative h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 rounded-full" />
-                    {currentPrice > 0 && data.stats.priceRange.max > data.stats.priceRange.min && (
+                    {currentPrice > 0 && (
                       <div className="absolute top-0 h-full w-1 bg-gray-900 dark:bg-white rounded-full"
-                        style={{ left: `${Math.min(Math.max(((currentPrice - data.stats.priceRange.min) / (data.stats.priceRange.max - data.stats.priceRange.min)) * 100, 0), 100)}%` }} />
+                        style={{ left: `${Math.min(Math.max(((currentPrice - rangeMin!) / (rangeMax! - rangeMin!)) * 100, 0), 100)}%` }} />
                     )}
                   </div>
                   <div className="flex justify-between text-xs mt-1">
@@ -126,25 +132,32 @@ export function PriceEvaluation({ brandId, modelId, year, kilometers, condition,
                     <span className="text-red-600 font-medium">غالي</span>
                   </div>
                 </div>
+                ) : (
+                  <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-center">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      لا تتوفر قيمة سوقية عادلة لهذه السيارة حالياً (أدلة مباشرة غير كافية)
+                    </p>
+                  </div>
+                )}
 
                 {/* Price Stats Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-center">
                     <DollarSign className="w-5 h-5 text-blue-500 mx-auto mb-1" />
                     <p className="text-xs text-gray-500">متوسط السوق</p>
-                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{data.stats.priceRange.avg.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{data.stats.priceRange.avg !== null ? data.stats.priceRange.avg.toLocaleString() : 'غير متاح'}</p>
                     <p className="text-[10px] text-gray-400">دينار</p>
                   </div>
                   <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-center">
                     <BarChart3 className="w-5 h-5 text-purple-500 mx-auto mb-1" />
                     <p className="text-xs text-gray-500">الوسيط</p>
-                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{data.stats.priceRange.median.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{data.stats.priceRange.median !== null ? data.stats.priceRange.median.toLocaleString() : 'غير متاح'}</p>
                     <p className="text-[10px] text-gray-400">دينار</p>
                   </div>
                   <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-center">
                     <CheckCircle className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
                     <p className="text-xs text-gray-500">السعر العادل</p>
-                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{data.stats.estimatedPrice.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{data.stats.estimatedPrice !== null ? data.stats.estimatedPrice.toLocaleString() : 'غير متاح'}</p>
                     <p className="text-[10px] text-gray-400">دينار</p>
                   </div>
                   <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 text-center">
@@ -156,7 +169,7 @@ export function PriceEvaluation({ brandId, modelId, year, kilometers, condition,
                 </div>
 
                 {/* Current Price Comparison */}
-                {currentPrice > 0 && diff !== null && (
+                {currentPrice > 0 && diff !== null && data.stats.priceRange.avg !== null && (
                   <div className={`p-4 rounded-xl mb-5 ${diff < -5 ? 'bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20' : diff < 10 ? 'bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20' : 'bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20'}`}>
                     <div className="flex items-center justify-between">
                       <div>
@@ -171,12 +184,14 @@ export function PriceEvaluation({ brandId, modelId, year, kilometers, condition,
                       </div>
                     </div>
                     <p className={`text-sm font-medium mt-2 ${diff < -5 ? 'text-green-700' : diff < 10 ? 'text-blue-700' : 'text-red-700'}`}>
-                      {diff < -5 ? '🎉 سعرك أقل من السوق — جذاب للمشترين!' : diff < 10 ? '✅ سعرك في نطاق السوق — مناسب' : '⚠️ سعرك أعلى من السوق — قد يصعب البيع'}
+                      {diff < -5 ? ' سعرك أقل من السوق — جذاب للمشترين!' : diff < 10 ? ' سعرك في نطاق السوق — مناسب' : ' سعرك أعلى من السوق — قد يصعب البيع'}
                     </p>
-                    <button type="button" onClick={() => onPriceSelect(data.stats.estimatedPrice)}
-                      className="mt-2 text-xs text-blue-600 hover:text-blue-700 underline">
-                      استخدام السعر العادل ({data.stats.estimatedPrice.toLocaleString()} د.أ)
-                    </button>
+                    {data.stats.estimatedPrice !== null && (
+                      <button type="button" onClick={() => onPriceSelect(data.stats.estimatedPrice!)}
+                        className="mt-2 text-xs text-blue-600 hover:text-blue-700 underline">
+                        استخدام السعر العادل ({data.stats.estimatedPrice!.toLocaleString()} د.أ)
+                      </button>
+                    )}
                   </div>
                 )}
 

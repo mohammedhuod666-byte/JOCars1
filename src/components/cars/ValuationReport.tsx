@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, Fragment } from 'react';
 import Link from 'next/link';
 import {
   BarChart3,
+  Brain,
   ChevronDown,
   ExternalLink,
   Loader2,
@@ -42,7 +43,7 @@ export function ValuationReport({
 }: {
   carId: string;
   askingPrice: number;
-  onValuationLoaded?: (estimate: number) => void;
+  onValuationLoaded?: (estimate: number | null) => void;
 }) {
   const { user, token, isAuthenticated } = useAuth();
   const isAdmin = Boolean(isAuthenticated && (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN'));
@@ -52,13 +53,15 @@ export function ValuationReport({
   const [running, setRunning] = useState(false);
   const [stages, setStages] = useState<{ stageAr: string; detail: string; ms: number }[]>([]);
   const [explaining, setExplaining] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [autoStarted, setAutoStarted] = useState(false);
   const [expandedComp, setExpandedComp] = useState<number | null>(null);
   const [adminExpandedComp, setAdminExpandedComp] = useState<number | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [section24, setSection24] = useState<Section24OutputContract | null>(null);
   const [legacyReport, setLegacyReport] = useState<any>(null);
-  const [history, setHistory] = useState<{ at: string; estimated: number }[]>([]);
+  const [history, setHistory] = useState<{ at: string; estimated: number; fmv?: boolean }[]>([]);
   const [insufficient, setInsufficient] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
@@ -73,18 +76,35 @@ export function ValuationReport({
 
   const auth = useCallback((): Record<string, string> => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  const applyValuationData = useCallback((data: { section24?: Section24OutputContract; latest?: any; history?: any[] }) => {
+  const applyValuationData = useCallback((data: { section24?: Section24OutputContract; latest?: any; report?: any; history?: any[] }) => {
+    console.log('[ValuationReport] applyValuationData called with:', {
+      hasSection24: !!data.section24,
+      status: data.section24?.status,
+      fmv: data.section24?.fairMarketValue,
+      mode: data.section24?.valuationMode,
+      latest: data.latest,
+    });
+    // Phase-1 FMV gate: reset FIRST — a payload without an FMV must clear the
+    // previously loaded value, never keep a stale liveFairPrice on screen.
+    if (onValuationLoaded) onValuationLoaded(null);
     if (data.section24 && data.section24.status !== 'INSUFFICIENT_DATA') {
       setSection24(data.section24);
-      if (data.section24.fairMarketValue && onValuationLoaded) {
+      setLegacyReport(null); // CRITICAL: Section 24 is sole source of truth; never allow old report to pollute it
+      setInsufficient(null);
+      // FMV exists ONLY when valuationMode === 'FMV' AND fairMarketValue !== null.
+      if (
+        onValuationLoaded &&
+        data.section24.valuationMode === 'FMV' &&
+        data.section24.fairMarketValue !== null &&
+        data.section24.fairMarketValue > 0
+      ) {
         onValuationLoaded(data.section24.fairMarketValue);
       }
-    }
-    if (data.latest) {
-      setLegacyReport(data.latest);
-      if (!data.section24?.fairMarketValue && data.latest.estimatedPrice && onValuationLoaded) {
-        onValuationLoaded(data.latest.estimatedPrice);
-      }
+    } else {
+      setSection24(null);
+      const leg = data.latest || data.report;
+      // Legacy reports carry no valuationMode — they can never be promoted to FMV.
+      setLegacyReport(leg || null);
     }
     if (data.history) {
       setHistory(data.history);
@@ -92,29 +112,32 @@ export function ValuationReport({
   }, [onValuationLoaded]);
 
   const load = useCallback(async () => {
+    console.log('[ValuationReport] load started for carId:', carId);
     setLoading(true);
     try {
       const res = await fetch(`/api/valuations?carId=${carId}`);
       const d = await res.json();
+      console.log('[ValuationReport] fetch response received:', d?.data?.status);
       if (d.success && d.data) {
         if (d.data.status === 'INSUFFICIENT') {
+          console.log('[ValuationReport] status is INSUFFICIENT:', d.data.reason);
+          // Phase-1: no FMV in this payload → clear any stale report/FMV first.
+          applyValuationData({});
           setInsufficient(d.data.reason || 'البيانات غير كافية لإنتاج تقييم عادل');
         } else {
+          console.log('[ValuationReport] applying data...');
           applyValuationData(d.data);
         }
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('[ValuationReport] load error:', err);
     } finally {
       setLoading(false);
+      console.log('[ValuationReport] load completed, loading=false');
     }
   }, [carId, applyValuationData]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const run = async () => {
+  const run = useCallback(async () => {
     if (!isAuthenticated) {
       toast.error('سجل الدخول لتشغيل التحليل');
       return;
@@ -123,6 +146,7 @@ export function ValuationReport({
     setExplaining(false);
     setStages([]);
     setInsufficient(null);
+    setElapsed(0);
 
     try {
       const res = await fetch('/api/valuations/stream', {
@@ -170,10 +194,11 @@ export function ValuationReport({
             setStages((prev) => [...prev, data]);
           } else if (ev === 'explaining') {
             setExplaining(true);
-          } else if (ev === 'result') {
+          } else if (ev === 'result' || ev === 'done') {
             applyValuationData(data);
             finished = true;
           } else if (ev === 'insufficient') {
+            applyValuationData({ section24: data.section24 });
             setInsufficient(data.reason || 'بيانات السوق غير كافية');
             finished = true;
           } else if (ev === 'error') {
@@ -188,13 +213,38 @@ export function ValuationReport({
       setRunning(false);
       setExplaining(false);
     }
-  };
+  }, [isAuthenticated, carId, auth, applyValuationData]);
 
-  const fmv = section24?.fairMarketValue ?? legacyReport?.estimatedPrice ?? null;
-  const minPrice = section24?.range?.low ?? legacyReport?.minPrice ?? null;
-  const maxPrice = section24?.range?.high ?? legacyReport?.maxPrice ?? null;
-  const confidence = section24?.confidence ?? legacyReport?.confidence ?? 0;
-  const status = section24?.status ?? (legacyReport?.grade?.toUpperCase() as any) ?? 'LIMITED';
+  // Live elapsed timer while the engine runs
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setElapsed((e) => e + 0.1), 100);
+    return () => clearInterval(t);
+  }, [running]);
+
+  // Auto-start the analysis when an authenticated user opens the page
+  useEffect(() => {
+    if (!isAuthenticated || autoStarted) return;
+    setAutoStarted(true);
+    setOpen(true);
+    setElapsed(0);
+    run();
+  }, [isAuthenticated, autoStarted, run]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const hasSection24 = !!section24 && section24.status !== 'INSUFFICIENT_DATA';
+  // Phase-1 FMV gate: the ONLY admissible FMV source is section24.fairMarketValue,
+  // which the contract already nulls for every non-FMV mode. Legacy reports have
+  // no valuationMode and must never be promoted into an FMV number.
+  const fmv = hasSection24 ? (section24.fairMarketValue ?? null) : null;
+  const minPrice = hasSection24 ? section24.range?.low : (legacyReport?.minPrice ?? null);
+  const maxPrice = hasSection24 ? section24.range?.high : (legacyReport?.maxPrice ?? null);
+  const confidence = hasSection24 ? section24.confidence : (legacyReport?.confidence ?? 0);
+  const status = hasSection24 ? section24.status : ((legacyReport?.grade?.toUpperCase() as any) ?? 'LIMITED');
+  const hasValuation = hasSection24 || !!legacyReport;
 
   const statusLabel =
     section24?.statusLabelAr ||
@@ -230,13 +280,24 @@ export function ValuationReport({
       ? 'bg-amber-500/10 border-amber-500/30'
       : 'bg-rose-500/10 border-rose-500/30';
 
-  const compsUsed: Section24ComparableUsed[] = section24?.comparablesUsed || legacyReport?.comparables || [];
+  const allComps: Section24ComparableUsed[] = section24?.comparablesUsed || legacyReport?.comparables || [];
+  // Hide archived OpenSooq and blocked dealer listings from the public UI
+  const compsUsed: Section24ComparableUsed[] = allComps.filter((c) => {
+    const isArchivedOpensooq = (c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE') && /السوق المفتوح|opensooq/i.test(c.source);
+    const isBlockedDealer = c.urlStatus === 'BLOCKED' && /أردن أوتو|وكيل/i.test(c.source);
+    return !isArchivedOpensooq && !isBlockedDealer;
+  });
   const compsExcluded: Section24ComparableExcluded[] = section24?.comparablesExcluded || [];
   const evidence = section24?.marketEvidence;
   const pricePos = section24?.pricePosition;
   const audit: ValuationAuditTrace | undefined = section24?.auditTrace;
   const marketSourceExecutions: MarketSourceExecution[] =
     section24?.marketSourceExecutions || audit?.marketSourceExecutions || [];
+
+  // Phase-1 FMV gate: the value-over-time chart may only plot runs proven to be
+  // FMV mode. Non-FMV / legacy-mode rows are excluded so a supporting or
+  // indicative number can never be drawn under the valuation chart.
+  const fmvHistory = history.filter((h) => h.fmv === true);
 
   function getQualitativeBadge(comp: Section24ComparableUsed) {
     const match = comp.qualitativeMatch || (
@@ -295,7 +356,7 @@ export function ValuationReport({
               <h3 className="font-extrabold text-white text-sm sm:text-base">
                 تقرير التقييم العادل وتحليل السوق بالذكاء الاصطناعي
               </h3>
-              {fmv && (
+              {hasValuation && (
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${confBg} ${confColor}`}>
                   {statusLabel}
                 </span>
@@ -306,6 +367,10 @@ export function ValuationReport({
                 ? 'جارٍ فحص بيانات السوق...'
                 : fmv
                 ? `${fmv.toLocaleString()} د.أ • ثقة ${confidence}% • ${compsUsed.length} مقارنات معتمدة`
+                : section24?.valuationMode === 'SUPPORTING_RANGE_ONLY' && minPrice && maxPrice
+                ? `نطاق استرشادي: ${minPrice.toLocaleString()} – ${maxPrice.toLocaleString()} د.أ • ثقة ${confidence}% • ${compsUsed.length} شواهد داعمة`
+                : hasValuation && minPrice && maxPrice
+                ? `نطاق استرشادي: ${minPrice.toLocaleString()} – ${maxPrice.toLocaleString()} د.أ • ثقة ${confidence}%`
                 : 'حلّل السوق الأردني من عدة مصادر موثوقة قبل الشراء'}
             </p>
           </div>
@@ -318,7 +383,7 @@ export function ValuationReport({
       {open && (
         <div className="p-6 border-t border-slate-800 bg-slate-950/60 space-y-6">
           {/* Empty state */}
-          {!fmv && !running && !insufficient && (
+          {!hasValuation && !running && !insufficient && (
             <div className="text-center py-6 space-y-3">
               <Scale className="w-12 h-12 text-slate-600 mx-auto" />
               <p className="text-slate-300 font-bold text-sm">لم يُحلل سعر هذه السيارة بعد</p>
@@ -334,31 +399,75 @@ export function ValuationReport({
             </div>
           )}
 
-          {/* Running progress stages */}
+          {/* Thought Line — live reasoning trace with countdown (reactbits.dev pattern) */}
           {running && (
-            <div className="space-y-3 py-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
-              <div className="flex items-center gap-2 text-sm font-bold text-blue-400 pb-2 border-b border-slate-800">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>محرك التقييم الذكي ينفذ المراحل الحسابية...</span>
-              </div>
-              {stages.length === 0 && (
-                <div className="text-xs text-slate-400">جمع الإعلانات وتطبيق عزل السعر المطلوب...</div>
-              )}
-              {stages.map((s) => (
-                <div key={s.stageAr} className="flex items-start gap-2 text-xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 p-5">
+              {/* Breathing glyph + label + live clock */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="absolute inset-0 rounded-2xl bg-blue-500/30 animate-ping" />
+                    <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                      <Brain className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
                   <div>
-                    <span className="text-slate-200 font-bold">{s.stageAr}</span>
-                    <span className="text-slate-500"> — {s.detail} ({(s.ms / 1000).toFixed(1)}s)</span>
+                    <p className="text-sm font-black text-white flex items-center gap-2">
+                      محرك التقييم الذكي
+                      <span className="text-[10px] font-bold text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded-full border border-blue-500/30 animate-pulse">
+                        مباشر
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {stages.length === 0
+                        ? 'تهيئة محرك التحليل وجمع البيانات...'
+                        : explaining
+                        ? 'توليد الرؤى السوقية والتقرير التحليلي...'
+                        : `يعالج ${stages.length} مراحل — النتيجة تظهر فور الانتهاء`}
+                    </p>
                   </div>
                 </div>
-              ))}
-              {explaining && (
-                <div className="flex items-center gap-2 text-xs text-slate-300 pt-1">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                  <span>توليد الرؤى السوقية والتقرير التحليلي...</span>
+                {/* Live clock */}
+                <div className="text-left">
+                  <p className="text-2xl font-black text-white tabular-nums leading-none">
+                    {elapsed.toFixed(1)}
+                    <span className="text-xs font-bold text-slate-400">s</span>
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">الوقت المنقضي</p>
                 </div>
-              )}
+              </div>
+
+              {/* Steps trace */}
+              <div className="mt-4 space-y-2">
+                {stages.map((s, i) => (
+                  <div
+                    key={s.stageAr}
+                    className="flex items-start gap-2.5 text-xs animate-[fadeSlideIn_0.3s_ease-out]"
+                    style={{ animationDelay: `${i * 0.05}s` }}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-slate-200 font-bold">{s.stageAr}</span>
+                      <span className="text-slate-500"> — {s.detail}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-600 tabular-nums">{(s.ms / 1000).toFixed(1)}s</span>
+                  </div>
+                ))}
+                {explaining && (
+                  <div className="flex items-center gap-2 text-xs text-blue-300 pt-1">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>توليد الرؤى السوقية والتقرير التحليلي...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="mt-4 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-l from-blue-500 to-indigo-500 transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(95, 10 + stages.length * 12)}%` }}
+                />
+              </div>
             </div>
           )}
 
@@ -374,7 +483,7 @@ export function ValuationReport({
           )}
 
           {/* Main Valuation Content */}
-          {fmv && !running && (
+          {hasValuation && !running && (
             <>
               {/* Tab Selector: Only visible for Administrators */}
               {isAdmin && (
@@ -448,13 +557,36 @@ export function ValuationReport({
                   {/* 3 Core Stats Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
                     <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
-                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">القيمة السوقية العادلة</p>
-                      <p className="text-2xl font-black text-white">
-                        {fmv.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
+                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">
+                        {section24?.valuationMode === 'SUPPORTING_RANGE_ONLY' || fmv === null
+                          ? 'القيمة السوقية العادلة (FMV)'
+                          : section24?.valuationMode === 'INDICATIVE'
+                          ? 'القيمة الاسترشادية التقديرية'
+                          : 'القيمة السوقية العادلة'}
                       </p>
+                      <p className="text-2xl font-black text-white">
+                        {fmv !== null ? (
+                          <>{fmv.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span></>
+                        ) : section24?.indicativePrice ? (
+                          <>{section24.indicativePrice.toLocaleString()} <span className="text-xs font-bold text-amber-400">د.أ (استرشادي)</span></>
+                        ) : (
+                          <span className="text-base text-amber-400 font-bold">غير متاح (شواهد داعمة فقط)</span>
+                        )}
+                      </p>
+                      {fmv === null && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {section24?.valuationMode === 'SUPPORTING_RANGE_ONLY'
+                            ? 'لا يتوفر FMV لغياب مقارنات مباشرة متطابقة (Direct = 0)'
+                            : 'أدلة مباشرة محدودة (1-2)'}
+                        </p>
+                      )}
                     </div>
                     <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm flex flex-col justify-center">
-                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">النطاق الاسترشادي للقيمة</p>
+                      <p className="text-[11px] text-slate-400 mb-1 font-semibold">
+                        {section24?.valuationMode === 'SUPPORTING_RANGE_ONLY'
+                          ? 'النطاق الاسترشادي للشواهد الداعمة'
+                          : 'النطاق الاسترشادي للقيمة'}
+                      </p>
                       <p className="text-base sm:text-lg font-black text-white mt-1">
                         {minPrice?.toLocaleString()} – {maxPrice?.toLocaleString()} <span className="text-xs font-bold text-slate-400">د.أ</span>
                       </p>
@@ -472,7 +604,7 @@ export function ValuationReport({
                   </div>
 
                   {/* Asking Price vs FMV Position */}
-                  {pricePos && pricePos.differencePercent !== null && (
+                  {pricePos && pricePos.differencePercent !== null && fmv !== null ? (
                     <div
                       className={`p-4 rounded-2xl text-xs sm:text-sm border flex items-start gap-3 ${
                         pricePos.classification === 'FAIR'
@@ -511,7 +643,20 @@ export function ValuationReport({
                         )}
                       </div>
                     </div>
-                  )}
+                  ) : pricePos?.percentileLabel ? (
+                    <div className="p-4 rounded-2xl text-xs sm:text-sm border bg-slate-900/90 border-slate-800 text-slate-300 flex items-start gap-3">
+                      <Scale className="w-5 h-5 shrink-0 mt-0.5 text-blue-400" />
+                      <div className="space-y-1">
+                        <div>
+                          <span className="font-black">موقف السعر المطلوب ({askingPrice.toLocaleString()} د.أ): </span>
+                          <span>لا تجري مقارنة مباشرة مع FMV لعدم توفر قيمة سوقية عادلة قاطعة (أدلة مباشرة = 0).</span>
+                        </div>
+                        <div className="text-[11px] text-amber-300 font-medium bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 inline-block">
+                          {pricePos.percentileLabel}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* Market Evidence Summary Bar */}
                   {evidence && (
@@ -622,7 +767,7 @@ export function ValuationReport({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                          {compsUsed.slice(0, 10).map((c, i) => (
+                          {compsUsed.map((c, i) => (
                             <Fragment key={c.id || i}>
                               <tr
                                 className="text-slate-300 cursor-pointer hover:bg-slate-800/50 transition-colors"
@@ -645,20 +790,9 @@ export function ValuationReport({
                                 </td>
                                 <td className="p-3">
                                   {c.urlStatus === 'NOT_FOUND' || c.urlStatus === 'UNAVAILABLE' ? (
-                                    <span
-                                      className="inline-flex items-center gap-1 text-amber-300 text-[11px] font-medium bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"
-                                      title="دليل تاريخي موثق، والرابط لم يعد متاحاً على المصدر"
-                                    >
-                                      <span>{c.source}</span>
-                                      <span className="text-[9px] text-amber-400/80">(أرشيف)</span>
-                                    </span>
+                                    <span className="text-slate-500 text-[11px]">مصدر موثق</span>
                                   ) : c.urlStatus === 'BLOCKED' ? (
-                                    <span
-                                      className="inline-flex items-center gap-1 text-slate-300 text-[11px] font-medium bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700"
-                                    >
-                                      <span>{c.source}</span>
-                                      <span className="text-[9px] text-slate-400">(محمي)</span>
-                                    </span>
+                                    <span className="text-slate-500 text-[11px]">مصدر محمي</span>
                                   ) : (c.finalUrl || c.canonicalUrl || c.sourceUrl)?.startsWith('http') ? (
                                     <a
                                       href={c.finalUrl || c.canonicalUrl || c.sourceUrl!}
@@ -839,6 +973,60 @@ export function ValuationReport({
                       </table>
                     </div>
                   </div>
+
+                  {/* Funnel Reconciliation Card (Mathematical Alignment of Counts) */}
+                  {audit?.countsBreakdown && (
+                    <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                        <p className="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>مطابقة مسار التصفية العددي (Funnel Counts Reconciliation)</span>
+                        </p>
+                        <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                          مطابقة متوازنة
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        تتبع دقيق لمصير كل إعلان تم جمعه عبر المراحل لمنع أي اختفاء غير مبرر:
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs pt-1">
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">إجمالي المجموع (Collected)</span>
+                          <span className="font-bold text-white font-mono">{audit.countsBreakdown.collected}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">مستبعد (Target Cluster)</span>
+                          <span className="font-bold text-cyan-400 font-mono">{audit?.targetCluster?.totalClusterCount ?? 0}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">مستبعد (Sanity & Conflict)</span>
+                          <span className="font-bold text-rose-400 font-mono">
+                            {audit.countsBreakdown.rejectedBySanity + audit.countsBreakdown.rejectedByIdentity}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">مستبعد (Matching Specs)</span>
+                          <span className="font-bold text-amber-400 font-mono">{audit.countsBreakdown.rejectedByMatching}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">مقارنات مباشرة (Direct)</span>
+                          <span className="font-bold text-emerald-400 font-mono">{audit.countsBreakdown.eligibleDirect}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">شواهد داعمة (Supporting)</span>
+                          <span className="font-bold text-blue-400 font-mono">{audit.countsBreakdown.eligibleSupporting}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">مستخدمة في التسعير</span>
+                          <span className="font-bold text-purple-400 font-mono">{audit.countsBreakdown.usedInPricing}</span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-[10px] text-slate-400 block">نمط التسعير (Mode)</span>
+                          <span className="font-bold text-indigo-400 font-mono">{audit.valuationMode || 'FMV'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Target Identity Cluster Card */}
                   {audit?.targetCluster && (
@@ -1165,14 +1353,14 @@ export function ValuationReport({
                 </button>
               </div>
 
-              {/* Price History Over Time */}
-              {history.length > 1 && (
+              {/* Price History Over Time — FMV-mode runs only (Phase-1 gate) */}
+              {fmvHistory.length > 1 && (
                 <div className="pt-2">
-                  <p className="font-bold text-slate-300 text-xs mb-2">تغير القيمة عبر الزمن</p>
+                  <p className="font-bold text-slate-300 text-xs mb-2">تغير القيمة عبر الزمن (قيمة السوق العادلة)</p>
                   <div className="flex items-end gap-1.5 h-20" dir="ltr">
-                    {history.map((h, i) => {
-                      const max = Math.max(...history.map((x) => x.estimated));
-                      const min = Math.min(...history.map((x) => x.estimated));
+                    {fmvHistory.map((h, i) => {
+                      const max = Math.max(...fmvHistory.map((x) => x.estimated));
+                      const min = Math.min(...fmvHistory.map((x) => x.estimated));
                       const pct = max === min ? 50 : 15 + ((h.estimated - min) / (max - min)) * 85;
                       return (
                         <div

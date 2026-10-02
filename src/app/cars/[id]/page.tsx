@@ -36,6 +36,7 @@ import { sanitizePlainText } from '@/lib/sanitize';
 import WhatsAppShareButton from '@/components/ui/WhatsAppShareButton';
 import JordanianInspectionReport from '@/components/cars/JordanianInspectionReport';
 import { ValuationReport } from '@/components/cars/ValuationReport';
+import { HoldButton } from '@/components/ui/HoldButton';
 import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/car-features';
 
 const AuctionSection = lazy(() => import('@/components/auctions/AuctionSection').then(m => ({ default: m.AuctionSection })));
@@ -579,9 +580,14 @@ export default function CarDetailPage() {
                         تعديل الإعلان
                       </Button>
                     </Link>
-                    <Button variant="ghost" icon={<Trash2 className="w-4 h-4 text-rose-400" />} onClick={handleDeleteCar}>
-                      حذف الإعلان
-                    </Button>
+                    <HoldButton
+                      onComplete={handleDeleteCar}
+                      holdDuration={2000}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-rose-400 hover:bg-rose-500/10 transition-all"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>حذف الإعلان</span>
+                    </HoldButton>
                   </>
                 )}
               </div>

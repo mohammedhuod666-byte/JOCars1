@@ -32,19 +32,20 @@ interface SimilarCar {
 
 interface AnalysisData {
   valuation: {
-    fairPrice: number;
+    // Phase-1 FMV gate: null whenever the engine produced no FMV.
+    fairPrice: number | null;
     minPrice: number;
     maxPrice: number;
     confidence: number;
     sources: string[];
   };
   assessment: {
-    position: 'below' | 'within' | 'above';
+    position: 'below' | 'within' | 'above' | 'unknown';
     label: string;
     color: string;
     icon: string;
-    diffPercent: number;
-    diffAmount: number;
+    diffPercent: number | null;
+    diffAmount: number | null;
     explanation: string;
   };
   factors: PriceFactor[];
@@ -143,13 +144,17 @@ export function CarPriceAnalysis({
     below: 'from-green-500 to-emerald-500',
     within: 'from-blue-500 to-indigo-500',
     above: 'from-red-500 to-orange-500',
+    unknown: 'from-amber-500 to-yellow-600',
   };
 
   const positionBg = {
     below: 'bg-green-50 dark:bg-green-500/10 border-green-200 dark:border-green-800',
     within: 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-800',
     above: 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-800',
+    unknown: 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-800',
   };
+
+  const fairPrice = data?.valuation.fairPrice ?? null;
 
   return (
     <div className="space-y-3">
@@ -188,16 +193,24 @@ export function CarPriceAnalysis({
 
               <div className="p-5 space-y-5">
 
-                {/* Fair Price Display */}
+                {/* Fair Price Display — Phase-1: only a real FMV may render here */}
                 <div className="text-center">
                   <p className="text-sm text-gray-500 mb-1">القيمة السوقية العادلة</p>
-                  <p className="text-4xl font-black text-gray-900 dark:text-white">
-                    {data.valuation.fairPrice.toLocaleString()}
-                    <span className="text-lg font-medium text-gray-500 mr-1">د.أ</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    نطاق: {data.valuation.minPrice.toLocaleString()} — {data.valuation.maxPrice.toLocaleString()} د.أ
-                  </p>
+                  {fairPrice !== null ? (
+                    <>
+                      <p className="text-4xl font-black text-gray-900 dark:text-white">
+                        {fairPrice.toLocaleString()}
+                        <span className="text-lg font-medium text-gray-500 mr-1">د.أ</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        نطاق: {data.valuation.minPrice.toLocaleString()} — {data.valuation.maxPrice.toLocaleString()} د.أ
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      غير متاح — لا توجد أدلة مباشرة كافية لسعر عادل
+                    </p>
+                  )}
                 </div>
 
                 {/* Price Range Visual */}
@@ -210,9 +223,17 @@ export function CarPriceAnalysis({
                     <span>متوسط</span>
                     <span>غالي</span>
                   </div>
-                  {/* Fair price marker */}
-                  <div className="absolute top-0 h-3 w-0.5 bg-blue-600 rounded-full"
-                    style={{ left: '50%', transform: 'translateX(-50%)' }} />
+                  {/* Fair price marker — only when a real FMV exists (positioned by its actual value) */}
+                  {fairPrice !== null && data.valuation.maxPrice > data.valuation.minPrice && (
+                    <div className="absolute top-0 h-3 w-0.5 bg-blue-600 rounded-full"
+                      style={{
+                        left: `${Math.min(Math.max(
+                          ((fairPrice - data.valuation.minPrice) / (data.valuation.maxPrice - data.valuation.minPrice)) * 100,
+                          0
+                        ), 100)}%`,
+                        transform: 'translateX(-50%)',
+                      }} />
+                  )}
                   {/* User price marker */}
                   {currentPrice > 0 && data.valuation.maxPrice > data.valuation.minPrice && (
                     <div className="absolute top-0 h-3 w-1 bg-gray-900 dark:bg-white rounded-full"
@@ -231,12 +252,13 @@ export function CarPriceAnalysis({
                     <div className="mt-0.5">
                       {data.assessment.position === 'below' ? <TrendingDown className="w-6 h-6 text-green-600" /> :
                        data.assessment.position === 'within' ? <CheckCircle className="w-6 h-6 text-blue-600" /> :
+                       data.assessment.position === 'unknown' ? <AlertCircle className="w-6 h-6 text-amber-600" /> :
                        <TrendingUp className="w-6 h-6 text-red-600" />}
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className={`font-bold ${data.assessment.color}`}>{data.assessment.label}</h4>
-                        {currentPrice > 0 && (
+                        {currentPrice > 0 && data.assessment.diffPercent !== null && (
                           <span className={`text-sm font-bold ${data.assessment.color}`}>
                             ({data.assessment.diffPercent > 0 ? '+' : ''}{data.assessment.diffPercent}%)
                           </span>
@@ -259,7 +281,7 @@ export function CarPriceAnalysis({
                     <div className="text-2xl text-gray-300">↔</div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500">القيمة العادلة</p>
-                      <p className="font-bold text-blue-600">{data.valuation.fairPrice.toLocaleString()} د.أ</p>
+                      <p className="font-bold text-blue-600">{fairPrice !== null ? `${fairPrice.toLocaleString()} د.أ` : 'غير متاح'}</p>
                     </div>
                   </div>
                 )}
@@ -274,7 +296,7 @@ export function CarPriceAnalysis({
                   <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-center">
                     <Target className="w-5 h-5 text-purple-500 mx-auto mb-1" />
                     <p className="text-[10px] text-gray-500">السعر العادل</p>
-                    <p className="text-sm font-bold text-purple-600">{data.valuation.fairPrice.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-purple-600">{fairPrice !== null ? fairPrice.toLocaleString() : 'غير متاح'}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-center">
                     <BarChart3 className="w-5 h-5 text-amber-500 mx-auto mb-1" />
@@ -283,11 +305,11 @@ export function CarPriceAnalysis({
                   </div>
                 </div>
 
-                {/* Use Fair Price Button */}
-                {onPriceSelect && currentPrice !== data.valuation.fairPrice && (
-                  <button type="button" onClick={() => onPriceSelect(data.valuation.fairPrice)}
+                {/* Use Fair Price Button — only when a real FMV exists */}
+                {onPriceSelect && fairPrice !== null && currentPrice !== fairPrice && (
+                  <button type="button" onClick={() => onPriceSelect(fairPrice)}
                     className="w-full py-2.5 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all">
-                    استخدام السعر العادل ({data.valuation.fairPrice.toLocaleString()} د.أ)
+                    استخدام السعر العادل ({fairPrice.toLocaleString()} د.أ)
                   </button>
                 )}
 
