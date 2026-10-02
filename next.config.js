@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    loaderFile: './src/lib/image-loader.ts',
     remotePatterns: [
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: 'maps.googleapis.com' },
@@ -32,7 +33,7 @@ const nextConfig = {
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()' },
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://res.cloudinary.com https://maps.googleapis.com https://maps.google.com https://*.tile.openstreetmap.org https://*.ngrok-free.app https://*.ngrok.io http://localhost:* http://127.0.0.1:*; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https://res.cloudinary.com https://*.ngrok-free.app https://*.ngrok.io; object-src 'none'; media-src 'self' blob: data:; base-uri 'self'; form-action 'self'; frame-src 'self' https://www.openstreetmap.org https://maps.google.com https://maps.googleapis.com https://www.youtube.com https://youtube.com https://youtu.be; frame-ancestors 'none';" },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://res.cloudinary.com https://maps.googleapis.com https://maps.google.com https://*.tile.openstreetmap.org https://*.ngrok-free.app https://*.ngrok.io https://*.googleusercontent.com; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https://res.cloudinary.com https://*.ngrok-free.app https://*.ngrok.io https://accounts.google.com https://oauth2.googleapis.com https://rest.ably.io https://*.ably.io https://main.realtime.ably.net https://*.ably-realtime.com; object-src 'none'; media-src 'self' blob: data:; base-uri 'self'; form-action 'self'; frame-src 'self' https://www.openstreetmap.org https://maps.google.com https://maps.googleapis.com https://www.youtube.com https://youtube.com https://youtu.be https://accounts.google.com; frame-ancestors 'none';" },
           { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
           { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
