@@ -4,7 +4,20 @@ import { authenticateRequest } from '@/lib/auth';
 import { messageSchema } from '@/lib/validations';
 import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from '@/lib/api';
 import { sendWhatsApp, buildCarMessage } from '@/lib/whatsapp';
+import { publishConversationEvent } from '@/lib/realtime';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
+
+async function canAccessConversation(conversationId: string, userId: string, role: string) {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { buyerId: true, sellerId: true },
+  });
+
+  if (!conversation) return 'NOT_FOUND';
+  if (role === 'ADMIN') return 'ALLOWED';
+  if (conversation.buyerId === userId || conversation.sellerId === userId) return 'ALLOWED';
+  return 'FORBIDDEN';
+}
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);
@@ -37,6 +50,13 @@ export async function POST(request: NextRequest) {
     const validation = messageSchema.safeParse(body);
     if (!validation.success) return validationErrorResponse(validation.error);
 
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId : null;
+    if (conversationId) {
+      const access = await canAccessConversation(conversationId, user.id, user.role);
+      if (access === 'NOT_FOUND') return errorResponse('المحادثة غير موجودة', 404);
+      if (access === 'FORBIDDEN') return errorResponse('لا تملك صلاحية الوصول إلى هذه المحادثة', 403);
+    }
+
     const msgData: Record<string, unknown> = {
       content: validation.data.content,
       senderId: user.id,
@@ -44,8 +64,8 @@ export async function POST(request: NextRequest) {
       carId: validation.data.carId,
     };
 
-    if (body.conversationId) {
-      msgData.conversationId = body.conversationId;
+    if (conversationId) {
+      msgData.conversationId = conversationId;
     }
 
     const message = await prisma.message.create({
@@ -63,16 +83,21 @@ export async function POST(request: NextRequest) {
     });
 
     // Touch conversation
-    if (body.conversationId) {
+    if (conversationId) {
       await prisma.conversation.update({
-        where: { id: body.conversationId },
+        where: { id: conversationId },
         data: { updatedAt: new Date() },
       });
+
+      // Realtime fan-out (Ably, server-side): every participant — including
+      // the sender's other devices — receives exactly one copy of the
+      // persisted message. Best-effort: never blocks/fails the send itself.
+      publishConversationEvent(conversationId, 'message-received', message);
     }
 
-    // Notification — detect image messages (IMG: prefix) or emoji prefix
+    // Notification — detect image messages (IMG: prefix) or legacy emoji prefix
     const msgPreview = validation.data.content.startsWith('IMG:') || validation.data.content.startsWith('📷')
-      ? '📷 صورة مرفقة'
+      ? 'صورة مرفقة'
       : validation.data.content.slice(0, 100);
 
     await prisma.notification.create({
@@ -81,7 +106,7 @@ export async function POST(request: NextRequest) {
         title: 'رسالة جديدة',
         message: `لديك رسالة جديدة من ${user.name}`,
         userId: validation.data.receiverId,
-        link: `/messages?conversationId=${body.conversationId || ''}`,
+        link: `/messages?conversationId=${conversationId || ''}`,
       },
     });
 
@@ -123,9 +148,13 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { conversationId } = body;
 
-    if (!conversationId) {
+    if (typeof conversationId !== 'string' || !conversationId) {
       return errorResponse('معرّف المحادثة مطلوب');
     }
+
+    const access = await canAccessConversation(conversationId, user.id, user.role);
+    if (access === 'NOT_FOUND') return errorResponse('المحادثة غير موجودة', 404);
+    if (access === 'FORBIDDEN') return errorResponse('لا تملك صلاحية الوصول إلى هذه المحادثة', 403);
 
     await prisma.message.updateMany({
       where: { conversationId, receiverId: user.id, read: false },

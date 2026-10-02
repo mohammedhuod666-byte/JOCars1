@@ -1,0 +1,66 @@
+# Vercel deploy exclusions — keep upload small & never ship local-only data.
+# NOTE: when this file exists, .gitignore is NOT used by the Vercel CLI.
+
+# dependencies / build (installed & built by Vercel itself)
+node_modules/
+.next/
+out/
+build/
+.pnp
+.pnp.js
+
+# git history is never needed for a Vercel build (CLI does not exclude it)
+.git/
+
+# large binary artifacts at repo root (mobile app builds, docs)
+*.apk
+*.aab
+*.pdf
+*.pptx
+*.docx
+*.tsbuildinfo
+
+# secrets — env vars are configured in the Vercel dashboard/CLI instead
+.env
+.env.*
+!.env.example
+
+# vercel local link state
+.vercel/
+
+# local databases & backups (never upload)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+prisma/dev.db*
+backups/
+
+# unrelated / local-only project folders (incl. git-safety protected dir)
+lumek_dark_sector/
+CarsJOApp/
+data/
+experiments/
+scratch/
+tests/
+test-results/
+playwright-report/
+coverage/
+scripts/
+stritz_runs/
+strix_runs/
+omniroute-skills/
+.source-aware/
+.freebuff/
+Jo Cars/
+JOCars/
+JUCars-2024*
+.github/
+.vscode/
+
+# logs
+*.log
+npm-debug.log*
+
+# note: public/uploads/ is DELIBERATELY not ignored — existing images ship with the build.

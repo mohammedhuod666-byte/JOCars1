@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
+import { publishConversationEvent } from '@/lib/realtime';
 
 export async function GET(
   request: NextRequest,
@@ -62,6 +63,9 @@ export async function POST(
       where: { id },
       data: { updatedAt: new Date() },
     });
+
+    // Realtime fan-out (Ably) for admin replies — same pattern as /api/messages.
+    publishConversationEvent(id, 'message-received', message);
 
     await prisma.notification.create({
       data: {

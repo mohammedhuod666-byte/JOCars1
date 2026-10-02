@@ -69,7 +69,11 @@ export default function AdminMessagesPage() {
         .then((r) => r.json())
         .then((d) => { if (d.success) { setConversations(d.data); setFiltered(d.data); } });
     });
-    return () => { socket.off('message-received'); };
+    if (activeConv) socket.emit('join-conversation', activeConv.id);
+    return () => {
+      if (activeConv) socket.emit('leave-conversation', activeConv.id);
+      socket.off('message-received');
+    };
   }, [activeConv]);
 
   const openConversation = async (conv: Conversation) => {
