@@ -53,6 +53,17 @@ function SectionSpinner() {
   );
 }
 
+// The inspection card must show the value the seller actually picked. Prefer
+// the persisted chip (aiConditionReport); older listings only carry it inside
+// the description line ("- تقرير الفحص: …"). When neither exists we show no
+// score instead of inventing a "7 جيد" the seller never claimed.
+function resolveInspectionScore(car: { aiConditionReport?: string | null; description?: string | null } | null | undefined): string | undefined {
+  const persisted = (car?.aiConditionReport || '').trim();
+  if (persisted) return persisted;
+  const m = /- تقرير الفحص:\s*([^\r\n]+)/.exec(car?.description || '');
+  return m ? m[1].trim() : undefined;
+}
+
 export default function CarDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -620,7 +631,7 @@ export default function CarDetailPage() {
             </div>
 
             {/* Jordanian Inspection Report Component */}
-            <JordanianInspectionReport score={(car as any).aiConditionReport || '7 جيد'} />
+            <JordanianInspectionReport score={resolveInspectionScore(car)} />
 
             {/* Features */}
             {(() => {

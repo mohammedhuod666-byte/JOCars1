@@ -234,8 +234,17 @@ export async function POST(request: NextRequest) {
 
     const data: Record<string, unknown> = {};
     let conditionDetailsStr: string | null = null;
+    // Inspection chip choice (فحص كامل 7 جيد / فحص 4 جيد / …). carSchema has no
+    // such field, so it used to be silently dropped and the ad card fell back
+    // to a hardcoded "7 جيد". Keep it here and store it as aiConditionReport.
+    let inspectionSummaryStr: string | null = null;
     for (const [key, value] of formData.entries()) {
       if (key === 'conditionDetails') { conditionDetailsStr = value as string; continue; }
+      if (key === 'inspectionSummary') {
+        const s = sanitizePlainText(String(value)).trim().slice(0, 120);
+        inspectionSummaryStr = s || null;
+        continue;
+      }
       if (key !== 'images' && key !== 'coverImage' && key !== 'video') {
         data[key] = value;
       }
@@ -356,6 +365,7 @@ export async function POST(request: NextRequest) {
         // DB requires drivetrain; explicit UNKNOWN beats a false FWD.
         drivetrain: (validation.data as any).drivetrain || 'UNKNOWN',
         conditionDetails: conditionDetailsStr,
+        aiConditionReport: inspectionSummaryStr,
         slug,
         refCode,
         status: 'PENDING',
