@@ -7,11 +7,14 @@ import { successResponse, errorResponse, unauthorizedResponse, validationErrorRe
 import { generateSlug } from '@/lib/utils';
 import { generateRefCode } from '@/lib/generate-refcode';
 import { uploadMultipleImages, uploadImage } from '@/lib/cloudinary';
+import { sanitizeFeatures } from '@/lib/car-features';
 import { analyzeCarPrice } from '@/ai/price-analysis';
 import { notifyAdmins } from '@/lib/admin-notify';
 import { createAuditLog } from '@/lib/audit';
 import { moderateListing } from '@/ai/moderate';
 import { compressToWebP } from '@/lib/image-compress';
+import { validateUploadedImage } from '@/lib/image-validate';
+import { recordSignal } from '@/lib/sentinel';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -23,10 +26,18 @@ export async function GET(request: NextRequest) {
   const where: Record<string, unknown> = { status: 'APPROVED', deletedAt: null };
   if (searchParams.get('showSold') === 'true') delete where.status;
 
-  // Explicit status filter (used by sold archive, moderation queues, etc.)
+  // Explicit status filter — restricted: non-admins can only see APPROVED/SOLD.
+  // PENDING/REJECTED are moderation queues and must not leak to public.
+  const userEarly = await authenticateRequest(request).catch(() => null);
+  const isAdminEarly = userEarly?.role === 'ADMIN';
   const statusParam = searchParams.get('status');
   if (statusParam && ['APPROVED', 'PENDING', 'REJECTED', 'SOLD'].includes(statusParam)) {
-    where.status = statusParam;
+    if (statusParam === 'APPROVED' || statusParam === 'SOLD') {
+      where.status = statusParam;
+    } else if (isAdminEarly) {
+      where.status = statusParam;
+    }
+    // else: ignore — keep default APPROVED to prevent info disclosure
   }
   if (searchParams.get('featured') === 'true') where.featured = true;
 
@@ -47,11 +58,11 @@ export async function GET(request: NextRequest) {
       where.refCode = cleanCode;
     } else {
       where.OR = [
-        { description: { contains: q } },
-        { brand: { nameAr: { contains: q } } },
-        { brand: { nameEn: { contains: q } } },
-        { model: { nameAr: { contains: q } } },
-        { model: { nameEn: { contains: q } } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { brand: { nameAr: { contains: q, mode: 'insensitive' } } },
+        { brand: { nameEn: { contains: q, mode: 'insensitive' } } },
+        { model: { nameAr: { contains: q, mode: 'insensitive' } } },
+        { model: { nameEn: { contains: q, mode: 'insensitive' } } },
       ];
     }
   }
@@ -68,25 +79,34 @@ export async function GET(request: NextRequest) {
   const priceMin = searchParams.get('priceMin');
   const priceMax = searchParams.get('priceMax');
   if (priceMin || priceMax) {
-    where.price = {};
-    if (priceMin) (where.price as Record<string, number>).gte = parseInt(priceMin);
-    if (priceMax) (where.price as Record<string, number>).lte = parseInt(priceMax);
+    const gte = priceMin ? parseInt(priceMin, 10) : NaN;
+    const lte = priceMax ? parseInt(priceMax, 10) : NaN;
+    const priceFilter: Record<string, number> = {};
+    if (!Number.isNaN(gte)) priceFilter.gte = gte;
+    if (!Number.isNaN(lte)) priceFilter.lte = lte;
+    if (Object.keys(priceFilter).length > 0) where.price = priceFilter;
   }
 
   const yearMin = searchParams.get('yearMin');
   const yearMax = searchParams.get('yearMax');
   if (yearMin || yearMax) {
-    where.year = {};
-    if (yearMin) (where.year as Record<string, number>).gte = parseInt(yearMin);
-    if (yearMax) (where.year as Record<string, number>).lte = parseInt(yearMax);
+    const gte = yearMin ? parseInt(yearMin, 10) : NaN;
+    const lte = yearMax ? parseInt(yearMax, 10) : NaN;
+    const yearFilter: Record<string, number> = {};
+    if (!Number.isNaN(gte)) yearFilter.gte = gte;
+    if (!Number.isNaN(lte)) yearFilter.lte = lte;
+    if (Object.keys(yearFilter).length > 0) where.year = yearFilter;
   }
 
   const kmMin = searchParams.get('kilometersMin');
   const kmMax = searchParams.get('kilometersMax');
   if (kmMin || kmMax) {
-    where.kilometers = {};
-    if (kmMin) (where.kilometers as Record<string, number>).gte = parseInt(kmMin);
-    if (kmMax) (where.kilometers as Record<string, number>).lte = parseInt(kmMax);
+    const gte = kmMin ? parseInt(kmMin, 10) : NaN;
+    const lte = kmMax ? parseInt(kmMax, 10) : NaN;
+    const kmFilter: Record<string, number> = {};
+    if (!Number.isNaN(gte)) kmFilter.gte = gte;
+    if (!Number.isNaN(lte)) kmFilter.lte = lte;
+    if (Object.keys(kmFilter).length > 0) where.kilometers = kmFilter;
   }
 
   if (searchParams.get('exclude')) {
@@ -100,7 +120,7 @@ export async function GET(request: NextRequest) {
   const sortOrder = allowedSortOrders.includes(searchParams.get('sortOrder') || '') ? searchParams.get('sortOrder')! : 'desc';
   orderBy[sortBy] = sortOrder;
 
-  const user = await authenticateRequest(request).catch(() => null);
+  const user = userEarly;
 
   const cacheKey = `cars:${JSON.stringify({ where, skip, limit, orderBy: { featured: 'desc', ...orderBy } })}`;
 
@@ -197,7 +217,17 @@ export async function POST(request: NextRequest) {
   if (user.banStatus) return errorResponse('حسابك محظور', 403);
 
   try {
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      const len = request.headers.get('content-length');
+      console.error(`Car create: multipart parse failed (content-length: ${len || 'unknown'})`);
+      return errorResponse(
+        'تعذر استلام الصور — غالباً حجم الملفات كبير جداً أو انقطع الاتصال أثناء الرفع. قلل عدد الصور (10 كحد أقصى دفعة واحدة) وتأكد من الإنترنت ثم حاول مجدداً.',
+        413,
+      );
+    }
 
     const uploadedFiles = formData.getAll('images') as File[];
     const coverFile = formData.get('coverImage') as File | null;
@@ -218,6 +248,11 @@ export async function POST(request: NextRequest) {
     data.ownerCount = parseInt((data.ownerCount as string) || '1');
     if (data.engineCapacity) data.engineCapacity = parseFloat(data.engineCapacity as string);
     if (data.cylinders) data.cylinders = parseInt(data.cylinders as string);
+    if (data.horsepower) data.horsepower = parseInt(data.horsepower as string);
+    if (data.acceleration) data.acceleration = parseFloat(data.acceleration as string);
+    if (data.features) {
+      data.features = JSON.stringify(sanitizeFeatures(data.features));
+    }
     data.isNegotiable = data.isNegotiable === 'true';
     data.hasWarranty = data.hasWarranty === 'true';
     data.hasServiceHistory = data.hasServiceHistory === 'true';
@@ -226,6 +261,12 @@ export async function POST(request: NextRequest) {
     data.isPaintOriginal = data.isPaintOriginal !== 'false';
     if (data.locationLat) data.locationLat = parseFloat(data.locationLat as string);
     if (data.locationLng) data.locationLng = parseFloat(data.locationLng as string);
+    // (0,0) is the Gulf of Guinea — never a real car location in Jordan.
+    // The map picker sends it for "cleared"; treat as unset instead of storing.
+    if (data.locationLat === 0 && data.locationLng === 0) {
+      delete data.locationLat;
+      delete data.locationLng;
+    }
     if (data.videoUrl === '') delete data.videoUrl;
 
     const validation = carSchema.safeParse(data);
@@ -235,64 +276,75 @@ export async function POST(request: NextRequest) {
     }
 
     const hasCloudinary = !!(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_KEY !== 'your-api-key' && process.env.CLOUDINARY_API_SECRET);
-    let uploadedImages: { url: string }[] = [];
+    let uploadedImages: { url: string; secure_url?: string }[] = [];
     let coverUrl: string | undefined;
 
-    const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-    const toDataUri = async (file: File): Promise<string> => {
-      if (!ALLOWED_MIME.includes(file.type)) {
-        throw new Error('نوع الملف غير مسموح. الأنواع المسموحة: JPG, PNG, WebP, GIF');
-      }
-      if (file.size > MAX_FILE_SIZE) {
-        throw new Error('حجم الملف يتجاوز الحد الأقصى (10MB)');
-      }
-      const bytes = await file.arrayBuffer();
-      if (!bytes || bytes.byteLength === 0) throw new Error('Empty file');
-      // Auto-compress to WebP (max 1600px) before storing
-      const { buffer, mime } = await compressToWebP(Buffer.from(bytes), file.type);
-      return `data:${mime};base64,${buffer.toString('base64')}`;
+    const toCompressedBuffer = async (file: File): Promise<{ buffer: Buffer; ext: string }> => {
+      const { buffer, ext } = await validateUploadedImage(file);
+      if (file.type === 'image/gif') return { buffer, ext };
+      const { buffer: out } = await compressToWebP(buffer, file.type);
+      // compressToWebP may pass the original through (small files, failures):
+      // keep the REAL extension so .webp is never written for PNG content.
+      if (out === buffer || out.equals(buffer)) return { buffer, ext };
+      return { buffer: out, ext: 'webp' };
     };
 
-    const toCompressedBuffer = async (file: File): Promise<Buffer> => {
-      const bytes = await file.arrayBuffer();
-      const { buffer } = await compressToWebP(Buffer.from(bytes), file.type);
-      return buffer;
+    // Cloudinary SDK treats a bare string as a LOCAL FILE PATH. Raw base64
+    // makes it fs.open('/9j/4AAQ…') → ENAMETOOLONG and the publish dies with
+    // a generic message. Every payload must be a data URI with the real mime.
+    // secure_url (https) is what we persist: the site is https-only.
+    const MIME_BY_EXT: Record<string, string> = {
+      jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+    };
+    const toDataUri = (buffer: Buffer, ext: string): string =>
+      `data:${MIME_BY_EXT[ext] || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+
+    const saveLocal = async (buffer: Buffer, ext: string): Promise<string> => {
+      const { writeFile, mkdir } = await import('fs/promises');
+      const pathMod = await import('path');
+      const safeExt = ['jpg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg';
+      const fileName = `car_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+      const uploadsDir = pathMod.join(process.cwd(), 'public', 'uploads');
+      await mkdir(uploadsDir, { recursive: true });
+      await writeFile(pathMod.join(uploadsDir, fileName), buffer);
+      return `/uploads/${fileName}`;
     };
 
     try {
       if (hasCloudinary) {
         if (uploadedFiles.length > 0) {
-          const buffers = await Promise.all(uploadedFiles.map(img => toCompressedBuffer(img)));
-          const base64s = buffers.map(buf => buf.toString('base64'));
-          uploadedImages = await uploadMultipleImages(base64s, 'jo-cars/cars');
+          const files = await Promise.all(uploadedFiles.map(img => toCompressedBuffer(img)));
+          const dataUris = files.map(f => toDataUri(f.buffer, f.ext));
+          uploadedImages = await uploadMultipleImages(dataUris, 'jo-cars/cars');
         }
         if (coverFile) {
-          const buffer = await toCompressedBuffer(coverFile);
-          const result = await uploadImage(buffer.toString('base64'), { folder: 'jo-cars/covers' });
+          const cover = await toCompressedBuffer(coverFile);
+          const result = await uploadImage(toDataUri(cover.buffer, cover.ext), { folder: 'jo-cars/covers' });
           coverUrl = result.secure_url;
         }
       } else {
-        for (const img of uploadedFiles) {
-          const dataUri = await toDataUri(img);
-          uploadedImages.push({ url: dataUri });
+        // No Cloudinary: store compressed files on local disk (never data-URI in DB).
+        if (uploadedFiles.length > 10) {
+          return errorResponse('الحد الأقصى 10 صور لكل إعلان', 400);
         }
-        if (coverFile) coverUrl = await toDataUri(coverFile);
+        for (const img of uploadedFiles) {
+          const f = await toCompressedBuffer(img);
+          uploadedImages.push({ url: await saveLocal(f.buffer, f.ext) });
+        }
+        if (coverFile) {
+          const f = await toCompressedBuffer(coverFile);
+          coverUrl = await saveLocal(f.buffer, f.ext);
+        }
       }
     } catch (uploadErr) {
-      console.error('Cloudinary upload failed, falling back to data URIs:', uploadErr);
-      try {
-        uploadedImages = [];
-        for (const img of uploadedFiles) {
-          const dataUri = await toDataUri(img);
-          uploadedImages.push({ url: dataUri });
-        }
-        if (coverFile) coverUrl = await toDataUri(coverFile);
-      } catch (fallbackErr) {
-        console.error('Image upload failed:', fallbackErr);
-        return errorResponse('فشل رفع الصور. تأكد من صيغة الصور (JPG/PNG/WebP) وحجمها (أقل من 10MB)', 400);
-      }
+      console.error('Image upload failed:', uploadErr);
+      const raw = uploadErr instanceof Error ? uploadErr.message : '';
+      // Arabic messages come from our own validators (real, user-actionable
+      // reasons). Anything else is storage/SDK internals — never show those.
+      const msg = /[\u0600-\u06FF]/.test(raw)
+        ? raw
+        : 'تعذّر رفع الصور على خادم التخزين — أعد المحاولة بعد قليل أو انشر الإعلان بدون صور.';
+      return errorResponse(msg, 400);
     }
 
     const slug = generateSlug(data.brandId as string, data.modelId as string, data.year as number, Date.now().toString());
@@ -301,6 +353,8 @@ export async function POST(request: NextRequest) {
     const car = await prisma.car.create({
       data: {
         ...validation.data,
+        // DB requires drivetrain; explicit UNKNOWN beats a false FWD.
+        drivetrain: (validation.data as any).drivetrain || 'UNKNOWN',
         conditionDetails: conditionDetailsStr,
         slug,
         refCode,
@@ -309,7 +363,9 @@ export async function POST(request: NextRequest) {
         coverImage: coverUrl || null,
         images: uploadedImages.length > 0 ? {
           create: uploadedImages.map((img, i) => ({
-            url: img.url,
+            // Cloudinary returns `url` as http:// — the site is https, so a
+            // plain http image is mixed content (blocked by modern browsers).
+            url: img.secure_url || img.url,
             isCover: i === 0,
             order: i,
           })),
@@ -319,6 +375,18 @@ export async function POST(request: NextRequest) {
         brand: true, model: true, city: true, images: true,
       },
     });
+
+    // Sentinel: listing-burst signal — more than 5 cars/hour is spam behavior.
+    prisma.car.count({
+      where: { userId: user.id, createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) } },
+    }).then((n) => {
+      if (n > 5) {
+        recordSignal({
+          userId: user.id, type: 'SPAM_LISTING',
+          detail: `${n} إعلانات خلال ساعة`,
+        }).catch(() => {});
+      }
+    }).catch(() => {});
 
     analyzeCarPrice({
       brand: car.brand?.nameAr || car.brand?.nameEn || '',
@@ -388,7 +456,7 @@ export async function POST(request: NextRequest) {
           }
           await notifyAdmins(
             'NEW_REPORT',
-            'بلاغ تلقائي من الإشراف الذكي 🤖',
+            'بلاغ تلقائي من الإشراف الذكي ',
             `إعلان ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}: ${verdict.issues.join('، ')}`,
             '/admin/reports',
           );
@@ -399,7 +467,12 @@ export async function POST(request: NextRequest) {
     return successResponse(car, 201);
   } catch (error) {
     console.error('Car create error:', error);
-    const msg = error instanceof Error ? error.message : 'فشل إضافة السيارة';
+    // Never leak raw internals (e.g. undici "Failed to parse body as
+    // FormData") — map known technical failures to actionable Arabic.
+    const raw = error instanceof Error ? error.message : '';
+    const msg = /formdata|multipart|body/i.test(raw)
+      ? 'تعذر استلام البيانات — قلل عدد الصور وحجمها وتأكد من الإنترنت ثم حاول مجدداً.'
+      : 'فشل إضافة السيارة';
     return errorResponse(msg, 500);
   }
 }

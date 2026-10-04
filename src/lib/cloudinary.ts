@@ -25,6 +25,11 @@ export async function uploadImage(
     publicId?: string;
   }
 ): Promise<UploadResult> {
+  // The SDK treats any bare string as a LOCAL FILE PATH (fs.open on it), so
+  // raw base64 blows up as ENAMETOOLONG. Reject clearly instead.
+  if (typeof file === 'string' && !/^(data:|https?:\/\/|file:)/i.test(file)) {
+    throw new Error('مصدر صورة غير صالح: base64 خام بدون data URI — حوّله إلى data:<mime>;base64,…');
+  }
   const uploadOptions = {
     folder: options?.folder || 'jo-cars',
     transformation: options?.transformation || [
