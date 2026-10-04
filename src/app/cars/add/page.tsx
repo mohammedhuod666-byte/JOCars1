@@ -16,6 +16,7 @@ import {
   Info, RefreshCw, Layers
 } from 'lucide-react';
 import { MapPicker } from '@/components/cars/MapPicker';
+import { compressImagesClient } from '@/lib/image-compress-client';
 import { AIPriceEstimator } from '@/components/cars/AIPriceEstimator';
 import toast from 'react-hot-toast';
 
@@ -27,6 +28,7 @@ type CarFormData = {
   brandId: string; modelId: string; year: number; trim: string;
   kilometers: number; fuelType: string; transmission: string; color: string;
   doors: number; engineCapacity: string; cylinders: string; drivetrain: string;
+  horsepower: string; acceleration: string; features: string[];
   condition: string; bodyType: string; lightingType: string; rimType: string;
   vin: string; description: string; price: number; cityId: string;
   locationLat: string; locationLng: string; phone: string; whatsapp: string;
@@ -45,8 +47,9 @@ type CarFormData = {
 
 const initialForm: CarFormData = {
   brandId: '', modelId: '', year: new Date().getFullYear(), trim: '',
-  kilometers: 0, fuelType: 'HYBRID', transmission: 'AUTOMATIC', color: 'أبيض',
-  doors: 4, engineCapacity: '2500', cylinders: '4', drivetrain: 'FWD',
+  kilometers: 0, fuelType: '', transmission: 'AUTOMATIC', color: 'أبيض',
+  doors: 4, engineCapacity: '', cylinders: '', drivetrain: '',
+  horsepower: '', acceleration: '', features: [],
   condition: 'EXCELLENT', bodyType: 'SEDAN', lightingType: 'LED', rimType: 'ALLOY',
   vin: '', description: '', price: 0, cityId: '',
   locationLat: '', locationLng: '', phone: '', whatsapp: '',
@@ -63,14 +66,14 @@ const initialForm: CarFormData = {
 };
 
 const CUSTOMS_OPTIONS = [
-  { value: 'DUTY_PAID', label: 'مجمركة بالكامل ✅' },
-  { value: 'FREE_ZONE', label: 'منطقة حرة (غير مجمركة) 🚗' },
-  { value: 'DISABLED_EXEMPTION', label: 'إعفاء ذوي الإحتياجات ♿' },
-  { value: 'TAXI_SPECIAL', label: 'تكسي / تطبيقي مميز 🚕' },
+  { value: 'DUTY_PAID', label: 'مجمركة بالكامل ' },
+  { value: 'FREE_ZONE', label: 'منطقة حرة (غير مجمركة) ' },
+  { value: 'DISABLED_EXEMPTION', label: 'إعفاء ذوي الإحتياجات ' },
+  { value: 'TAXI_SPECIAL', label: 'تكسي / تطبيقي مميز ' },
 ];
 
 const INSPECTION_OPTIONS = [
-  'فحص كامل 7 جيد ✨',
+  'فحص كامل 7 جيد',
   'فحص 4 جيد',
   '3 جيد وضربة شاسي أمامي',
   'قصعة دقة شاسي أمامي',
@@ -79,10 +82,70 @@ const INSPECTION_OPTIONS = [
 ];
 
 const TRADE_OPTIONS = [
-  { value: 'CASH_ONLY', label: 'للبيع كاش فقط 💵' },
-  { value: 'ALLOW_TRADE', label: 'قابل للبدل بسيارة أخرى 🔄' },
-  { value: 'INSTALLMENTS', label: 'إمكانية الأقساط بدفعة أولى 💳' },
+  { value: 'CASH_ONLY', label: 'للبيع كاش فقط ' },
+  { value: 'ALLOW_TRADE', label: 'قابل للبدل بسيارة أخرى ' },
+  { value: 'INSTALLMENTS', label: 'إمكانية الأقساط بدفعة أولى ' },
 ];
+
+import { CAR_FEATURES, CAR_FEATURES_AR } from '@/lib/car-features';
+
+/**
+ * Maps every server-validated field (carSchema in src/lib/validations.ts +
+ * the POST /api/cars guards) to its Arabic label and the wizard step that
+ * contains it, so a rejected publish can point at the exact field instead of
+ * a generic "verify the selected fields" toast.
+ */
+const FIELD_META: Record<string, { label: string; step: number }> = {
+  brandId: { label: 'الشركة المصنعة', step: 1 },
+  modelId: { label: 'الموديل', step: 1 },
+  year: { label: 'سنة الصنع', step: 1 },
+  kilometers: { label: 'عداد الكيلومترات (الممشى)', step: 1 },
+  fuelType: { label: 'نوع الوقود', step: 1 },
+  transmission: { label: 'ناقل الحركة (الجير)', step: 1 },
+  color: { label: 'لون السيارة', step: 1 },
+  doors: { label: 'عدد الأبواب', step: 1 },
+  engineCapacity: { label: 'سعة المحرك (CC)', step: 1 },
+  cylinders: { label: 'عدد السلندر', step: 1 },
+  horsepower: { label: 'القدرة بالحصان (HP)', step: 1 },
+  acceleration: { label: 'التسارع 0-100 (ثانية)', step: 1 },
+  drivetrain: { label: 'نوع الدفع', step: 1 },
+  condition: { label: 'حالة السيارة', step: 1 },
+  bodyType: { label: 'نوع الهيكل', step: 1 },
+  features: { label: 'المواصفات الإضافية', step: 1 },
+  vin: { label: 'رقم الهيكل (VIN)', step: 2 },
+  description: { label: 'وصف السيارة', step: 2 },
+  customsStatus: { label: 'حالة الجمرك', step: 2 },
+  videoUrl: { label: 'رابط الفيديو', step: 3 },
+  images: { label: 'صور السيارة', step: 3 },
+  price: { label: 'السعر المطلوب (د.أ)', step: 4 },
+  phone: { label: 'رقم الهاتف', step: 4 },
+  whatsapp: { label: 'رقم الواتساب', step: 4 },
+  cityId: { label: 'المحافظة', step: 4 },
+  locationLat: { label: 'الموقع على الخريطة', step: 4 },
+  locationLng: { label: 'الموقع على الخريطة', step: 4 },
+  ownerCount: { label: 'عدد المالكين', step: 4 },
+};
+
+const fieldLabel = (field: string) => FIELD_META[field]?.label || field || 'البيانات المُدخلة';
+const fieldStep = (field: string) => FIELD_META[field]?.step || 1;
+
+/** Inline error line(s) rendered directly under the offending control(s). */
+function FieldErrors({ fields, errors }: { fields: string[]; errors: Record<string, string> }) {
+  const shown = fields.filter(f => errors[f]);
+  if (!shown.length) return null;
+  return (
+    <>
+      {shown.map(f => (
+        <p key={f} id={`err-${f}`} role="alert" className="mt-1.5 flex items-start gap-1.5 text-[11px] font-bold text-rose-400">
+          <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
+          <span>
+            <span className="text-rose-300">{fieldLabel(f)}:</span> {errors[f]}
+          </span>
+        </p>
+      ))}
+    </>
+  );
+}
 
 export default function AddCarPage() {
   const router = useRouter();
@@ -150,10 +213,35 @@ export default function AddCarPage() {
 
   const updateForm = (field: keyof CarFormData, value: unknown) => {
     setForm(prev => ({ ...prev, [field]: value }));
+    // A field the user is fixing should stop showing a stale error.
+    setErrors(prev => (prev[field] ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== field)) : prev));
     if (field === 'vin') {
       setVinInfo(null);
       setVinHistory([]);
     }
+  };
+
+  /** Show a set of field errors, jump to the step containing the first one and
+   *  scroll it into view so "which field failed" is always answered on screen. */
+  const applyErrors = (errMap: Record<string, string>) => {
+    const entries = Object.entries(errMap).filter(([, m]) => !!m);
+    if (!entries.length) return;
+    const [firstField, firstMessage] = entries[0];
+    setErrors(errMap);
+    setStep(fieldStep(firstField));
+    const where = entries.length === 1
+      ? `${fieldLabel(firstField)}: ${firstMessage}`
+      : `${fieldLabel(firstField)}: ${firstMessage} (+${entries.length - 1} حقول أخرى مظللة بالأسفل)`;
+    toast.error(`يرجى التحقق من ${where}`, { duration: 7000, id: 'car-validation' });
+    // Wait for the step panel to render before scrolling to the inline error.
+    setTimeout(() => {
+      const el = document.getElementById(`err-${firstField}`);
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const focusable = el.parentElement?.querySelector<HTMLElement>('input, textarea, select');
+        focusable?.focus({ preventScroll: true });
+      }
+    }, 120);
   };
 
   const handleAiDescription = async () => {
@@ -175,7 +263,7 @@ export default function AddCarPage() {
       const data = await res.json();
       if (data.success && data.data) {
         updateForm('description', data.data.description);
-        toast.success('تم تحسين وتنسيق الوصف بالذكاء الاصطناعي ✨');
+        toast.success('تم تحسين وتنسيق الوصف بالذكاء الاصطناعي');
       }
     } catch {
       toast.error('تعذر تحسين الوصف');
@@ -186,13 +274,56 @@ export default function AddCarPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.brandId || !form.modelId || !form.year || !form.price || !form.phone || !form.cityId) {
-      toast.error('يرجى تعبئة كافة الحقول الأساسية (الشركة، الموديل، السنة، السعر، المحافظة، ورقم الهاتف)');
+    // Client-side pre-check mirrors carSchema so the user gets the exact field
+    // (label + step + inline message) instead of a generic toast.
+    const pre: Record<string, string> = {};
+    if (!form.brandId) pre.brandId = 'الشركة مطلوبة';
+    if (!form.modelId) pre.modelId = 'الموديل مطلوب';
+    if (!form.year || form.year < 1990 || form.year > 2030) pre.year = 'سنة الصنع يجب أن تكون بين 1990 و 2030';
+    if (!form.price || form.price <= 0) pre.price = 'السعر المطلوب مطلوب ويجب أن يكون أكبر من صفر';
+    if (!form.phone || !form.phone.trim()) pre.phone = 'رقم الهاتف مطلوب';
+    if (!form.cityId) pre.cityId = 'المحافظة مطلوبة';
+    if (!form.fuelType) pre.fuelType = 'يرجى اختيار نوع الوقود (بنزين / ديزل / هايبرد / كهرباء)';
+    if (!form.transmission) pre.transmission = 'يرجى اختيار ناقل الحركة';
+    if (!form.color || !form.color.trim()) pre.color = 'لون السيارة مطلوب';
+    const engCap = parseFloat(form.engineCapacity);
+    if (!form.engineCapacity || isNaN(engCap) || engCap < 500 || engCap > 10000) pre.engineCapacity = 'أدخل سعة المحرك بالـ CC (مثال 2000)';
+    if (!form.cylinders) pre.cylinders = 'يرجى اختيار عدد السلندر';
+    if (!form.drivetrain) pre.drivetrain = 'يرجى اختيار نوع الدفع (أمامي / خلفي / رباعي)';
+    const hpVal = parseInt(form.horsepower);
+    if (form.horsepower !== '' && (isNaN(hpVal) || hpVal < 50 || hpVal > 2000)) pre.horsepower = 'القدرة يجب أن تكون بين 50 و 2000 حصان';
+    const accVal = parseFloat(form.acceleration);
+    if (form.acceleration !== '' && (isNaN(accVal) || accVal < 2 || accVal > 30)) pre.acceleration = 'التسارع (0-100) يجب أن يكون بين 2 و 30 ثانية';
+    if (form.description.trim().length < 20) pre.description = 'الوصف يجب أن يكون 20 حرفاً على الأقل';
+    if (form.vin && form.vin.length !== 0 && form.vin.length !== 17) pre.vin = 'رقم الهيكل (VIN) يجب أن يكون 17 حرفاً، أو اتركه فارغاً';
+    if (form.videoUrl && !/^https?:\/\/\S+$/i.test(form.videoUrl)) pre.videoUrl = 'رابط الفيديو غير صحيح — يجب أن يبدأ بـ http:// أو https://';
+    if (Object.keys(pre).length) {
+      applyErrors(pre);
       return;
     }
-
+    // Total upload guard: Next.js truncates route-handler bodies at 10MB —
+    // anything bigger dies server-side as an unparseable form. Compress
+    // client-side first (WebP ≤1600px), then enforce the cap.
     setLoading(true);
     setErrors({});
+    let sendImages = images;
+    let sendCover = coverImage;
+    try {
+      const [imgs, cover] = await Promise.all([
+        compressImagesClient(images),
+        coverImage ? compressImagesClient([coverImage]) : null,
+      ]);
+      sendImages = imgs.files;
+      if (cover) sendCover = cover.files[0] || null;
+    } catch { /* compression best-effort; server validates anyway */ }
+    const totalBytes = [...sendImages, ...(sendCover ? [sendCover] : []), ...(videoFile ? [videoFile] : [])]
+      .reduce((n, f) => n + (f.size || 0), 0);
+    const totalMB = totalBytes / 1024 / 1024;
+    if (totalMB > 9) {
+      setLoading(false);
+      toast.error(`حجم الصور بعد الضغط كبير جداً (${totalMB.toFixed(1)}MB) — الحد 9MB. احذف بعض الصور ثم حاول مجدداً.`, { duration: 6000 });
+      return;
+    }
 
     try {
       const formData = new FormData();
@@ -202,20 +333,26 @@ export default function AddCarPage() {
       const customsLabel = CUSTOMS_OPTIONS.find(c => c.value === form.customsStatus)?.label || '';
       const tradeLabel = TRADE_OPTIONS.find(t => t.value === form.tradeOption)?.label || '';
 
-      const jordanianSpecsText = `\n\n📌 **مواصفات السوق الأردني والفحص:**\n- الجمرك: ${customsLabel}\n- تقرير الفحص: ${form.inspectionSummary}\n- خيارات البيع: ${tradeLabel}\n` +
-        (form.fuelType === 'ELECTRIC' || form.fuelType === 'HYBRID' ? `- صحة البطارية (SOH): ${form.batteryHealthSoh}%\n- مدى الشحنة: ${form.electricRangeKm} كم\n` : '');
+      const jordanianSpecsText = `\n\n **مواصفات السوق الأردني والفحص:**\n- الجمرك: ${customsLabel}\n- تقرير الفحص: ${form.inspectionSummary}\n- خيارات البيع: ${tradeLabel}\n` +
+        (form.fuelType === 'ELECTRIC' || form.fuelType === 'HYBRID' || form.fuelType === 'PLUGIN_HYBRID' ? `- صحة البطارية (SOH): ${form.batteryHealthSoh}%\n- مدى الشحنة: ${form.electricRangeKm} كم\n` : '');
 
       if (!enrichedDescription.includes('مواصفات السوق الأردني')) {
         enrichedDescription += jordanianSpecsText;
       }
 
       Object.entries({ ...form, description: enrichedDescription }).forEach(([key, value]) => {
+        if (key === 'features' || key === 'horsepower' || key === 'acceleration') return; // handled below
         if (value !== '' && value !== null) formData.append(key, String(value));
       });
+      formData.append('features', JSON.stringify(form.features));
+      const hp = parseInt(form.horsepower);
+      if (!isNaN(hp) && hp > 0) formData.append('horsepower', String(hp));
+      const acc = parseFloat(form.acceleration);
+      if (!isNaN(acc) && acc > 0) formData.append('acceleration', String(acc));
 
       if (conditionDetails.length > 0) formData.append('conditionDetails', JSON.stringify(conditionDetails));
-      images.forEach(img => formData.append('images', img));
-      if (coverImage) formData.append('coverImage', coverImage);
+      sendImages.forEach(img => formData.append('images', img));
+      if (sendCover) formData.append('coverImage', sendCover);
       if (videoFile) formData.append('video', videoFile);
 
       const res = await fetch('/api/cars', {
@@ -230,13 +367,18 @@ export default function AddCarPage() {
         toast.success('تمت إضافة السيارة بنجاح! الإعلان قيد التفعيل والمراجعة.');
         router.push(`/cars/${data.data.slug || data.data.id}`);
       } else {
-        const errMap: Record<string, string> = {};
-        if (data.details && Array.isArray(data.details)) {
-          data.details.forEach((d: { field: string; message: string }) => { errMap[d.field] = d.message; });
-          setErrors(errMap);
-          toast.error('يرجى التحقق من الحقول المحددة');
+        if (data.details && Array.isArray(data.details) && data.details.length) {
+          // 422 from carSchema: pin every rejected field (label + step + inline
+          // message) and jump to the first one instead of a generic toast.
+          const errMap: Record<string, string> = {};
+          data.details.forEach((d: { field: string; message: string }) => {
+            const key = (d.field || '').trim();
+            if (key && !errMap[key]) errMap[key] = d.message;
+          });
+          if (Object.keys(errMap).length) applyErrors(errMap);
+          else toast.error(data.error || 'يرجى التحقق من البيانات المدخلة');
         } else {
-          toast.error(data.error || 'فشل إضافة السيارة');
+          toast.error(data.error || 'فشل إضافة السيارة', { duration: 7000, id: 'car-publish' });
         }
       }
     } catch {
@@ -249,6 +391,9 @@ export default function AddCarPage() {
   const selectedBrand = brands.find(b => b.id === form.brandId);
   const selectedModel = models.find(m => m.id === form.modelId);
   const isEVOrHybrid = form.fuelType === 'ELECTRIC' || form.fuelType === 'HYBRID' || form.fuelType === 'PLUGIN_HYBRID';
+
+  const errorEntries = Object.entries(errors).filter(([, m]) => !!m);
+  const stepErrors = (n: number) => errorEntries.filter(([f]) => fieldStep(f) === n);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-24 py-8">
@@ -293,7 +438,7 @@ export default function AddCarPage() {
                     : step > s.num
                       ? 'bg-slate-900 border-slate-800 text-emerald-400'
                       : 'bg-slate-950/60 border-slate-900 text-slate-500'
-                }`}
+                } ${stepErrors(s.num).length ? 'ring-2 ring-rose-500/80 border-rose-500/60' : ''}`}
               >
                 <div className={`w-5 h-5 rounded-lg flex items-center justify-center text-[11px] font-mono ${
                   step === s.num ? 'bg-slate-950 text-emerald-400' : 'bg-slate-800 text-slate-400'
@@ -301,12 +446,51 @@ export default function AddCarPage() {
                   {s.num}
                 </div>
                 <span className="truncate">{s.title}</span>
+                {stepErrors(s.num).length > 0 && (
+                  <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center">
+                    {stepErrors(s.num).length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Validation summary — names the exact rejected fields (label + message + step)
+              and jumps to them; the inline messages appear under each control. */}
+          {errorEntries.length > 0 && (
+            <div className="p-4 md:p-5 rounded-3xl border border-rose-500/40 bg-rose-950/40 space-y-2.5" role="alert" aria-live="assertive">
+              <div className="flex items-center gap-2 text-rose-200 font-black text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>لم يُنشر الإعلان — عدّل الحقول التالية ({errorEntries.length})</span>
+              </div>
+              <ul className="space-y-1.5">
+                {errorEntries.map(([f, m]) => (
+                  <li key={f}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep(fieldStep(f));
+                        setTimeout(() => {
+                          const el = document.getElementById(`err-${f}`);
+                          if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        }, 80);
+                      }}
+                      className="w-full text-right flex items-start gap-2 text-xs font-bold text-rose-100 hover:text-white transition-colors group"
+                    >
+                      <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0 group-hover:bg-rose-300" />
+                      <span>
+                        <span className="text-rose-300">{fieldLabel(f)}</span>
+                        <span className="text-rose-200/90"> — {m}</span>
+                        <span className="text-rose-400/80"> (الخطوة {fieldStep(f)})</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           
           {/* STEP 1: Basic Info */}
           {step === 1 && (
@@ -332,6 +516,7 @@ export default function AddCarPage() {
                     <option value="">اختر الشركة</option>
                     {brands.map(b => <option key={b.id} value={b.id}>{b.nameAr}</option>)}
                   </select>
+                  <FieldErrors fields={['brandId']} errors={errors} />
                 </div>
 
                 {/* Model */}
@@ -346,6 +531,7 @@ export default function AddCarPage() {
                     <option value="">{form.brandId ? 'اختر الموديل' : 'اختر الشركة أولاً'}</option>
                     {models.map(m => <option key={m.id} value={m.id}>{m.nameAr}</option>)}
                   </select>
+                  <FieldErrors fields={['modelId']} errors={errors} />
                 </div>
 
                 {/* Year */}
@@ -357,6 +543,7 @@ export default function AddCarPage() {
                     onChange={e => updateForm('year', parseInt(e.target.value) || new Date().getFullYear())}
                     className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-bold"
                   />
+                  <FieldErrors fields={['year']} errors={errors} />
                 </div>
 
                 {/* Kilometers */}
@@ -369,6 +556,7 @@ export default function AddCarPage() {
                     placeholder="مثال: 85000"
                     className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-bold"
                   />
+                  <FieldErrors fields={['kilometers']} errors={errors} />
                 </div>
 
                 {/* Trim */}
@@ -393,6 +581,7 @@ export default function AddCarPage() {
                     placeholder="أبيض لؤلؤي، أسود ملكي..."
                     className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
                   />
+                  <FieldErrors fields={['color']} errors={errors} />
                 </div>
 
               </div>
@@ -402,11 +591,11 @@ export default function AddCarPage() {
                 <label className="block text-xs font-bold text-slate-300">نوع المحرك والوقود *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   {[
-                    { id: 'HYBRID', label: 'هايبرد 🔋' },
-                    { id: 'ELECTRIC', label: 'كهرباء كاملة ⚡' },
-                    { id: 'PETROL', label: 'بنزين ⛽' },
-                    { id: 'DIESEL', label: 'ديزل 🚜' },
-                    { id: 'PLUGIN_HYBRID', label: 'بلق-إن 🔌' },
+                    { id: 'HYBRID', label: 'هايبرد ' },
+                    { id: 'ELECTRIC', label: 'كهرباء كاملة ' },
+                    { id: 'PETROL', label: 'بنزين ' },
+                    { id: 'DIESEL', label: 'ديزل ' },
+                    { id: 'PLUGIN_HYBRID', label: 'بلق-إن ' },
                   ].map(f => (
                     <button
                       key={f.id}
@@ -422,6 +611,7 @@ export default function AddCarPage() {
                     </button>
                   ))}
                 </div>
+                <FieldErrors fields={['fuelType']} errors={errors} />
               </div>
 
               {/* Transmission Chips */}
@@ -429,8 +619,8 @@ export default function AddCarPage() {
                 <label className="block text-xs font-bold text-slate-300">ناقل الحركة (الجير) *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    { id: 'AUTOMATIC', label: 'أوتوماتيك ⚙️' },
-                    { id: 'MANUAL', label: 'عادي / يدوي 🕹️' },
+                    { id: 'AUTOMATIC', label: 'أوتوماتيك ' },
+                    { id: 'MANUAL', label: 'عادي / يدوي ' },
                     { id: 'CVT', label: 'CVT اقتصادي' },
                     { id: 'DCT', label: 'دبل كلتش DCT' },
                   ].map(t => (
@@ -447,6 +637,88 @@ export default function AddCarPage() {
                       {t.label}
                     </button>
                   ))}
+                </div>
+                <FieldErrors fields={['transmission']} errors={errors} />
+              </div>
+
+              {/* Engine & Drivetrain */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">المحرك والدفع *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number" min="500" max="10000" step="100"
+                    value={form.engineCapacity}
+                    onChange={e => updateForm('engineCapacity', e.target.value)}
+                    placeholder="سعة المحرك CC (مثال 2000)"
+                    className="w-full p-3 rounded-2xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                  />
+                  <select
+                    value={form.cylinders}
+                    onChange={e => updateForm('cylinders', e.target.value)}
+                    className="w-full p-3 rounded-2xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                  >
+                    <option value="">عدد السلندر *</option>
+                    {['2', '3', '4', '5', '6', '8', '10', '12'].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input
+                    type="number" min="50" max="2000"
+                    value={form.horsepower}
+                    onChange={e => updateForm('horsepower', e.target.value)}
+                    placeholder="القدرة (HP)"
+                    className="w-full p-3 rounded-2xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    type="number" min="2" max="30" step="0.1"
+                    value={form.acceleration}
+                    onChange={e => updateForm('acceleration', e.target.value)}
+                    placeholder="تسارع 0-100 (ثانية)"
+                    className="w-full p-3 rounded-2xl border border-slate-800 bg-slate-950 text-white text-xs outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <FieldErrors fields={['engineCapacity', 'cylinders', 'horsepower', 'acceleration']} errors={errors} />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'FWD', label: 'دفع أمامي FWD' },
+                    { id: 'RWD', label: 'دفع خلفي RWD' },
+                    { id: 'AWD', label: 'دفع رباعي AWD' },
+                    { id: 'FOUR_WD', label: '4x4' },
+                  ].map(d => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => updateForm('drivetrain', d.id)}
+                      className={`p-3 rounded-2xl border text-xs font-extrabold transition-all cursor-pointer ${
+                        form.drivetrain === d.id
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+                <FieldErrors fields={['drivetrain']} errors={errors} />
+              </div>
+
+              {/* Features checklist */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300">المواصفات والمزايا (اختياري — {form.features.length} محدد)</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto p-1">
+                  {CAR_FEATURES.map(f => {
+                    const on = form.features.includes(f);
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => updateForm('features', on ? form.features.filter(x => x !== f) : [...form.features, f])}
+                        className={`px-2 py-2 rounded-xl border text-[11px] font-bold transition-all text-right ${
+                          on ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        {on ? '✓ ' : ''}{CAR_FEATURES_AR[f]}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -571,7 +843,7 @@ export default function AddCarPage() {
                       }}
                       className="px-3 py-1 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 transition-colors"
                     >
-                      فك واستعلام الشاسي 🔍
+                      فك واستعلام الشاسي 
                     </button>
                   )}
                 </div>
@@ -583,6 +855,7 @@ export default function AddCarPage() {
                   placeholder="17 حرف/رقم رقم الشاسي..."
                   className="w-full h-11 px-4 rounded-xl border border-slate-800 bg-slate-900 text-white text-xs outline-none focus:border-emerald-500 font-mono tracking-widest uppercase"
                 />
+                <FieldErrors fields={['vin']} errors={errors} />
 
                 {vinInfo && (
                   <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-500/30 text-xs space-y-1 text-slate-300">
@@ -595,12 +868,12 @@ export default function AddCarPage() {
               {/* Vehicle Condition Features Checks */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                 {[
-                  { key: 'isNegotiable' as const, label: 'السعر قابل للتفاوض 💬' },
-                  { key: 'hasWarranty' as const, label: 'تحت الكفالة والضمان 🛡️' },
-                  { key: 'hasServiceHistory' as const, label: 'سجل صيانة بالوكالة 📖' },
-                  { key: 'isPaintOriginal' as const, label: 'دهان أصلي وكالة ✨' },
-                  { key: 'isDamaged' as const, label: 'مصدومة سابقاً ⚠️' },
-                  { key: 'isWholesale' as const, label: 'بيع جملة لتاجر 🏭' },
+                  { key: 'isNegotiable' as const, label: 'السعر قابل للتفاوض ' },
+                  { key: 'hasWarranty' as const, label: 'تحت الكفالة والضمان ' },
+                  { key: 'hasServiceHistory' as const, label: 'سجل صيانة بالوكالة ' },
+                  { key: 'isPaintOriginal' as const, label: 'دهان أصلي وكالة ' },
+                  { key: 'isDamaged' as const, label: 'مصدومة سابقاً ' },
+                  { key: 'isWholesale' as const, label: 'بيع جملة لتاجر ' },
                 ].map(({ key, label }) => (
                   <label key={key} className="flex items-center gap-2 p-3 rounded-2xl bg-slate-950 border border-slate-800 cursor-pointer">
                     <input
@@ -636,6 +909,7 @@ export default function AddCarPage() {
                   placeholder="اكتب شرحاً عن الإضافات، الترخيص، سبب البيع..."
                   className="w-full p-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 resize-none"
                 />
+                <FieldErrors fields={['description']} errors={errors} />
               </div>
 
               <div className="flex justify-between pt-4 border-t border-slate-800">
@@ -748,6 +1022,7 @@ export default function AddCarPage() {
                   className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
                   dir="ltr"
                 />
+                <FieldErrors fields={['videoUrl']} errors={errors} />
               </div>
 
               <div className="flex justify-between pt-4 border-t border-slate-800">
@@ -815,6 +1090,7 @@ export default function AddCarPage() {
                     placeholder="مثال: 14500"
                     className="w-full h-14 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-emerald-400 font-black text-2xl outline-none focus:border-emerald-500"
                   />
+                  <FieldErrors fields={['price']} errors={errors} />
                 </div>
 
                 <AIPriceEstimator
@@ -852,6 +1128,7 @@ export default function AddCarPage() {
                     className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
                     dir="ltr"
                   />
+                  <FieldErrors fields={['phone']} errors={errors} />
                 </div>
 
                 <div>
@@ -876,6 +1153,7 @@ export default function AddCarPage() {
                     <option value="">اختر المحافظة</option>
                     {cities.map(c => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
                   </select>
+                  <FieldErrors fields={['cityId']} errors={errors} />
                 </div>
               </div>
 
@@ -886,8 +1164,8 @@ export default function AddCarPage() {
                   lat={form.locationLat ? parseFloat(form.locationLat) : null}
                   lng={form.locationLng ? parseFloat(form.locationLng) : null}
                   onChange={(lat, lng) => {
-                    updateForm('locationLat', lat.toString());
-                    updateForm('locationLng', lng.toString());
+                    updateForm('locationLat', lat === null ? '' : lat.toString());
+                    updateForm('locationLng', lng === null ? '' : lng.toString());
                   }}
                 />
               </div>
@@ -904,11 +1182,11 @@ export default function AddCarPage() {
 
                 <button
                   type="submit"
-                  disabled={loading || !form.brandId || !form.modelId || !form.price || !form.phone || !form.cityId}
+                  disabled={loading}
                   className="px-10 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-base transition-all disabled:opacity-50 flex items-center gap-2 cursor-pointer shadow-xl shadow-emerald-500/20"
                 >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                  <span>نشر إعلان السيارة الآن 🚀</span>
+                  <span>نشر إعلان السيارة الآن </span>
                 </button>
               </div>
 

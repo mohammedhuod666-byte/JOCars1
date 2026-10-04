@@ -19,12 +19,12 @@ import Link from 'next/link';
 
 // Jordan Fast Reply Chips
 const QUICK_REPLIES = [
-  '💵 ما هو السعر النهائي من الآخر؟',
-  '📋 هل السيارة فحص كامل (7 جيد)؟',
-  '📍 أين موقع المعاينة والمعرض؟',
-  '🔁 هل تقبل البدل بسيارة أخرى؟',
-  '📸 هل يمكنك إرسال صور إضافية للداخلية والفرش؟',
-  '⚡ هل السعر شامل الجمارك والترخيص؟',
+  ' ما هو السعر النهائي من الآخر؟',
+  ' هل السيارة فحص كامل (7 جيد)؟',
+  ' أين موقع المعاينة والمعرض؟',
+  ' هل تقبل البدل بسيارة أخرى؟',
+  ' هل يمكنك إرسال صور إضافية للداخلية والفرش؟',
+  ' هل السعر شامل الجمارك والترخيص؟',
 ];
 
 const EMOJI_DATA: Record<string, string[]> = {
@@ -415,8 +415,8 @@ export default function MessagesContent() {
   const getLastMsgPreview = (msg?: Message | null) => {
     if (!msg) return 'اضغط لبدء المحادثة';
     const { imageUrl, text } = parseMessageContent(msg.content);
-    if (imageUrl && text) return `📷 ${text}`;
-    if (imageUrl) return '📷 صورة مرفقة';
+    if (imageUrl && text) return text;
+    if (imageUrl) return 'صورة مرفقة';
     return msg.content;
   };
 
@@ -440,7 +440,7 @@ export default function MessagesContent() {
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-gray-900 dark:text-white">المحادثات المباشرة</h2>
-                    <p className="text-[11px] text-gray-500">سوق Cars JO المعتمد 🇯🇴</p>
+                    <p className="text-[11px] text-gray-500">سوق Cars JO المعتمد </p>
                   </div>
                 </div>
                 {unreadTotal > 0 && (
@@ -492,7 +492,7 @@ export default function MessagesContent() {
                       : 'bg-gray-200/70 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700'
                   }`}
                 >
-                  السيارات 🚗
+                  السيارات 
                 </button>
               </div>
             </div>
@@ -557,7 +557,7 @@ export default function MessagesContent() {
                         {conv.car && (
                           <div className="mt-1.5 flex items-center gap-1">
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100/80 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold truncate max-w-[200px]">
-                              🚗 {conv.car.brand?.nameAr} {conv.car.model?.nameAr} ({conv.car.price.toLocaleString('ar-JO')} د.أ)
+                               {conv.car.brand?.nameAr} {conv.car.model?.nameAr} ({conv.car.price.toLocaleString('ar-JO')} د.أ)
                             </span>
                           </div>
                         )}
@@ -642,7 +642,7 @@ export default function MessagesContent() {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-14 h-12 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0 border border-emerald-500/30 shadow-sm">
                         <img
-                          src={activeConv.car.images?.[0]?.url || 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=300&q=80'}
+                          src={activeConv.car.images?.[0]?.url || '/images/placeholder-car.svg'}
                           alt=""
                           className="w-full h-full object-cover"
                         />
@@ -773,7 +773,7 @@ export default function MessagesContent() {
                   {typingUsers.size > 0 && otherParticipant(activeConv)?.id && typingUsers.has(otherParticipant(activeConv)!.id) && (
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center text-xs font-bold">
-                        💬
+                        
                       </div>
                       <div className="px-3 py-2 rounded-2xl bg-gray-200 dark:bg-gray-800 text-gray-500 text-xs flex items-center gap-1.5">
                         <span>يكتب الآن</span>
@@ -936,7 +936,7 @@ export default function MessagesContent() {
                   <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center mx-auto mb-4 shadow-xl shadow-emerald-500/20">
                     <MessageCircle className="w-10 h-10" />
                   </div>
-                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1">مركز الرسائل والمحادثات 🇯🇴</h3>
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white mb-1">مركز الرسائل والمحادثات </h3>
                   <p className="text-xs text-gray-500 leading-relaxed mb-4">
                     حدد أي محادثة من القائمة الجانبية لبدء التواصل المباشر مع البائع أو المشتري بالتفاوض على أسعار السيارات!
                   </p>

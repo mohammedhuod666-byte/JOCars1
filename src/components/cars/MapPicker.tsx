@@ -8,7 +8,7 @@ import type L from 'leaflet';
 interface MapPickerProps {
   lat: number | null;
   lng: number | null;
-  onChange: (lat: number, lng: number) => void;
+  onChange: (lat: number | null, lng: number | null) => void;
   className?: string;
 }
 
@@ -34,8 +34,16 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    // The dynamic import below is async: if the component unmounts (or
+    // StrictMode re-runs this effect) while it's pending, the cleanup above
+    // would find mapRef still null and do nothing — then the late init would
+    // create a second map on the same container ("Map container is already
+    // initialized") and leak it. Flag cancellation to close that window.
+    let cancelled = false;
+
     const initMap = async () => {
       const leaflet = await import('leaflet');
+      if (cancelled || !mapContainerRef.current) return;
 
       // Fix default marker icon paths for bundled builds
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,6 +97,13 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
         onChange(newLat, newLng);
       });
 
+      if (cancelled) {
+        // Unmounted while the import was pending but after the map was built.
+        map.remove();
+        markerRef.current = null;
+        return;
+      }
+
       mapRef.current = map;
       setMapReady(true);
     };
@@ -96,9 +111,11 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
     initMap();
 
     return () => {
+      cancelled = true;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
+        markerRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,7 +276,7 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
             type="button"
             onClick={() => {
               setSelectedPos(null);
-              onChange(0, 0);
+              onChange(null, null);
               if (markerRef.current && mapRef.current) {
                 mapRef.current.removeLayer(markerRef.current);
                 markerRef.current = null;

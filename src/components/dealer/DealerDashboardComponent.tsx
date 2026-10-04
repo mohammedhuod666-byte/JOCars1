@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+// Header/Footer removed: this component renders inside LayoutWrapper, which
+// already mounts both — the local copies produced a duplicated footer and a
+// second fixed header stacked on the first one (visible on mobile).
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Store, Car, DollarSign, Eye, Heart, Plus, MessageCircle, ShieldCheck, MapPin, Share2,
@@ -188,9 +189,9 @@ export function DealerDashboardComponent() {
         if (target === 'logo') { setLogoUrl(url); updateUser({ dealerLogo: url }); }
         if (target === 'cover') updateUser({ dealerBannerImage: url });
         showToast(
-          target === 'cover' ? 'تم تحديث غلاف المعرض! 🎨'
-          : target === 'avatar' ? 'تم تحديث صورتك الشخصية! 📸'
-          : 'تم تحديث شعار المعرض! 🏪'
+          target === 'cover' ? 'تم تحديث غلاف المعرض!'
+          : target === 'avatar' ? 'تم تحديث صورتك الشخصية!'
+          : 'تم تحديث شعار المعرض!'
         );
       } else {
         showToast('تم الرفع لكن فشل الحفظ');
@@ -226,7 +227,7 @@ export function DealerDashboardComponent() {
           phone: dealerPhone, dealerCommercialReg: commercialReg,
           dealerBannerImage: bannerUrl, dealerLogo: logoUrl, image: avatarUrl,
         });
-        showToast('تم حفظ بيانات المعرض بنجاح! ✨');
+        showToast('تم حفظ بيانات المعرض بنجاح!');
         setEditingProfile(false);
       } else {
         showToast('فشل حفظ البيانات');
@@ -268,7 +269,7 @@ export function DealerDashboardComponent() {
       const data = await res.json();
       if (data.success) {
         setStoryCaption(''); setStoryCarId('');
-        showToast('تم نشر الستوري لمدة 24 ساعة! 🎉');
+        showToast('تم نشر الستوري لمدة 24 ساعة!');
       } else showToast(data.error || 'فشل النشر');
     } catch {
       showToast('حدث خطأ أثناء النشر');
@@ -290,7 +291,7 @@ export function DealerDashboardComponent() {
         setVerifyStatus({ status: 'PENDING' });
         setShowVerifyForm(false);
         setVerifyNotes('');
-        showToast('تم إرسال طلب التوثيق للإدارة! ⏳');
+        showToast('تم إرسال طلب التوثيق للإدارة!');
       } else {
         showToast(data.error || 'فشل إرسال الطلب');
       }
@@ -318,7 +319,7 @@ export function DealerDashboardComponent() {
       if (data.success) {
         setCars(prev => prev.map(c => c.id === carId ? { ...c, price: newPrice } : c));
         setEditingPriceId(null);
-        showToast('تم تحديث السعر بنجاح! 💵');
+        showToast('تم تحديث السعر بنجاح!');
       } else {
         showToast('فشل تحديث السعر');
       }
@@ -351,7 +352,7 @@ export function DealerDashboardComponent() {
       if (data.success) {
         const nextStatus = toSold ? 'SOLD' : 'APPROVED';
         setCars(prev => prev.map(c => c.id === carId ? { ...c, status: nextStatus } : c));
-        showToast(toSold ? 'تم تمييز السيارة كمباعة! 🎉' : 'تمت إعادة السيارة للعرض!');
+        showToast(toSold ? 'تم تمييز السيارة كمباعة! ' : 'تمت إعادة السيارة للعرض!');
       } else {
         showToast(data.error || 'فشل تغيير الحالة');
       }
@@ -361,7 +362,7 @@ export function DealerDashboardComponent() {
   };
 
   const handleFeatureRequest = async (car: DealerCar) => {
-    if (!confirm(`طلب تمييز إعلان ${car.brand?.nameAr} ${car.model?.nameAr} ${car.year} ⭐؟\nستتم مراجعة طلبك من الإدارة وتفعيل التمييز بعد تأكيد الدفع.`)) return;
+    if (!confirm(`طلب تمييز إعلان ${car.brand?.nameAr} ${car.model?.nameAr} ${car.year} ؟\nستتم مراجعة طلبك من الإدارة وتفعيل التمييز بعد تأكيد الدفع.`)) return;
     try {
       const res = await fetch('/api/premium-requests', {
         method: 'POST',
@@ -369,7 +370,7 @@ export function DealerDashboardComponent() {
         body: JSON.stringify({ carId: car.id, type: 'FEATURE' }),
       });
       const data = await res.json();
-      if (data.success) showToast('تم إرسال طلب التمييز! ستتواصل معك الإدارة ⭐');
+      if (data.success) showToast('تم إرسال طلب التمييز! ستتواصل معك الإدارة');
       else showToast(data.error || 'فشل إرسال الطلب');
     } catch {
       showToast('حدث خطأ أثناء إرسال الطلب');
@@ -389,7 +390,7 @@ export function DealerDashboardComponent() {
       const data = await res.json();
       if (data.success) {
         setCars(prev => prev.map(c => c.id === car.id ? { ...c, inspectionCenter: center, inspectionDate: dateStr } as DealerCar : c));
-        showToast('تم حفظ بيانات الفحص — بانتظار اعتماد الإدارة للشارة ✅');
+        showToast('تم حفظ بيانات الفحص — بانتظار اعتماد الإدارة للشارة');
       } else {
         showToast(data.error || 'فشل الحفظ');
       }
@@ -401,7 +402,7 @@ export function DealerDashboardComponent() {
   const handleCopyStoreLink = async () => {    const url = `${window.location.origin}/profile/${user?.id}`;
     try {
       await navigator.clipboard.writeText(url);
-      showToast('تم نسخ رابط المعرض! 🔗');
+      showToast('تم نسخ رابط المعرض!');
     } catch {
       showToast(url);
     }
@@ -409,7 +410,7 @@ export function DealerDashboardComponent() {
 
   const handleShareWhatsApp = () => {
     const url = `${window.location.origin}/profile/${user?.id}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(`تفضلوا بزيارة معرض ${dealerName || ''} للسيارات 🚗\n${url}`)}`, '_blank');
+    window.open(`https://wa.me/?text=${encodeURIComponent(`تفضلوا بزيارة معرض ${dealerName || ''} للسيارات \n${url}`)}`, '_blank');
   };
 
   // ── CSV bulk import (up to 50 cars per file) ──────────────────────────
@@ -433,7 +434,7 @@ export function DealerDashboardComponent() {
       if (ch === '"') {
         if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
         else inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
+      } else if (ch ===',' && !inQuotes) {
         out.push(cur.trim()); cur = '';
       } else cur += ch;
     }
@@ -466,7 +467,7 @@ export function DealerDashboardComponent() {
       const data = await res.json();
       if (data.success) {
         const { created, failed, errors } = data.data;
-        showToast(`تم استيراد ${created} سيارة ✅${failed ? ` — فشل ${failed}` : ''}`);
+        showToast(`تم استيراد ${created} سيارة ${failed ? ` — فشل ${failed}` : ''}`);
         if (errors && errors.length > 0) {
           console.warn('Bulk import row errors:', errors);
         }
@@ -482,12 +483,8 @@ export function DealerDashboardComponent() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-between">
-        <Header />
-        <div className="flex-1 flex items-center justify-center py-20">
-          <div className="animate-spin w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full" />
-        </div>
-        <Footer />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-center items-center">
+        <div className="animate-spin w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -544,7 +541,6 @@ export function DealerDashboardComponent() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-between">
-      <Header />
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
 
         {/* Toast */}
@@ -593,7 +589,7 @@ export function DealerDashboardComponent() {
 
           <div className="p-6 relative">
             <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4 -mt-20 sm:-mt-24">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0">
                 {/* Avatar with upload */}
                 <div className="relative shrink-0">
                   <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-white dark:bg-gray-800 border-4 border-white dark:border-gray-800 shadow-2xl flex items-center justify-center text-3xl font-black text-emerald-600 dark:text-emerald-400 overflow-hidden">
@@ -612,11 +608,11 @@ export function DealerDashboardComponent() {
                     {uploading === 'avatar' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                   </button>
                 </div>
-                <div className="pt-14 sm:pt-16">
+                <div className="pt-14 sm:pt-16 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="text-2xl font-black text-gray-900 dark:text-white">{dealerName || 'معرض السيارات'}</h1>
+                    <h1 className="text-2xl font-black text-gray-900 dark:text-white break-words min-w-0">{dealerName || 'معرض السيارات'}</h1>
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> تاجر معتمد 🇯🇴
+                      <ShieldCheck className="w-3.5 h-3.5" /> تاجر معتمد 
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
@@ -636,7 +632,7 @@ export function DealerDashboardComponent() {
                   معاينة المعرض العام
                 </Link>
                 <Link href="/dealer/reports" className="btn btn-outline px-4 py-2.5 text-xs font-bold">
-                  تقرير الأداء 📄
+                  تقرير الأداء 
                 </Link>
               </div>
             </div>
@@ -659,7 +655,7 @@ export function DealerDashboardComponent() {
               </button>
               <button onClick={() => csvInputRef.current?.click()} disabled={csvUploading} className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-purple-700 transition-all" title="استيراد حتى 50 سيارة دفعة واحدة">
                 {csvUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-                {csvUploading ? 'جاري الاستيراد...' : 'استيراد CSV 📥'}
+                {csvUploading ? 'جاري الاستيراد...' : 'استيراد CSV'}
               </button>
               <input ref={csvInputRef} type="file" accept=".csv,text/csv" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleCsvFile(f); e.target.value = ''; }} />
@@ -671,13 +667,13 @@ export function DealerDashboardComponent() {
                 {verifyStatus?.status === 'PENDING' ? (
                   <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300 font-bold">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    طلب التوثيق قيد مراجعة الإدارة ⏳ — سيتم إشعارك عند الاعتماد
+                    طلب التوثيق قيد مراجعة الإدارة  — سيتم إشعارك عند الاعتماد
                   </div>
                 ) : (
                   <>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="text-sm">
-                        <p className="font-bold text-amber-700 dark:text-amber-300">حسابك غير موثّق — وثّق معرضك لزيادة ثقة المشترين ✅</p>
+                        <p className="font-bold text-amber-700 dark:text-amber-300">حسابك غير موثّق — وثّق معرضك لزيادة ثقة المشترين </p>
                         {verifyStatus?.status === 'REJECTED' && verifyStatus?.rejectReason && (
                           <p className="text-xs text-red-500 mt-1">سبب الرفض السابق: {verifyStatus.rejectReason}</p>
                         )}
@@ -709,7 +705,7 @@ export function DealerDashboardComponent() {
               </div>
             ) : (
               <div className="mt-3 flex items-center gap-2 text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                <ShieldCheck className="w-4 h-4" /> حساب موثّق من الإدارة ✅
+                <ShieldCheck className="w-4 h-4" /> حساب موثّق من الإدارة 
               </div>
             )}
 
@@ -800,7 +796,7 @@ export function DealerDashboardComponent() {
         {/* ── Story publisher ─────────────────────────────────────────── */}
         <div className="card p-5 mb-6 border-purple-200 dark:border-purple-500/20">
           <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-1">
-            📸 ستوري الوارد الجديد <span className="text-[10px] font-normal text-gray-400">(يظهر بالرئيسية 24 ساعة)</span>
+             ستوري الوارد الجديد <span className="text-[10px] font-normal text-gray-400">(يظهر بالرئيسية 24 ساعة)</span>
           </h2>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             <input value={storyCaption} onChange={(e) => setStoryCaption(e.target.value)} maxLength={300}
@@ -845,11 +841,11 @@ export function DealerDashboardComponent() {
               </h3>
               <div className="flex items-center gap-3">
                 <div className="w-24 h-20 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0">
-                  <img src={topCar.images[0]?.url || 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=600&q=80'} alt="" className="w-full h-full object-cover" />
+                  <img src={topCar.images[0]?.url || '/images/placeholder-car.svg'} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-gray-900 dark:text-white truncate">{topCar.brand?.nameAr} {topCar.model?.nameAr} {topCar.year}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">👁️ {topCar.views.toLocaleString('ar-JO')} مشاهدة • ❤️ {topCar.saves} حفظ • 💬 {topCar.inquiries} استفسار</p>
+                  <p className="text-xs text-gray-500 mt-0.5"> {topCar.views.toLocaleString('ar-JO')} مشاهدة •  {topCar.saves} حفظ •  {topCar.inquiries} استفسار</p>
                   <p className="font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{topCar.price.toLocaleString('ar-JO')} د.أ</p>
                 </div>
               </div>
@@ -863,7 +859,7 @@ export function DealerDashboardComponent() {
                   <div key={c.id}>
                     <div className="flex justify-between text-[11px] text-gray-500 mb-1">
                       <span className="truncate font-bold">{c.brand?.nameAr} {c.model?.nameAr} {c.year}</span>
-                      <span className="shrink-0 mr-2">{c.views.toLocaleString('ar-JO')} 👁️</span>
+                      <span className="shrink-0 mr-2">{c.views.toLocaleString('ar-JO')} </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${Math.max(4, Math.round(((c.views || 0) / maxViews) * 100))}%` }}
@@ -884,7 +880,7 @@ export function DealerDashboardComponent() {
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-purple-500" /> العملاء المحتملون
               </h2>
-              <p className="text-xs text-gray-500">أحدث المحادثات على إعلاناتك — رد بسرعة لتغلق البيع 🤝</p>
+              <p className="text-xs text-gray-500">أحدث المحادثات على إعلاناتك — رد بسرعة لتغلق البيع </p>
             </div>
             <Link href="/messages" className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 text-xs font-bold hover:bg-purple-100 transition-all">
               كل الرسائل
@@ -893,7 +889,7 @@ export function DealerDashboardComponent() {
           {leadsLoading ? (
             <div className="flex justify-center py-6"><Loader2 className="w-6 h-6 animate-spin text-purple-500" /></div>
           ) : leads.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">لا توجد محادثات بعد — شارك رابط معرضك لجذب المشترين 📣</p>
+            <p className="text-xs text-gray-400 text-center py-6">لا توجد محادثات بعد — شارك رابط معرضك لجذب المشترين </p>
           ) : (
             <div className="space-y-2.5">
               {leads.map((c: any) => {
@@ -912,7 +908,7 @@ export function DealerDashboardComponent() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 truncate">
-                        {c.car ? `🚗 ${c.car.brand?.nameAr || ''} ${c.car.model?.nameAr || ''} • ` : ''}
+                        {c.car ? ` ${c.car.brand?.nameAr || ''} ${c.car.model?.nameAr || ''} • ` : ''}
                         {c.lastMessage?.content?.slice(0, 60) || 'محادثة جديدة'}
                       </p>
                     </div>
@@ -980,7 +976,7 @@ export function DealerDashboardComponent() {
                 <div key={car.id} className="flex flex-col sm:flex-row items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200/80 dark:border-gray-800 hover:border-emerald-500/30 transition-all gap-4">
                   <div className="flex items-center gap-4 w-full sm:w-auto min-w-0">
                     <div className="w-20 h-16 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-800 shrink-0">
-                      <img src={car.images[0]?.url || 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=600&q=80'} alt="" className="w-full h-full object-cover" />
+                      <img src={car.images[0]?.url || '/images/placeholder-car.svg'} alt="" className="w-full h-full object-cover" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -988,17 +984,17 @@ export function DealerDashboardComponent() {
                           {car.brand?.nameAr} {car.model?.nameAr} {car.year}
                         </h3>
                         {car.status === 'SOLD' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">مباعة 🎉</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">مباعة </span>
                         )}
                         {car.featured && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400">مميزة ⭐</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400">مميزة </span>
                         )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-gray-500 mt-1 flex-wrap">
-                        <span>📍 {car.city?.nameAr || 'الأردن'}</span>
-                        <span>👁️ {car.views} مشاهدة</span>
-                        <span>❤️ {car.saves} حفظ</span>
-                        <span>💬 {car.inquiries} استفسار</span>
+                        <span> {car.city?.nameAr || 'الأردن'}</span>
+                        <span> {car.views} مشاهدة</span>
+                        <span> {car.saves} حفظ</span>
+                        <span> {car.inquiries} استفسار</span>
                       </div>
                       {editingPriceId === car.id ? (
                         <div className="flex items-center gap-2 mt-1.5">
@@ -1035,21 +1031,21 @@ export function DealerDashboardComponent() {
                     </button>
                                         <button
                       onClick={() => handleDeclareInspection(car)}
-                      title={(car as any).inspectionVerified ? `فحص معتمد ✅${(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}` : 'توثيق الفحص بمركز معتمد'}
+                      title={(car as any).inspectionVerified ? `فحص معتمد ${(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}` : 'توثيق الفحص بمركز معتمد'}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1 ${
                         (car as any).inspectionVerified
                           ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-200'
                           : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 border-blue-200 hover:bg-blue-100'
                       }`}
                     >
-                      <ShieldCheck className="w-3.5 h-3.5" /> {(car as any).inspectionVerified ? 'فحص معتمد ✅' : 'توثيق الفحص'}
+                      <ShieldCheck className="w-3.5 h-3.5" /> {(car as any).inspectionVerified ? 'فحص معتمد ' : 'توثيق الفحص'}
                     </button>
                     <button
                       onClick={() => handleFeatureRequest(car)}
                       title="طلب تمييز الإعلان"
                       className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 border-purple-200 hover:bg-purple-100"
                     >
-                      <Star className="w-3.5 h-3.5" /> تمييز ⭐
+                      <Star className="w-3.5 h-3.5" /> تمييز 
                     </button>
                     <Link
                       href={`/cars/${car.slug}`} className="p-2 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 transition-all" title="معاينة الإعلان">
@@ -1063,7 +1059,6 @@ export function DealerDashboardComponent() {
         </div>
 
       </main>
-      <Footer />
     </div>
   );
 }
