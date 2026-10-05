@@ -47,6 +47,12 @@ export const useAuth = create<AuthState>()(
       _refreshing: false,
       login: (user, token) => set({ user, token, isAuthenticated: true }),
       logout: () => {
+        // Best-effort server cookie clear (fire-and-forget): the HttpOnly
+        // cookie cannot be removed from JS, and a stale cookie would keep
+        // authenticating requests after logout — even as a previous identity.
+        try {
+          fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        } catch {}
         set({ user: null, token: null, isAuthenticated: false });
         try { localStorage.removeItem('jo-cars-auth'); } catch {}
       },

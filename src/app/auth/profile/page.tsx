@@ -157,7 +157,7 @@ export default function ProfilePage() {
                 {(user?.role === 'DEALER' || user?.role === 'TRADER' || user?.role === 'ADMIN' || user?.dealerName) && (
                   <Link href="/dealer/dashboard"
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 transition-all mt-2">
-                    <Store className="w-4 h-4" /> لوحة التاجر والإنتاجية 🏪
+                    <Store className="w-4 h-4" /> لوحة التاجر والإنتاجية 
                   </Link>
                 )}
                 <a href={`/profile/${user?.id}`} target="_blank"
@@ -261,7 +261,7 @@ export default function ProfilePage() {
                     إضافة سيارة
                   </Button>
                 </div>
-                <CarGrid cars={myCars} columns={2} emptyMessage="لم تقم بإضافة أي سيارات بعد" />
+                <CarGrid cars={myCars} columns={2} isOwnerView emptyMessage="لم تقم بإضافة أي سيارات بعد" />
               </motion.div>
             )}
           </div>

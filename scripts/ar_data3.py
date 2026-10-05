@@ -1307,7 +1307,7 @@ CONFIG_DETAILS = [
         "desc": "متغيرات البيئة",
         "details": [
             "DATABASE_URL: PostgreSQL (Neon Serverless)",
-            "JWT_SECRET: l1j1mke1i5lo4ldg6f3jg968l8rycwlo6arwwmqh",
+            "JWT_SECRET: [REDACTED - set via environment, never commit]",
             "NEXTAUTH_SECRET",
             "NVIDIA_API_KEY",
             "CLOUDINARY_URL",

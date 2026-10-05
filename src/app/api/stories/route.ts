@@ -47,6 +47,11 @@ export async function POST(request: NextRequest) {
     return errorResponse('الستوري متاح لحسابات التجار والمعارض فقط', 403);
   }
 
+  // Verification, not just role: self-registered dealers must be approved first.
+  if (user.role !== 'ADMIN' && !user.dealerVerified) {
+    return errorResponse('حسابك قيد المراجعة — الستوري متاح بعد توثيق حسابك من الإدارة', 403);
+  }
+
   const rateLimit = checkRateLimit(`story:${user.id}`, { windowMs: 60 * 60 * 1000, maxRequests: 20 });
   if (!rateLimit.allowed) return errorResponse('تجاوزت حد النشر — حاول لاحقاً', 429);
 

@@ -17,7 +17,7 @@ import { moderateListing } from '@/ai/moderate';
 import { compressToWebP } from '@/lib/image-compress';
 import { validateUploadedImage } from '@/lib/image-validate';
 import { SERVER_MAX_PUBLISH_BODY_BYTES } from '@/lib/upload-limits';
-import { verifyUploadRef } from '@/lib/upload-token';
+import { verifyUploadRef, isOurAssetUrl } from '@/lib/upload-token';
 import { recordSignal } from '@/lib/sentinel';
 
 export async function GET(request: NextRequest) {
@@ -279,8 +279,19 @@ export async function POST(request: NextRequest) {
     const realFile = (f: unknown): f is File =>
       !!f && typeof f !== 'string' && typeof (f as File).size === 'number' && (f as File).size > 0;
 
-    const uploadedFiles = formData.getAll('images') as File[];
-    const coverFile = formData.get('coverImage') as File | null;
+    // Gallery images are staged separately via /api/upload/stage and
+    // arrive as a JSON array of CDN URLs — no raw bytes in this body.
+    const readJsonArray = (val: unknown): string[] => {
+      if (typeof val !== 'string' || !val.trim()) return [];
+      try {
+        const parsed = JSON.parse(val);
+        return Array.isArray(parsed) ? parsed.filter((x: unknown) => typeof x === 'string' && x.startsWith('http')) : [];
+      } catch { return []; }
+    };
+    const imageUrls = readJsonArray(formData.get('imageUrls'));
+    // Gallery images staged separately arrive as CDN URLs via coverUrl;
+    // legacy inline files use coverFile + coverIndex.
+    const stagedCoverUrl = typeof formData.get('coverUrl') === 'string' ? formData.get('coverUrl') as string : null;
     // The wizard sends the cover as an INDEX into the gallery rather than a
     // second copy of the same bytes: duplicating it cost up to ~400KB of the
     // request body, which was enough to cross the platform ceiling on an
@@ -289,6 +300,8 @@ export async function POST(request: NextRequest) {
     const coverIndex = typeof coverIndexRaw === 'string' && /^\d+$/.test(coverIndexRaw)
       ? parseInt(coverIndexRaw, 10)
       : NaN;
+    const uploadedFiles = formData.getAll('images') as File[];
+    const coverFile = formData.get('coverImage') as File | null;
     // Official documents. Kept out of the `images` array on purpose: they must
     // never become CarImage rows (that would put them in the public gallery).
     const licenseDocFile = formData.get('licenseDoc') as File | null;
@@ -508,7 +521,17 @@ export async function POST(request: NextRequest) {
 
     try {
       if (hasCloudinary) {
-        if (uploadedFiles.length > 0) {
+        // Gallery images: staged separately as CDN URLs (the structural
+        // fix for "تعذر استلام البيانات"). Upload legacy inline files
+        // only as fallback for API callers that still send bytes.
+        if (imageUrls.length > 0) {
+          // Staged images arrive as verified HTTPS Cloudinary URLs.
+          // Re-validate each URL belongs to our account before trusting it.
+          for (const u of imageUrls) {
+            if (!isOurAssetUrl(u)) return errorResponse('رابط صورة غير صالح', 400);
+          }
+          uploadedImages = imageUrls.map((url) => ({ url, secure_url: url }));
+        } else if (uploadedFiles.length > 0) {
           const files = await Promise.all(uploadedFiles.map(img => toCompressedBuffer(img)));
           const dataUris = files.map(f => toDataUri(f.buffer, f.ext));
           uploadedImages = await uploadMultipleImages(dataUris, 'jo-cars/cars');
@@ -518,6 +541,8 @@ export async function POST(request: NextRequest) {
         // to the legacy cover file.
         if (!Number.isNaN(coverIndex) && uploadedImages[coverIndex]) {
           coverUrl = uploadedImages[coverIndex].secure_url || uploadedImages[coverIndex].url;
+        } else if (stagedCoverUrl) {
+          coverUrl = stagedCoverUrl;
         } else if (coverFile) {
           const cover = await toCompressedBuffer(coverFile);
           const result = await uploadImage(toDataUri(cover.buffer, cover.ext), { folder: 'jo-cars/covers' });

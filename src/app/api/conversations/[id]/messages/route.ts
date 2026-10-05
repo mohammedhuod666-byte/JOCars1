@@ -29,12 +29,23 @@ export async function GET(
       return errorResponse('غير مصرح لك بالوصول إلى هذه المحادثة', 403);
     }
 
+    const searchParams = request.nextUrl.searchParams;
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '200')));
+    const beforeRaw = searchParams.get('before');
+    const before = beforeRaw ? new Date(beforeRaw) : null;
+
     const messages = await prisma.message.findMany({
-      where: { conversationId: id },
+      where: {
+        conversationId: id,
+        ...(before && !isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}),
+      },
       include: {
         sender: { select: { id: true, name: true, image: true, role: true } },
       },
       orderBy: { createdAt: 'asc' },
+      // No cursor → latest N (negative take reads from the end, order preserved).
+      // With `before` cursor → oldest N before the cursor for "load older" paging.
+      take: before ? limit : -limit,
     });
 
     if (user.role !== 'ADMIN') {

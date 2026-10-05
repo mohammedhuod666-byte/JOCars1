@@ -28,27 +28,18 @@ export function Footer() {
   const { ref, isInView } = useInScrollView(0.05);
 
   return (
-    <footer ref={ref} className="relative bg-surface-950 text-surface-400 overflow-hidden">
-      {/* Top accent edge */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-surface-700 to-transparent" />
-
-      {/* Subtle background glow */}
-      <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-accent-600/[0.04] rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-1/3 right-1/4 w-[400px] h-[300px] bg-gold-100/[0.025] rounded-full blur-[100px] pointer-events-none" />
-
+    <footer ref={ref} className="relative bg-surface-950 text-surface-400 overflow-hidden border-t border-surface-800">
       <div className="container-custom py-16 sm:py-20 relative">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}
           <div className="lg:col-span-2" style={scrollStyle(isInView, { delay: 0.05 })}>
             <Link href="/" className="inline-flex items-center gap-3 group mb-6">
-              <div className="relative flex h-11 w-11 items-center justify-center rounded-lg bg-accent-600 shadow-primary transition-transform duration-300 group-hover:scale-105">
-                <span className="text-white font-bold text-lg">J</span>
-                <div className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-gold-100 shadow-gold" />
+              <div className="relative flex h-11 w-11 items-center justify-center rounded-lg bg-gold-100 transition-transform duration-300 group-hover:scale-105">
+                <span className="text-gold-900 font-black text-lg">J</span>
               </div>
               <div>
-                <span className="block text-xl font-bold text-surface-200 tracking-tight" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
-                  <span className="text-accent-400">JO</span>{' '}
-                  <span className="text-gold-100">Cars</span>
+                <span className="block text-xl font-black text-surface-100 tracking-tight" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+                  JO Cars<span className="text-gold-100">.</span>
                 </span>
                 <span className="block text-[10px] text-surface-500 tracking-wider">منصة السيارات الأردنية</span>
               </div>
@@ -103,7 +94,7 @@ export function Footer() {
             © {new Date().getFullYear()} JO Cars. جميع الحقوق محفوظة.
           </p>
           <p className="text-xs text-surface-600 inline-flex items-center gap-1.5">
-            صُنع بـ <span className="text-accent-500">❤</span> في الأردن <span className="text-base">🇯🇴</span>
+            صُنع بـ <span className="text-accent-500"></span> في الأردن <span className="text-base"></span>
           </p>
         </div>
       </div>

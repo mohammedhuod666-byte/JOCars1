@@ -1,1 +1,0 @@
-room_goto(rm_se_a_c_f)

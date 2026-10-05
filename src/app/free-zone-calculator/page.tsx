@@ -6,16 +6,16 @@ import { Footer } from '@/components/layout/Footer';
 import { Ship, Calculator, DollarSign, ArrowRightLeft, Sparkles, CheckCircle2, FileCheck, ShieldCheck, MapPin, Truck, AlertCircle, RefreshCw } from 'lucide-react';
 
 const TOP_10_IMPORT_COUNTRIES = [
-  { id: 'KOREA', name: 'كوريا الجنوبية 🇰🇷', freightUsd: 1600 },
-  { id: 'CHINA', name: 'الصين الشعبية 🇨🇳', freightUsd: 1400 },
-  { id: 'USA', name: 'الولايات المتحدة 🇺🇸', freightUsd: 2200 },
-  { id: 'UAE', name: 'الإمارات العربية 🇦🇪', freightUsd: 1100 },
-  { id: 'GERMANY', name: 'ألمانيا 🇩🇪', freightUsd: 1900 },
-  { id: 'JAPAN', name: 'اليابان 🇯🇵', freightUsd: 2100 },
-  { id: 'SAUDI', name: 'السعودية 🇸🇦', freightUsd: 600 }, // Land transport
-  { id: 'CANADA', name: 'كندا 🇨🇦', freightUsd: 2400 },
-  { id: 'UK', name: 'بريطانيا 🇬🇧', freightUsd: 1800 },
-  { id: 'ITALY', name: 'إيطاليا 🇮🇹', freightUsd: 1700 },
+  { id: 'KOREA', name: 'كوريا الجنوبية', freightUsd: 1600 },
+  { id: 'CHINA', name: 'الصين الشعبية', freightUsd: 1400 },
+  { id: 'USA', name: 'الولايات المتحدة', freightUsd: 2200 },
+  { id: 'UAE', name: 'الإمارات العربية', freightUsd: 1100 },
+  { id: 'GERMANY', name: 'ألمانيا', freightUsd: 1900 },
+  { id: 'JAPAN', name: 'اليابان', freightUsd: 2100 },
+  { id: 'SAUDI', name: 'السعودية', freightUsd: 600 }, // Land transport
+  { id: 'CANADA', name: 'كندا', freightUsd: 2400 },
+  { id: 'UK', name: 'بريطانيا', freightUsd: 1800 },
+  { id: 'ITALY', name: 'إيطاليا', freightUsd: 1700 },
 ];
 
 export default function FreeZoneCalculatorPage() {
@@ -50,7 +50,7 @@ export default function FreeZoneCalculatorPage() {
         <div className="card p-6 sm:p-8 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white mb-8 border border-blue-500/30 shadow-2xl relative overflow-hidden">
           <div className="relative z-10">
             <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold border border-blue-500/30 inline-flex items-center gap-1.5 mb-3">
-              <Ship className="w-4 h-4" /> الشحن والتخليص بالأردن 🇯🇴
+              <Ship className="w-4 h-4" /> الشحن والتخليص بالأردن 
             </span>
             <h1 className="text-2xl sm:text-4xl font-black mb-2">حاسبة الاستيراد والمنطقة الحرة الزرقاء 2026</h1>
             <p className="text-sm text-gray-300 max-w-2xl leading-relaxed">
@@ -92,9 +92,9 @@ export default function FreeZoneCalculatorPage() {
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 block">فئة وقود السيارة</label>
               <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => setFuelCategory('EV')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'EV' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>⚡ كهرباء (27%)</button>
-                <button onClick={() => setFuelCategory('HYBRID')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'HYBRID' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>🔋 هايبرد (39%)</button>
-                <button onClick={() => setFuelCategory('PETROL')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'PETROL' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>⛽ بنزين (51%)</button>
+                <button onClick={() => setFuelCategory('EV')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'EV' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> كهرباء (27%)</button>
+                <button onClick={() => setFuelCategory('HYBRID')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'HYBRID' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> هايبرد (39%)</button>
+                <button onClick={() => setFuelCategory('PETROL')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelCategory === 'PETROL' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> بنزين (51%)</button>
               </div>
             </div>
 

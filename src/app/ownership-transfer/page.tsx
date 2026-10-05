@@ -65,7 +65,7 @@ export default function OwnershipTransferPage() {
       <main className="container-custom max-w-5xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 inline-flex items-center gap-1.5 mb-3">
-            <FileCheck className="w-3.5 h-3.5" /> نقل الملكية 🔄
+            <FileCheck className="w-3.5 h-3.5" /> نقل الملكية 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">انقل ملكية سيارتك خطوة بخطوة</h1>
           <p className="text-sm text-slate-400">الدليل الكامل: الأوراق، الخطوات، تقدير الرسوم — مع إمكانية طلب مساعدة من فريقنا</p>
@@ -125,7 +125,7 @@ export default function OwnershipTransferPage() {
             <div className="rounded-3xl bg-slate-900 border border-slate-800 p-6">
               <h2 className="font-bold flex items-center gap-2 mb-2"><Send className="w-5 h-5 text-emerald-400" /> بدك مساعدة بالمعاملة؟</h2>
               {sent ? (
-                <p className="text-sm text-emerald-400 font-bold">وصل طلبك ✅ — سيتواصل معك فريقنا قريباً</p>
+                <p className="text-sm text-emerald-400 font-bold">وصل طلبك  — سيتواصل معك فريقنا قريباً</p>
               ) : (
                 <>
                   {!needHelp ? (

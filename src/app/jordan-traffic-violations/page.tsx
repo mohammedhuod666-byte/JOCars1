@@ -89,7 +89,7 @@ export default function JordanTrafficViolationsPage() {
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/10 via-transparent to-transparent opacity-50" />
           <div className="relative z-10">
             <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30 inline-flex items-center gap-1.5 mb-3">
-              <ShieldAlert className="w-4 h-4" /> قانون السير الأردني المعدل 2024-2026 🇯🇴
+              <ShieldAlert className="w-4 h-4" /> قانون السير الأردني المعدل 2024-2026 
             </span>
             <h1 className="text-2xl sm:text-4xl font-black mb-2">حاسبة ترخيص المركبات والمخالفات المرورية الواقعية</h1>
             <p className="text-sm text-gray-300 max-w-2xl leading-relaxed">
@@ -115,9 +115,9 @@ export default function JordanTrafficViolationsPage() {
             <div>
               <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5 block">نوع وقود المحرك</label>
               <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => setFuelType('EV')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'EV' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>⚡ كهرباء</button>
-                <button onClick={() => setFuelType('HYBRID')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'HYBRID' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>🔋 هايبرد</button>
-                <button onClick={() => setFuelType('PETROL')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'PETROL' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}>⛽ بنزين/ديزل</button>
+                <button onClick={() => setFuelType('EV')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'EV' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> كهرباء</button>
+                <button onClick={() => setFuelType('HYBRID')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'HYBRID' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> هايبرد</button>
+                <button onClick={() => setFuelType('PETROL')} className={`py-2 rounded-xl text-xs font-bold border transition-all ${fuelType === 'PETROL' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'}`}> بنزين/ديزل</button>
               </div>
             </div>
 

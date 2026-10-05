@@ -51,19 +51,21 @@ export interface SimilarCar {
 
 export interface PriceAnalysis {
   valuation: {
-    fairPrice: number;
+    // Phase-1 FMV gate: null whenever the engine produced no FMV
+    // (valuationMode !== 'FMV'). Never falls back to the asking price.
+    fairPrice: number | null;
     minPrice: number;
     maxPrice: number;
     confidence: number;
     sources: string[];
   };
   assessment: {
-    position: 'below' | 'within' | 'above';
+    position: 'below' | 'within' | 'above' | 'unknown';
     label: string;
     color: string;
     icon: string;
-    diffPercent: number;
-    diffAmount: number;
+    diffPercent: number | null;
+    diffAmount: number | null;
     explanation: string;
   };
   factors: PriceFactor[];
@@ -95,24 +97,37 @@ export async function analyzeCarPrice(car: CarData): Promise<PriceAnalysis> {
     useAiSynthesis: true,
   });
 
-  const fmv = report.fairMarketValue || car.price || 0;
-  const minPrice = report.range.low || Math.round(fmv * 0.9);
-  const maxPrice = report.range.high || Math.round(fmv * 1.1);
+  // Phase-1 FMV gate: the ONLY admissible FMV is the contract's fairMarketValue,
+  // which is null for every non-FMV mode. The asking price must never stand in
+  // for a missing fair price.
+  const fmv = report.fairMarketValue ?? null;
+  const minPrice = report.range.low ?? (fmv !== null ? Math.round(fmv * 0.9) : 0);
+  const maxPrice = report.range.high ?? (fmv !== null ? Math.round(fmv * 1.1) : 0);
 
-  const pos = report.pricePosition.classification === 'BELOW_MARKET'
+  const classification = report.pricePosition.classification;
+  const pos = fmv === null || classification === 'UNKNOWN'
+    ? 'unknown'
+    : classification === 'BELOW_MARKET'
     ? 'below'
-    : report.pricePosition.classification === 'ABOVE_MARKET'
+    : classification === 'ABOVE_MARKET'
     ? 'above'
     : 'within';
 
+  // 'unknown' position with a NON-null fmv means: FMV exists but there is no
+  // asking price to compare against — never claim "لا تتوفر قيمة سوقية عادلة".
   const label = pos === 'below'
     ? 'سعر مناسب جداً (أقل من السوق)'
     : pos === 'above'
     ? 'سعر مرتفع عن متوسط السوق'
-    : 'سعر عادل ومطابق للسوق';
+    : pos === 'within'
+    ? 'سعر عادل ومطابق للسوق'
+    : fmv !== null
+    ? 'قيمة سوقية عادلة متوفرة (لا يوجد سعر معروض للمقارنة)'
+    : 'لا تتوفر قيمة سوقية عادلة للمقارنة (أدلة داعمة فقط)';
 
-  const color = pos === 'below' ? 'green' : pos === 'above' ? 'red' : 'emerald';
-  const icon = pos === 'below' ? 'TrendingDown' : pos === 'above' ? 'TrendingUp' : 'CheckCircle';
+  const color = pos === 'below' ? 'green' : pos === 'above' ? 'red' : pos === 'unknown' ? 'gray' : 'emerald';
+  const icon = pos === 'unknown' ? (fmv !== null ? 'Info' : 'AlertTriangle')
+    : pos === 'below' ? 'TrendingDown' : pos === 'above' ? 'TrendingUp' : 'CheckCircle';
 
   const comps: SimilarCar[] = report.comparablesUsed.map((c) => ({
     id: c.id || c.sourceUrl || '',
@@ -140,8 +155,9 @@ export async function analyzeCarPrice(car: CarData): Promise<PriceAnalysis> {
       label,
       color,
       icon,
-      diffPercent: report.pricePosition.differencePercent || 0,
-      diffAmount: report.pricePosition.differenceAmount || 0,
+      // Phase-1: differences are only reported against a real FMV.
+      diffPercent: fmv !== null ? (report.pricePosition.differencePercent ?? null) : null,
+      diffAmount: fmv !== null ? (report.pricePosition.differenceAmount ?? null) : null,
       explanation: report.reasoning.join(' '),
     },
     factors: report.adjustments.map((a) => ({

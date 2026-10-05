@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api';
+import { isCronAuthorized } from '@/lib/cron-auth';
 import { runBackup } from '@/lib/backup';
+import { notifyAdmins } from '@/lib/admin-notify';
 
 /**
  * Scheduled backup trigger — called by server.js every 5 hours.
@@ -8,14 +10,11 @@ import { runBackup } from '@/lib/backup';
  * matching secret are rejected).
  */
 export async function POST(request: NextRequest) {
-  const configured = process.env.BACKUP_CRON_SECRET;
-  if (!configured) {
+  if (!process.env.BACKUP_CRON_SECRET) {
     return errorResponse('الجدولة غير مفعّلة: حدّد BACKUP_CRON_SECRET في البيئة', 503);
   }
 
-  const headerSecret = request.headers.get('x-cron-secret') || '';
-  const querySecret = new URL(request.url).searchParams.get('secret') || '';
-  if (headerSecret !== configured && querySecret !== configured) {
+  if (!isCronAuthorized(request)) {
     return errorResponse('غير مصرح', 403);
   }
 
@@ -23,6 +22,8 @@ export async function POST(request: NextRequest) {
     const summary = await runBackup({ type: 'AUTO' });
     return successResponse(summary);
   } catch (error) {
+    // Alert admins inside the app — silent backup failures are how data loss happens.
+    await notifyAdmins('BACKUP_FAILED', 'فشل النسخ الاحتياطي', 'فشل النسخ الاحتياطي المجدول — تحقق من السجلات فورًا', '/admin').catch(() => {});
     return errorResponse('فشل النسخ المجدول', 500);
   }
 }

@@ -15,7 +15,7 @@ interface IndexData {
 }
 
 const FUEL_AR: Record<string, string> = {
-  PETROL: 'بنزين ⛽', DIESEL: 'ديزل 🛢️', HYBRID: 'هايبرد 🔋', ELECTRIC: 'كهرباء ⚡', PLUGIN_HYBRID: 'بلج-إن 🔌',
+  PETROL: 'بنزين', DIESEL: 'ديزل', HYBRID: 'هايبرد', ELECTRIC: 'كهرباء', PLUGIN_HYBRID: 'بلج-إن',
 };
 
 export default function MarketIndexPage() {
@@ -39,7 +39,7 @@ export default function MarketIndexPage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 inline-flex items-center gap-1.5 mb-3">
-            <TrendingUp className="w-3.5 h-3.5" /> مؤشر السوق الأردني 📊
+            <TrendingUp className="w-3.5 h-3.5" /> مؤشر السوق الأردني 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">وين رايحة أسعار السيارات؟</h1>
           <p className="text-sm text-slate-400">متوسطات حقيقية من إعلانات الموقع ({data?.totalListings.toLocaleString('ar-JO') || '—'} إعلان) + توقعات الذكاء الاصطناعي</p>
@@ -115,7 +115,7 @@ export default function MarketIndexPage() {
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-4">اضغط أي ماركة أو وقود لتصفح إعلاناته مباشرة 🚗</p>
+                <p className="text-[11px] text-slate-500 mt-4">اضغط أي ماركة أو وقود لتصفح إعلاناته مباشرة </p>
               </div>
             </div>
           </div>

@@ -17,7 +17,7 @@ export default function CarError({
 }) {
   return (
     <div className="max-w-md mx-auto mt-16 mb-24 p-6 text-center">
-      <div className="text-6xl mb-4">🚗</div>
+      <div className="flex justify-center mb-4"><CarIcon className="w-16 h-16 text-gray-300 dark:text-gray-600" /></div>
       <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
         حدث خطأ في تحميل السيارة
       </h2>

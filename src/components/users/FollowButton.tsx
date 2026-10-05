@@ -36,7 +36,7 @@ export function FollowButton({ userId, initialFollowing, onChange, compact }: Pr
       if (d.success) {
         setFollowing(d.data.following);
         onChange?.(d.data);
-        toast.success(d.data.following ? 'تمت المتابعة! 🤝' : 'تم إلغاء المتابعة');
+        toast.success(d.data.following ? 'تمت المتابعة! ' : 'تم إلغاء المتابعة');
       } else {
         toast.error(d.error || 'فشل تحديث المتابعة');
       }
@@ -51,7 +51,7 @@ export function FollowButton({ userId, initialFollowing, onChange, compact }: Pr
       <button onClick={toggle} disabled={loading}
         className={`flex items-center gap-2 rounded-xl text-sm font-medium transition-colors bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 ${compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2'}`}>
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4 text-emerald-500" />}
-        {compact ? 'أتابعه ✓' : 'تمت المتابعة ✓'}
+        {compact ? 'أتابعه ' : 'تمت المتابعة'}
       </button>
     );
   }

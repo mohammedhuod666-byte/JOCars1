@@ -6,7 +6,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Wallet, Fuel, ShieldCheck, Wrench, TrendingDown, Info } from 'lucide-react';
 
 const FUEL_LABELS: Record<string, string> = {
-  PETROL: 'بنزين ⛽', DIESEL: 'ديزل 🛢️', HYBRID: 'هايبرد 🔋', ELECTRIC: 'كهرباء ⚡',
+  PETROL: 'بنزين', DIESEL: 'ديزل', HYBRID: 'هايبرد', ELECTRIC: 'كهرباء',
 };
 
 export default function OwnershipCostPage() {
@@ -71,7 +71,7 @@ export default function OwnershipCostPage() {
       <main className="container-custom max-w-5xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1.5 mb-3">
-            <Wallet className="w-3.5 h-3.5" /> حاسبة التكلفة الكاملة 💰
+            <Wallet className="w-3.5 h-3.5" /> حاسبة التكلفة الكاملة 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">كم ستكلفك السيارة فعلاً؟</h1>
           <p className="text-sm text-slate-400">السعر المعلن ليس كل شيء — احسب الوقود والترخيص والتأمين والصيانة ونقص القيمة قبل الشراء</p>

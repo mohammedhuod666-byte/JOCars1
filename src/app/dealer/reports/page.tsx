@@ -58,7 +58,7 @@ export default function DealerReportsPage() {
               <FileText className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 dark:text-white">تقرير أداء المعرض 📄</h1>
+              <h1 className="text-2xl font-black text-gray-900 dark:text-white">تقرير أداء المعرض </h1>
               <p className="text-xs text-gray-500">{user?.dealerName || user?.name} • بتاريخ {today}</p>
             </div>
           </div>
@@ -96,9 +96,9 @@ export default function DealerReportsPage() {
                       <th className="text-right p-3 font-medium text-gray-500">السيارة</th>
                       <th className="text-right p-3 font-medium text-gray-500">السعر</th>
                       <th className="text-right p-3 font-medium text-gray-500">الحالة</th>
-                      <th className="text-right p-3 font-medium text-gray-500">👁️</th>
-                      <th className="text-right p-3 font-medium text-gray-500">❤️</th>
-                      <th className="text-right p-3 font-medium text-gray-500">💬</th>
+                      <th className="text-right p-3 font-medium text-gray-500">مشاهدات</th>
+                      <th className="text-right p-3 font-medium text-gray-500">حفظ</th>
+                      <th className="text-right p-3 font-medium text-gray-500">استفسارات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -106,7 +106,7 @@ export default function DealerReportsPage() {
                       <tr key={c.id}>
                         <td className="p-3 font-bold">{c.brand?.nameAr} {c.model?.nameAr} {c.year}</td>
                         <td className="p-3">{c.price.toLocaleString('ar-JO')} د.أ</td>
-                        <td className="p-3">{c.status === 'SOLD' ? 'مباعة 🎉' : c.status === 'APPROVED' ? 'نشطة' : c.status}</td>
+                        <td className="p-3">{c.status === 'SOLD' ? 'مباعة' : c.status === 'APPROVED' ? 'نشطة' : c.status}</td>
                         <td className="p-3">{c.views}</td>
                         <td className="p-3">{c.saves}</td>
                         <td className="p-3">{c.inquiries}</td>

@@ -50,7 +50,10 @@ export function slugify(text: string): string {
 }
 
 export function generateSlug(brand: string, model: string, year: number, id: string): string {
-  return `${slugify(brand)}-${slugify(model)}-${year}-${id.slice(0, 8)}`;
+  // Random suffix: timestamp alone collides when two identical cars are
+  // posted within the same second (unique constraint 500).
+  const rand = Math.random().toString(36).slice(2, 7);
+  return `${slugify(brand)}-${slugify(model)}-${year}-${id.slice(-6)}${rand}`;
 }
 
 export function truncate(text: string, length: number = 100): string {
@@ -129,7 +132,7 @@ export function getDrivetrainLabel(type: string): string {
     AWD: 'دفع كلي',
     FOUR_WD: 'دفع رباعي',
   };
-  return labels[type] || type;
+  return labels[type] || 'غير محدد';
 }
 
 export function getConditionLabel(condition: string): string {

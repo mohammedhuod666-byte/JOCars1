@@ -46,21 +46,21 @@ interface Workshop {
 }
 
 const SORT_OPTIONS = [
-  { value: 'rating', label: 'الأعلى تقييماً ⭐' },
-  { value: 'reviews', label: 'الأكثر تقييمات 💬' },
+  { value: 'rating', label: 'الأعلى تقييماً ' },
+  { value: 'reviews', label: 'الأكثر تقييمات ' },
   { value: 'newest', label: 'الأحدث 🆕' },
-  { value: 'views', label: 'الأكثر مشاهدة 🔥' },
+  { value: 'views', label: 'الأكثر مشاهدة ' },
 ];
 
 const CATEGORY_CHIPS = [
-  { id: '', label: 'الكل', icon: '🏪' },
-  { id: 'هايبرد', label: 'صيانة هايبرد وكهرباء', icon: '⚡' },
-  { id: 'فحص كمبيوتر', label: 'فحص كمبيوتر وكهرباء', icon: '🛠️' },
-  { id: 'ميكانيك', label: 'ميكانيك عام', icon: '🔧' },
-  { id: 'برمجة', label: 'برمجة عقول ومفاتيح', icon: '💻' },
-  { id: 'تغيير زيت', label: 'سرفيس وزيوت', icon: '🛢️' },
-  { id: 'خدمات متنقلة', label: 'صيانة متنقلة', icon: '🚚' },
-  { id: 'سحب سيارات', label: 'ونش وسحب 24/7', icon: '🚨' },
+  { id: '', label: 'الكل', icon: '' },
+  { id: 'هايبرد', label: 'صيانة هايبرد وكهرباء', icon: '' },
+  { id: 'فحص كمبيوتر', label: 'فحص كمبيوتر وكهرباء', icon: '' },
+  { id: 'ميكانيك', label: 'ميكانيك عام', icon: '' },
+  { id: 'برمجة', label: 'برمجة عقول ومفاتيح', icon: '' },
+  { id: 'تغيير زيت', label: 'سرفيس وزيوت', icon: '' },
+  { id: 'خدمات متنقلة', label: 'صيانة متنقلة', icon: '' },
+  { id: 'سحب سيارات', label: 'ونش وسحب 24/7', icon: '' },
 ];
 
 const PROVINCE_OPTIONS = [
@@ -220,7 +220,7 @@ export default function WorkshopsPage() {
               onClick={() => { setHasTowingOnly(true); setPage(1); }}
               className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0 transition-colors"
             >
-              عرض الورش ذات خدمة الونش والطوارئ 🚨
+              عرض الورش ذات خدمة الونش والطوارئ 
             </button>
           </div>
         </div>
@@ -241,7 +241,6 @@ export default function WorkshopsPage() {
                     : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
                 }`}
               >
-                <span>{chip.icon}</span>
                 <span>{chip.label}</span>
               </button>
             );
@@ -439,7 +438,7 @@ export default function WorkshopsPage() {
                     )}
                     {ws.hasTowingService && (
                       <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-600/90 text-white flex items-center gap-1">
-                        🚨 ونش 24/7
+                         ونش 24/7
                       </span>
                     )}
                   </div>
@@ -447,7 +446,7 @@ export default function WorkshopsPage() {
                   {/* Discount Offer Badge */}
                   {ws.discountOffer && (
                     <div className="absolute bottom-3 right-3 left-3 bg-emerald-500/90 backdrop-blur-md text-slate-950 text-xs font-bold px-3 py-1.5 rounded-xl truncate">
-                      🏷️ {ws.discountOffer}
+                       {ws.discountOffer}
                     </div>
                   )}
                 </div>
@@ -488,7 +487,7 @@ export default function WorkshopsPage() {
 
                       {ws.hasWarranty && (
                         <span className="text-amber-400 text-[11px] font-semibold flex items-center gap-1">
-                          🛡️ كفالة {ws.warrantyPeriod || ''}
+                           كفالة {ws.warrantyPeriod || ''}
                         </span>
                       )}
                     </div>
@@ -669,7 +668,7 @@ export default function WorkshopsPage() {
                     <span className="text-sm font-bold text-amber-400">دينار أردني (د.أ)</span>
                   </div>
                   <p className="text-slate-400 text-xs leading-relaxed pt-1">
-                    💡 {ESTIMATOR_SERVICES[estSelected].note}
+                     {ESTIMATOR_SERVICES[estSelected].note}
                   </p>
                 </div>
               </div>
@@ -678,13 +677,13 @@ export default function WorkshopsPage() {
                 <button
                   onClick={() => {
                     const label = ESTIMATOR_SERVICES[estSelected].label;
-                    setFilterService(label.split(' ')[0]);
+                    setFilterService(label.split('')[0]);
                     setShowCostEstimator(false);
                     setPage(1);
                   }}
                   className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-colors"
                 >
-                  ابحث عن ورش تقدم هذه الخدمة 🔍
+                  ابحث عن ورش تقدم هذه الخدمة 
                 </button>
               </div>
             </motion.div>

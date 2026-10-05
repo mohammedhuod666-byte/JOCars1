@@ -2,102 +2,96 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Car, Wrench, Cpu, MessageCircle, Calculator, ShieldCheck, ArrowLeft, ChevronLeft, PhoneCall, Clapperboard, TrendingUp, Wallet, Factory } from 'lucide-react';
+import { Car, Wrench, Cpu, MessageCircle, Clapperboard, TrendingUp, Wallet, Factory, ArrowLeft } from 'lucide-react';
 
 export function ServicesGrid() {
   const services = [
     {
       title: 'سوق الحراج والإعلانات',
       desc: 'بيع واشترِ سيارات هايبرد، كهرباء وبنزين بجميع المواصفات والجمرك في الأردن.',
-      icon: <Car className="w-7 h-7 text-emerald-400" />,
+      icon: <Car className="w-6 h-6 text-gold-100" />,
       link: '/cars',
       btnText: 'تصفح السيارات',
-      color: 'from-emerald-500/10 to-teal-500/10 border-emerald-500/20',
       badge: 'أكثر من 50,000 زائر',
     },
     {
       title: 'دليل الورش ومراكز الصيانة',
       desc: 'احجز موعد صيانة فوري لدى أفضل ورش الهايبرد، فحص الكمبيوتر، والميكانيك في الأردن.',
-      icon: <Wrench className="w-7 h-7 text-teal-400" />,
+      icon: <Wrench className="w-6 h-6 text-gold-100" />,
       link: '/workshops',
       btnText: 'استكشف الورش',
-      color: 'from-teal-500/10 to-cyan-500/10 border-teal-500/20',
       badge: 'حجز موعد فوري',
     },
     {
       title: 'سوق قطع الغيار الأصلية',
       desc: 'محركات، جيرات، هيئات، وقطع بودي مستعملة وجديدة مع كفالة وتوصيل للمحافظات.',
-      icon: <Cpu className="w-7 h-7 text-cyan-400" />,
+      icon: <Cpu className="w-6 h-6 text-gold-100" />,
       link: '/parts',
       btnText: 'تصفح قطع الغيار',
-      color: 'from-cyan-500/10 to-blue-500/10 border-cyan-500/20',
       badge: 'كفالة وتوصيل',
     },
     {
       title: 'منتدى مجتمع كارس جو',
-      desc: 'طرح استفساراتك حول مشاكل الأعطال والسيارات واصلح سيارتك مع خبرة الأعضاء والفنيين.',
-      icon: <MessageCircle className="w-7 h-7 text-amber-400" />,
+      desc: 'اطرح استفساراتك حول الأعطال والسيارات وأصلح سيارتك مع خبرة الأعضاء والفنيين.',
+      icon: <MessageCircle className="w-6 h-6 text-gold-100" />,
       link: '/forum',
       btnText: 'دخول المنتدى',
-      color: 'from-amber-500/10 to-emerald-500/10 border-amber-500/20',
       badge: 'إجابات متخصصة',
     },
     {
-      title: 'ريلز السيارات 🎬',
+      title: 'ريلز السيارات',
       desc: 'شاهد جولات فيديو حقيقية للسيارات قبل المعاينة — كل إعلان فيه فيديو يظهر هنا.',
-      icon: <Clapperboard className="w-7 h-7 text-rose-400" />,
+      icon: <Clapperboard className="w-6 h-6 text-gold-100" />,
       link: '/reels',
       btnText: 'شاهد الريلز',
-      color: 'from-rose-500/10 to-pink-500/10 border-rose-500/20',
-      badge: 'جديد ✨',
+      badge: 'جديد',
     },
     {
-      title: 'مؤشر السوق 📊',
+      title: 'مؤشر السوق',
       desc: 'متوسطات الأسعار الحقيقية حسب الماركة والوقود مع توقعات الذكاء الاصطناعي.',
-      icon: <TrendingUp className="w-7 h-7 text-indigo-400" />,
+      icon: <TrendingUp className="w-6 h-6 text-gold-100" />,
       link: '/market-index',
       btnText: 'افتح المؤشر',
-      color: 'from-indigo-500/10 to-purple-500/10 border-indigo-500/20',
-      badge: 'جديد ✨',
+      badge: 'جديد',
     },
     {
-      title: 'التكلفة الكاملة 💰',
-      desc: 'احسب كم ستكلفك السيارة فعلاً: وقود وترخيص وتأمين وصيانة ونقص القيمة.',
-      icon: <Wallet className="w-7 h-7 text-emerald-400" />,
+      title: 'التكلفة الكاملة',
+      desc: 'احسب كم ستكلفك السيارة فعلا: وقود وترخيص وتأمين وصيانة ونقص القيمة.',
+      icon: <Wallet className="w-6 h-6 text-gold-100" />,
       link: '/ownership-cost',
       btnText: 'احسب التكلفة',
-      color: 'from-emerald-500/10 to-lime-500/10 border-emerald-500/20',
-      badge: 'وفّر فلوسك',
+      badge: 'وفر فلوسك',
     },
     {
-      title: 'سوق الجملة والمصدوم 🏭',
+      title: 'سوق الجملة والمصدوم',
       desc: 'عروض الجملة تاجر → تاجر، وسيارات مصدومة بأسعار مخفضة للورش وأصحاب الخبرة.',
-      icon: <Factory className="w-7 h-7 text-orange-400" />,
+      icon: <Factory className="w-6 h-6 text-gold-100" />,
       link: '/wholesale',
       btnText: 'تصفح الجملة',
-      color: 'from-orange-500/10 to-amber-500/10 border-orange-500/20',
       badge: 'للتجار',
     },
   ];
 
   return (
-    <section className="py-16 bg-slate-950 text-slate-100 border-t border-slate-900 relative overflow-hidden">
+    <section className="py-16 sm:py-20 bg-surface-950 border-t border-surface-800 relative">
       <div className="container-custom max-w-6xl space-y-10 relative z-10">
-        
+
         {/* Header */}
-        <div className="text-center space-y-3 max-w-2xl mx-auto">
-          <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black">
-            خدمات المنصة الأولى 🚗✨
-          </span>
-          <h2 className="text-3xl sm:text-4xl font-black text-white">
-            كل ما تحتاجه لسيارتك في منصة واحدة
-          </h2>
-          <p className="text-slate-400 text-sm leading-relaxed">
-            تمتع بتجربة متكاملة تبدأ من شراء السيارة وتثمينها، وصولاً لصيانتها وتوفير قطع غيارها.
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="space-y-3">
+            <p className="kicker">خدمات المنصة</p>
+            <h2 className="display text-3xl sm:text-4xl text-surface-50">
+              كل ما تحتاجه لسيارتك بمكان واحد
+            </h2>
+          </div>
+          <p className="text-surface-500 text-sm leading-relaxed max-w-sm">
+            من الشراء والتثمين، وصولا للصيانة وقطع الغيار — تجربة متكاملة.
           </p>
         </div>
 
-        {/* Services Cards Grid */}
+        <div className="road-line opacity-30" />
+
+        {/* Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {services.map((s, index) => (
             <motion.div
@@ -105,33 +99,32 @@ export function ServicesGrid() {
               initial={{ opacity: 0, y: 15 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: index * 0.08 }}
+              transition={{ delay: Math.min(index * 0.06, 0.4) }}
             >
               <Link
                 href={s.link}
-                className={`group block p-6 rounded-3xl bg-gradient-to-b ${s.color} border bg-slate-900/90 hover:bg-slate-900 transition-all duration-300 shadow-xl flex flex-col justify-between h-full space-y-6`}
+                className="card-hard-hover group block p-6 rounded-2xl bg-surface-900 border-2 border-surface-700 h-full"
               >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                      {s.icon}
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-slate-950 text-[10px] font-bold text-slate-300 border border-slate-800">
-                      {s.badge}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <h3 className="font-black text-white text-lg group-hover:text-emerald-400 transition-colors">
-                      {s.title}
-                    </h3>
-                    <p className="text-slate-400 text-xs leading-relaxed">{s.desc}</p>
-                  </div>
+                <div className="flex items-start justify-between mb-5">
+                  <span className="w-12 h-12 rounded-xl bg-surface-800 border border-surface-700 flex items-center justify-center group-hover:border-gold-100/40 transition-colors">
+                    {s.icon}
+                  </span>
+                  <span className="text-xs font-black text-surface-600 tabular-nums" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-bold text-emerald-400 pt-2 border-t border-slate-800/80">
-                  <span>{s.btnText}</span>
-                  <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                <h3 className="font-black text-surface-50 text-base mb-1.5">
+                  {s.title}
+                </h3>
+                <p className="text-surface-500 text-xs leading-relaxed mb-4">{s.desc}</p>
+
+                <div className="flex items-center justify-between pt-3 border-t border-surface-700/60">
+                  <span className="text-[11px] font-bold text-surface-500">{s.badge}</span>
+                  <span className="text-xs font-black text-gold-100 flex items-center gap-1 group-hover:gap-2 transition-all">
+                    {s.btnText}
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </span>
                 </div>
               </Link>
             </motion.div>

@@ -1,20 +1,20 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api';
+import { isCronAuthorized } from '@/lib/cron-auth';
 import { recalculateAllFairPrices } from '@/lib/fair-price';
 
 /**
  * Nightly fair-price recalculation — called by server.js every 24 hours.
  * Guarded by BACKUP_CRON_SECRET (shared scheduler secret).
  */
+export const maxDuration = 300; // nightly recalc can exceed the default serverless limit
+
 export async function POST(request: NextRequest) {
-  const configured = process.env.BACKUP_CRON_SECRET;
-  if (!configured) {
+  if (!process.env.BACKUP_CRON_SECRET) {
     return errorResponse('الجدولة غير مفعّلة: حدّد BACKUP_CRON_SECRET في البيئة', 503);
   }
 
-  const headerSecret = request.headers.get('x-cron-secret') || '';
-  const querySecret = new URL(request.url).searchParams.get('secret') || '';
-  if (headerSecret !== configured && querySecret !== configured) {
+  if (!isCronAuthorized(request)) {
     return errorResponse('غير مصرح', 403);
   }
 
@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Vercel Cron fires GET + Authorization: Bearer <CRON_SECRET> — run the job
+  // only when authorized; unauthenticated callers just see the schedule info.
+  if (process.env.BACKUP_CRON_SECRET && isCronAuthorized(request)) return POST(request);
   return successResponse({ schedule: 'every 24 hours', enabled: Boolean(process.env.BACKUP_CRON_SECRET) });
 }

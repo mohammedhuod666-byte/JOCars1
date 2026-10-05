@@ -1,16 +1,16 @@
 import { NextRequest } from 'next/server';
 
 const banks = [
-  { id: 'iskanc', nameAr: 'بنك الإسكان', nameEn: 'Housing Bank', rate: 5.25, icon: '🏠' },
-  { id: 'cairo', nameAr: 'بنك القاهرة عمان', nameEn: 'Cairo Amman Bank', rate: 5.5, icon: '🏛️' },
-  { id: 'jkb', nameAr: 'البنك الأردني الكويتي', nameEn: 'Jordan Kuwait Bank', rate: 5.0, icon: '🏦' },
-  { id: 'arab', nameAr: 'البنك العربي', nameEn: 'Arab Bank', rate: 5.25, icon: '🌍' },
-  { id: 'ettihad', nameAr: 'بنك الاتحاد', nameEn: 'Union Bank', rate: 5.75, icon: '🤝' },
-  { id: 'safwa', nameAr: 'بنك صفوة الإسلامي', nameEn: 'Safwa Islamic Bank', rate: 4.75, icon: '🕌' },
-  { id: 'jib', nameAr: 'البنك الإسلامي الأردني', nameEn: 'Jordan Islamic Bank', rate: 4.5, icon: '⭐' },
-  { id: 'ahli', nameAr: 'البنك الأهلي الأردني', nameEn: 'Jordan Ahli Bank', rate: 5.5, icon: '💳' },
-  { id: 'societe', nameAr: 'بنك سوسيتيه جنرال', nameEn: 'Societe Generale', rate: 6.0, icon: '🌐' },
-  { id: 'capital', nameAr: 'بنك رأس المال', nameEn: 'Capital Bank', rate: 5.0, icon: '💰' },
+  { id: 'iskanc', nameAr: 'بنك الإسكان', nameEn: 'Housing Bank', rate: 5.25, icon: '' },
+  { id: 'cairo', nameAr: 'بنك القاهرة عمان', nameEn: 'Cairo Amman Bank', rate: 5.5, icon: '' },
+  { id: 'jkb', nameAr: 'البنك الأردني الكويتي', nameEn: 'Jordan Kuwait Bank', rate: 5.0, icon: '' },
+  { id: 'arab', nameAr: 'البنك العربي', nameEn: 'Arab Bank', rate: 5.25, icon: '' },
+  { id: 'ettihad', nameAr: 'بنك الاتحاد', nameEn: 'Union Bank', rate: 5.75, icon: '' },
+  { id: 'safwa', nameAr: 'بنك صفوة الإسلامي', nameEn: 'Safwa Islamic Bank', rate: 4.75, icon: '' },
+  { id: 'jib', nameAr: 'البنك الإسلامي الأردني', nameEn: 'Jordan Islamic Bank', rate: 4.5, icon: '' },
+  { id: 'ahli', nameAr: 'البنك الأهلي الأردني', nameEn: 'Jordan Ahli Bank', rate: 5.5, icon: '' },
+  { id: 'societe', nameAr: 'بنك سوسيتيه جنرال', nameEn: 'Societe Generale', rate: 6.0, icon: '' },
+  { id: 'capital', nameAr: 'بنك رأس المال', nameEn: 'Capital Bank', rate: 5.0, icon: '' },
 ];
 
 function calcMonthlyPayment(principal: number, annualRate: number, months: number): number {

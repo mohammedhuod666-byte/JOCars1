@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import prisma from '@/lib/prisma';
 import { descriptionGenerator } from '@/ai/description-generator';
 import { successResponse, errorResponse } from '@/lib/api';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -10,9 +11,22 @@ export async function POST(request: NextRequest) {
     if (!rateLimit.allowed) return errorResponse('تم تجاوز الحد المسموح', 429);
 
     const body = await request.json();
+    // The add-car form sends brandId/modelId (not names) — resolve them.
+    let brandName: string = body.brandName || '';
+    let modelName: string = body.modelName || '';
+    try {
+      if (!brandName && body.brandId) {
+        const b = await prisma.brand.findUnique({ where: { id: body.brandId }, select: { nameAr: true } });
+        if (b) brandName = b.nameAr;
+      }
+      if (!modelName && body.modelId) {
+        const m = await prisma.carModel.findUnique({ where: { id: body.modelId }, select: { nameAr: true } });
+        if (m) modelName = m.nameAr;
+      }
+    } catch { /* name resolution is best-effort */ }
     const result = await descriptionGenerator.process({
-      brand: body.brandName || '',
-      model: body.modelName || '',
+      brand: brandName,
+      model: modelName,
       year: body.year || new Date().getFullYear(),
       kilometers: body.kilometers || 0,
       fuelType: body.fuelType || '',

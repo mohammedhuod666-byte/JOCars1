@@ -11,25 +11,25 @@ import type { UsedPart } from '@/types';
 import { formatPrice } from '@/lib/utils';
 
 const PART_TYPES = [
-  { value: 'engine', label: 'محرك وفواصل', icon: '⚙️' },
-  { value: 'transmission', label: 'جير وفتيس', icon: '🏎️' },
-  { value: 'body', label: 'هيكل وبودي', icon: '🛡️' },
-  { value: 'electrical', label: 'كهرباء وإلكترونيات', icon: '⚡' },
-  { value: 'suspension', label: 'تعليق وهيئة', icon: '🔧' },
-  { value: 'brake', label: 'فرامل وبريكات', icon: '🛑' },
-  { value: 'cooling', label: 'تبريد وراديتر', icon: '❄️' },
-  { value: 'exhaust', label: 'عادم واكزوزت', icon: '💨' },
-  { value: 'interior', label: 'فرش وداخلي', icon: '🪑' },
-  { value: 'wheel', label: 'جنوط وإطارات', icon: '🛞' },
-  { value: 'turbo', label: 'توربو وسوبر', icon: '🚀' },
-  { value: 'ac', label: 'مكيف وكمبروسر', icon: '🧊' },
-  { value: 'other', label: 'قطع متنوعة', icon: '📦' },
+  { value: 'engine', label: 'محرك وفواصل', icon: '' },
+  { value: 'transmission', label: 'جير وفتيس', icon: '' },
+  { value: 'body', label: 'هيكل وبودي', icon: '' },
+  { value: 'electrical', label: 'كهرباء وإلكترونيات', icon: '' },
+  { value: 'suspension', label: 'تعليق وهيئة', icon: '' },
+  { value: 'brake', label: 'فرامل وبريكات', icon: '' },
+  { value: 'cooling', label: 'تبريد وراديتر', icon: '' },
+  { value: 'exhaust', label: 'عادم واكزوزت', icon: '' },
+  { value: 'interior', label: 'فرش وداخلي', icon: '' },
+  { value: 'wheel', label: 'جنوط وإطارات', icon: '' },
+  { value: 'turbo', label: 'توربو وسوبر', icon: '' },
+  { value: 'ac', label: 'مكيف وكمبروسر', icon: '' },
+  { value: 'other', label: 'قطع متنوعة', icon: '' },
 ];
 
 const CONDITIONS = [
-  { value: 'NEW', label: 'جديدة وكالة ✨' },
-  { value: 'USED', label: 'مستعملة أصلية ⚙️' },
-  { value: 'REFURBISHED', label: 'مُجددة ومفحوصة 🛠️' },
+  { value: 'NEW', label: 'جديدة وكالة ' },
+  { value: 'USED', label: 'مستعملة أصلية ' },
+  { value: 'REFURBISHED', label: 'مُجددة ومفحوصة ' },
 ];
 
 export default function PartsPage() {
@@ -82,7 +82,7 @@ export default function PartsPage() {
             <div className="space-y-3 max-w-2xl">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>سوق قطع الغيار المتخصص في الأردن ⚙️🚗</span>
+                <span>سوق قطع الغيار المتخصص في الأردن </span>
               </div>
 
               <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight">
@@ -116,7 +116,7 @@ export default function PartsPage() {
                   : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
               }`}
             >
-              الكل ✨
+              الكل 
             </button>
             {PART_TYPES.map((t) => (
               <button
@@ -128,7 +128,6 @@ export default function PartsPage() {
                     : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                <span>{t.icon}</span>
                 <span>{t.label}</span>
               </button>
             ))}
@@ -290,12 +289,12 @@ export default function PartsPage() {
 
                         {isNew && (
                           <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-500 text-slate-950 shadow-md">
-                            جديدة وكالة ✨
+                            جديدة وكالة 
                           </span>
                         )}
                         {isRefurbished && (
                           <span className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-500 text-slate-950 shadow-md">
-                            مُجددة 🛠️
+                            مُجددة 
                           </span>
                         )}
                       </div>

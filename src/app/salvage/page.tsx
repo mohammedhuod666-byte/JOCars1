@@ -25,7 +25,7 @@ export default function SalvagePage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 inline-flex items-center gap-1.5 mb-3">
-            <Wrench className="w-3.5 h-3.5" /> سوق المصدوم ⚠️
+            <Wrench className="w-3.5 h-3.5" /> سوق المصدوم 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">سيارات مصدومة وعلى وضعها — بأسعار الجملة</h1>
           <p className="text-sm text-slate-400">للورش والتجار وأصحاب الخبرة: سيارات بحاجة صيانة أو سمكرة بأسعار مخفضة. عاين جيداً قبل الشراء.</p>

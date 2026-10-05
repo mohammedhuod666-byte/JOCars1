@@ -31,7 +31,7 @@ export default function SoldArchivePage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 inline-flex items-center gap-1.5 mb-3">
-            <Archive className="w-3.5 h-3.5" /> أرشيف المبيعات 📚
+            <Archive className="w-3.5 h-3.5" /> أرشيف المبيعات 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">بكم انباعت فعلاً؟</h1>
           <p className="text-sm text-slate-400">أسعار بيع حقيقية منفذة — أدق مرجع لسعر السوق قبل أن تشتري أو تبيع</p>
@@ -53,7 +53,7 @@ export default function SoldArchivePage() {
                   <div className="h-44 overflow-hidden relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={car.images[0]?.url || '/images/placeholder-car.svg'} alt="" className="w-full h-full object-cover" loading="lazy" />
-                    <span className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-blue-600 text-white text-[11px] font-black">مباعة ✅</span>
+                    <span className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-blue-600 text-white text-[11px] font-black">مباعة </span>
                   </div>
                   <div className="p-4">
                     <p className="font-bold truncate">{car.brand?.nameAr} {car.model?.nameAr} {car.year}</p>

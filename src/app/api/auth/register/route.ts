@@ -4,7 +4,7 @@ import { hashPassword, signToken, setAuthCookie } from '@/lib/auth';
 import { registerSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit';
 import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
 import { createAuditLog } from '@/lib/audit';
 
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `register:${ip}`;
-    const rateLimit = checkRateLimit(rateLimitKey, RATE_LIMITS.REGISTER);
+    const rateLimit = await checkRateLimitAsync(rateLimitKey, RATE_LIMITS.REGISTER);
     if (!rateLimit.allowed) {
       if (trackSuspiciousActivity(ip)) {
         blockIP(ip, 'Excessive registration attempts');

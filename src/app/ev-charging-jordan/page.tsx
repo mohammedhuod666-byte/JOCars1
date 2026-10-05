@@ -4,13 +4,24 @@ import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Zap, MapPin, Search, Phone, ShieldCheck, BatteryCharging, Clock, DollarSign, ExternalLink, Sparkles, Filter, Calculator, CheckCircle2, TrendingUp, Navigation, Fuel } from 'lucide-react';
-import { STATIONS_DATA, Station } from './stations-data';
+import type { Station } from './stations-data';
 
 export default function EvChargingJordanPage() {
   const [selectedCity, setSelectedCity] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'ALL' | 'EV' | 'PETROL'>('ALL');
   
+  // Stations data (13k+ rows) is code-split: loaded on demand AFTER first
+  // paint instead of bloating the initial page bundle (was ~360KB static).
+  const [stations, setStations] = useState<Station[]>([]);
+  useEffect(() => {
+    let alive = true;
+    import('./stations-data').then((m) => {
+      if (alive) setStations(m.STATIONS_DATA);
+    });
+    return () => { alive = false; };
+  }, []);
+
   // Geolocation for distances
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
 
@@ -33,7 +44,7 @@ export default function EvChargingJordanPage() {
     }
   };
 
-  const filteredStations = STATIONS_DATA.filter(st => {
+  const filteredStations = stations.filter(st => {
     const matchesCity = selectedCity === 'ALL' || st.city === selectedCity;
     const matchesSearch = !searchQuery || st.name.includes(searchQuery) || st.address.includes(searchQuery) || (st.plugTypes && st.plugTypes.some(p => p.toLowerCase().includes(searchQuery.toLowerCase())));
     let matchesType = true;
@@ -51,7 +62,7 @@ export default function EvChargingJordanPage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1 space-y-8">
         <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-950 border border-emerald-500/30 shadow-2xl relative overflow-hidden space-y-3">
           <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-black border border-emerald-500/30 flex w-fit items-center gap-1.5">
-            <Zap className="w-4 h-4" /> دليل محطات الأردن الشامل 🇯🇴
+            <Zap className="w-4 h-4" /> دليل محطات الأردن الشامل 
           </span>
           <h1 className="text-2xl sm:text-4xl font-black text-white">دليل محطات الوقود وشحن السيارات الكهربائية بالأردن</h1>
           <p className="text-sm text-slate-300 max-w-2xl leading-relaxed font-medium">دليل تفاعلي لأبرز محطات الوقود (بنزين وديزل) ومحطات الشحن السريع (Fast DC & AC) المنتشرة في كافة محافظات المملكة. ابحث عن أقرب محطة إليك وتعرف على الخدمات المجاورة لها.</p>
@@ -75,7 +86,7 @@ export default function EvChargingJordanPage() {
           <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-end">
             {['ALL', 'عمان', 'إربد', 'الزرقاء', 'العقبة', 'السلط', 'البحر الميت', 'جرش', 'مأدبا', 'الكرك', 'معان'].map(city => (
               <button key={city} type="button" onClick={() => setSelectedCity(city)} className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${selectedCity === city ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'}`}>
-                {city === 'ALL' ? 'كل المحافظات 🇯🇴' : city}
+                {city === 'ALL' ? 'كل المحافظات ' : city}
               </button>
             ))}
             <button onClick={calculateUserLocation} className="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-md shadow-blue-500/20 flex items-center gap-2 shrink-0">
@@ -86,7 +97,7 @@ export default function EvChargingJordanPage() {
 
         <div className="flex justify-between items-center px-2">
           <p className="text-xs font-bold text-slate-400">
-            تم العثور على <span className="text-emerald-400">{filteredStations.length}</span> محطة في قاعدة البيانات (من أصل {STATIONS_DATA.length}).
+            تم العثور على <span className="text-emerald-400">{filteredStations.length}</span> محطة في قاعدة البيانات (من أصل {stations.length}).
             {!searchQuery && " يتم عرض أقرب 30 محطة، استخدم البحث للعثور على محطة معينة."}
           </p>
         </div>
@@ -101,19 +112,19 @@ export default function EvChargingJordanPage() {
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-black text-white text-sm sm:text-base">{st.name}</h3>
-                    {st.status === 'ONLINE' ? <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">متاحة الآن 🟢</span> : <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">مشغولة 🔴</span>}
+                    {st.status === 'ONLINE' ? <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">متاحة الآن </span> : <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">مشغولة </span>}
                   </div>
                   <p className="text-xs text-slate-400 flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-emerald-400" /> {st.address}</p>
-                  <p className="text-[11px] text-slate-500 font-bold leading-relaxed max-w-lg">✨ معالم قريبة: {st.nearby} {st.pricePerKwh ? `| 💰 السعر: ${st.pricePerKwh} دينار/كيلوواط` : ''}</p>
+                  <p className="text-[11px] text-slate-500 font-bold leading-relaxed max-w-lg"> معالم قريبة: {st.nearby} {st.pricePerKwh ? `|  السعر: ${st.pricePerKwh} دينار/كيلوواط` : ''}</p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {/* Render Petrol Types */}
                     {st.petrolTypes && st.petrolTypes.map((fuel, idx) => (
-                      <span key={`p-${idx}`} className="text-[10px] font-extrabold px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30">⛽ {fuel}</span>
+                      <span key={`p-${idx}`} className="text-[10px] font-extrabold px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30"> {fuel}</span>
                     ))}
                     
                     {/* Render EV Plug Types */}
                     {st.plugTypes && st.plugTypes.map((plug, idx) => (
-                      <span key={`e-${idx}`} className="text-[10px] font-extrabold px-2.5 py-1 rounded-xl bg-slate-950 text-slate-300 border border-slate-800">⚡ {plug}</span>
+                      <span key={`e-${idx}`} className="text-[10px] font-extrabold px-2.5 py-1 rounded-xl bg-slate-950 text-slate-300 border border-slate-800"> {plug}</span>
                     ))}
                     
                     {st.fastCharging && <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">قوة {st.powerKw} kW</span>}
@@ -126,7 +137,7 @@ export default function EvChargingJordanPage() {
                     تبعد: <span className="text-emerald-400">{getDistance(userLocation.lat, userLocation.lng, st.lat, st.lng)} كم</span>
                   </div>
                 )}
-                <a href={`https://www.google.com/maps/search/?api=1&query=${st.lat},${st.lng}`} target="_blank" rel="noreferrer" className="px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer"><ExternalLink className="w-4 h-4" /> الملاحة 📍</a>
+                <a href={`https://www.google.com/maps/search/?api=1&query=${st.lat},${st.lng}`} target="_blank" rel="noreferrer" className="px-5 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer"><ExternalLink className="w-4 h-4" /> الملاحة </a>
               </div>
             </div>
           ))}

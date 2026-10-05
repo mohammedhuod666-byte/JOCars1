@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateRequest } from '@/lib/auth';
 import { errorResponse } from '@/lib/api';
-import { chatCompletion, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
+import { chatCompletion, generateArabicFallbackResponse, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
 import { fetchOpenSooqListings } from '@/lib/opensooq-scrape';
 import { getCachedResponse, setCachedResponse } from '@/ai/chat-cache';
 import {
@@ -28,7 +28,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ── Intent Detection ──
-type Intent = 'car_search' | 'workshop' | 'parts' | 'price_analysis' | 'engine_sound' | 'selling' | 'site_info' | 'ref_code' | 'navigation' | 'general';
+type Intent = 'car_search' | 'workshop' | 'parts' | 'price_analysis' | 'engine_sound' | 'selling' | 'site_info' | 'ref_code' | 'navigation' | 'general' | 'car_listing' | 'workshop_add' | 'negotiation' | 'ticket';
 
 function detectIntent(query: string): Intent {
   const q = query.toLowerCase();
@@ -139,13 +139,13 @@ async function findSimilarCars(car: any) {
 // ── Build full car report ──
 function buildCarReport(car: any, similarCars: any[], marketListings: any[]): string {
   const conditionMap: Record<string, string> = {
-    EXCELLENT: 'ممتازة ✨', VERY_GOOD: 'جيدة جداً 👍', GOOD: 'جيدة 👌', FAIR: 'مقبولة 🤏',
+    EXCELLENT: 'ممتازة ', VERY_GOOD: 'جيدة جداً ', GOOD: 'جيدة ', FAIR: 'مقبولة ',
   };
   const fuelMap: Record<string, string> = {
-    PETROL: 'بنزين ⛽', DIESEL: 'ديزل 🛢️', HYBRID: 'هايبرد 🔋', ELECTRIC: 'كهربائية ⚡',
+    PETROL: 'بنزين ', DIESEL: 'ديزل ', HYBRID: 'هايبرد ', ELECTRIC: 'كهربائية ',
   };
   const transMap: Record<string, string> = {
-    AUTOMATIC: 'أوتوماتيك 🔄', MANUAL: 'يدوي ✋',
+    AUTOMATIC: 'أوتوماتيك ', MANUAL: 'يدوي ',
   };
 
   // Market comparison
@@ -163,35 +163,35 @@ function buildCarReport(car: any, similarCars: any[], marketListings: any[]): st
   let priceEmoji = '';
   if (avgPrice > 0) {
     const diff = ((car.price - avgPrice) / avgPrice) * 100;
-    if (diff < -10) { priceVerdict = 'منخفض 🟢'; priceEmoji = '🟢'; }
-    else if (diff > 10) { priceVerdict = 'مرتفع 🔴'; priceEmoji = '🔴'; }
-    else { priceVerdict = 'عادل 🟡'; priceEmoji = '🟡'; }
+    if (diff < -10) { priceVerdict = 'منخفض '; priceEmoji = ''; }
+    else if (diff > 10) { priceVerdict = 'مرتفع '; priceEmoji = ''; }
+    else { priceVerdict = 'عادل '; priceEmoji = ''; }
   }
 
   // AI score
   const aiScore = car.aiScore || null;
   let scoreEmoji = '';
   if (aiScore) {
-    if (aiScore >= 80) scoreEmoji = '🟢';
-    else if (aiScore >= 60) scoreEmoji = '🟡';
-    else scoreEmoji = '🔴';
+    if (aiScore >= 80) scoreEmoji = '';
+    else if (aiScore >= 60) scoreEmoji = '';
+    else scoreEmoji = '';
   }
 
   // Owner count warning
-  const ownerWarning = car.ownerCount > 2 ? '\n⚠️ تنبيه: السيارة تغيرت بين أكثر من 2 مالك' : '';
+  const ownerWarning = car.ownerCount > 2 ? '\n تنبيه: السيارة تغيرت بين أكثر من 2 مالك' : '';
 
   // Features list
   const features: string[] = [];
-  if (car.isNegotiable) features.push('💰 قابل للتفاوض');
-  if (car.hasWarranty) features.push('🛡️ يوجد ضمان');
-  if (car.hasServiceHistory) features.push('📄 تاريخ صيانة');
-  if (car.isPaintOriginal) features.push('🎨 طلاء أصلي');
-  if (!car.isDamaged) features.push('✅ بدون أضرار');
+  if (car.isNegotiable) features.push(' قابل للتفاوض');
+  if (car.hasWarranty) features.push(' يوجد ضمان');
+  if (car.hasServiceHistory) features.push(' تاريخ صيانة');
+  if (car.isPaintOriginal) features.push(' طلاء أصلي');
+  if (!car.isDamaged) features.push(' بدون أضرار');
 
-  const report = `🚗 **تقرير سيارة كامل: ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**
+  const report = ` **تقرير سيارة كامل: ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 **المواصفات:**
+ **المواصفات:**
 • الماركة: ${car.brand?.nameAr || ''} (${car.brand?.nameEn || ''})
 • الموديل: ${car.model?.nameAr || ''} (${car.model?.nameEn || ''})
 • السنة: ${car.year}
@@ -205,32 +205,32 @@ function buildCarReport(car: any, similarCars: any[], marketListings: any[]): st
 • عدد المالكين: ${car.ownerCount || 1}
 ${ownerWarning}
 
-💰 **تحليل السعر:**
+ **تحليل السعر:**
 • السعر المعلن: **${car.price?.toLocaleString()} د.أ** ${car.isNegotiable ? '(قابل للتفاوض)' : ''}
 ${avgPrice > 0 ? `• متوسط الأسعار المشابهة: ${avgPrice.toLocaleString()} د.أ
 • أدنى سعر: ${minPrice.toLocaleString()} د.أ
 • أعلى سعر: ${maxPrice.toLocaleString()} د.أ
 • تقييم السعر: **${priceVerdict}** مقارنة بالسوق (${marketPrices.length + sitePrices.length} إعلان مشابه)` : '• لا تتوفر بيانات كافية من السوق للمقارنة'}
 
-${aiScore ? `📊 **تقييم الذكاء الاصطناعي: ${aiScore}/100** ${scoreEmoji}` : ''}
+${aiScore ? ` **تقييم الذكاء الاصطناعي: ${aiScore}/100** ${scoreEmoji}` : ''}
 
-${features.length > 0 ? `✨ **المميزات:**\n${features.map(f => `• ${f}`).join('\n')}` : ''}
+${features.length > 0 ? ` **المميزات:**\n${features.map(f => `• ${f}`).join('\n')}` : ''}
 
-📍 **المدينة:** ${car.city?.nameAr || 'غير محددة'}
-🏷️ **الرمز المرجعی:** ${car.refCode || 'غير متوفر'}
-🔗 **رابط الإعلان:** ${SITE_URL}/cars/${car.slug || car.id}
+ **المدينة:** ${car.city?.nameAr || 'غير محددة'}
+ **الرمز المرجعی:** ${car.refCode || 'غير متوفر'}
+ **رابط الإعلان:** ${SITE_URL}/cars/${car.slug || car.id}
 
-👤 **البائع:** ${car.user?.name || 'غير معروف'} (${car.user?._count?.cars || 0} إعلانات)
+ **البائع:** ${car.user?.name || 'غير معروف'} (${car.user?._count?.cars || 0} إعلانات)
 
-${similarCars.length > 0 ? `🔍 **سيارات مشابهة في الموقع:**
+${similarCars.length > 0 ? ` **سيارات مشابهة في الموقع:**
 ${similarCars.slice(0, 4).map((s, i) => `${i + 1}. ${s.brand?.nameAr || ''} ${s.model?.nameAr || ''} ${s.year} — ${s.price?.toLocaleString()} د.أ | ${s.city?.nameAr || ''}`).join('\n')}` : ''}
 
-💡 **توصيات قبل الشراء:**
-1. 📞 تواصل مع البائع واستفسر عن الحالة الفعلية
-2. 🔍 اطلب تقرير فحص فني من ورشة موثوقة
-3. 🚗 اجرِ اختبار قيادة قبل الشراء
-4. 📄 تأكد من أوراق السيارة (سجل، تأمين، ضريبة)
-5. 💰 قارن السعر مع الإعلانات المشابهة أعلاه`;
+ **توصيات قبل الشراء:**
+1.  تواصل مع البائع واستفسر عن الحالة الفعلية
+2.  اطلب تقرير فحص فني من ورشة موثوقة
+3.  اجرِ اختبار قيادة قبل الشراء
+4.  تأكد من أوراق السيارة (سجل، تأمين، ضريبة)
+5.  قارن السعر مع الإعلانات المشابهة أعلاه`;
 
   return report;
 }
@@ -525,7 +525,15 @@ export async function POST(request: NextRequest) {
     const normalizedQuery = normalizeDialect(query);
 
     // Detect intent
-    const intent = detectIntent(normalizedQuery);
+    let intent = detectIntent(normalizedQuery);
+    // How-to questions ("كيف أضيف إعلان؟") are QUESTIONS, not flow
+    // triggers — answer them instead of mislabeling the request.
+    // Also normalize stream-only intents this route doesn't handle.
+    if (intent === 'car_listing' && /كيف|شرح|اشرح|طريقة|خطوات|وين|أين|اين|ممكن تشرح|شو الطريقة|هل يمكن|؟\s*$/i.test(normalizedQuery)) {
+      intent = 'site_info';
+    } else if (intent === 'car_listing' || intent === 'workshop_add' || intent === 'negotiation' || intent === 'ticket') {
+      intent = 'general';
+    }
 
     // Check for ref code
     const refCode = extractRefCode(query);
@@ -543,7 +551,7 @@ export async function POST(request: NextRequest) {
     if (intent === 'ref_code' && refCode) {
       const car = await fetchCarByRefCode(refCode);
       if (!car) {
-        const notFoundMsg = `لم أجد سيارة بالرمز المرجعي **${refCode}** في الموقع.\n\n💡 تأكد من صحة الرمز أو جرّب البحث بالاسم مثل: "كامري 2020" أو " toyota"`  ;
+        const notFoundMsg = `لم أجد سيارة بالرمز المرجعي **${refCode}** في الموقع.\n\n تأكد من صحة الرمز أو جرّب البحث بالاسم مثل: "كامري 2020" أو " toyota"`  ;
         conversation.push({ role: 'assistant', content: notFoundMsg });
         conversationStore.set(sid, conversation);
         return Response.json({
@@ -590,7 +598,7 @@ export async function POST(request: NextRequest) {
       const targetPage = detectTargetPage(normalizedQuery);
       if (targetPage) {
         if (targetPage.requiresAuth && !userName) {
-          const authMsg = `🔒 هذه الصفحة "${targetPage.labelAr}" تتطلب تسجيل دخول.\n\nسأنقلك الآن لصفحة تسجيل الدخول...`;
+          const authMsg = ` هذه الصفحة "${targetPage.labelAr}" تتطلب تسجيل دخول.\n\nسأنقلك الآن لصفحة تسجيل الدخول...`;
           conversation.push({ role: 'assistant', content: authMsg });
           conversationStore.set(sid, conversation);
           return Response.json({
@@ -603,7 +611,7 @@ export async function POST(request: NextRequest) {
           });
         }
         if (targetPage.requiresAdmin && userRole !== 'ADMIN') {
-          const adminMsg = `⛔ صفحة "${targetPage.labelAr}" متاحة فقط لمدير الموقع.`;
+          const adminMsg = ` صفحة "${targetPage.labelAr}" متاحة فقط لمدير الموقع.`;
           conversation.push({ role: 'assistant', content: adminMsg });
           conversationStore.set(sid, conversation);
           return Response.json({
@@ -611,7 +619,7 @@ export async function POST(request: NextRequest) {
             data: { message: adminMsg, cars: [], intent: 'navigation', suggestions: ['العودة للرئيسية'], sessionId: sid },
           });
         }
-        const successMsg = `✅ سأنقلك الآن إلى صفحة "${targetPage.labelAr}"...`;
+        const successMsg = ` سأنقلك الآن إلى صفحة "${targetPage.labelAr}"...`;
         conversation.push({ role: 'assistant', content: successMsg });
         conversationStore.set(sid, conversation);
         return Response.json({
@@ -623,7 +631,7 @@ export async function POST(request: NextRequest) {
           },
         });
       }
-      const fallbackNavMsg = `🤔 أي صفحة تريد أن أخذك إليها؟\n\nأمثلة:\n- المفضلة\n- إعلاناتي\n- الجراج\n- ورش العمل\n- قطع الغيار\n- المنتدى\n- الملف الشخصي\n\nاكتب اسم الصفحة وسأنقلك لها مباشرة!`;
+      const fallbackNavMsg = ` أي صفحة تريد أن أخذك إليها؟\n\nأمثلة:\n- المفضلة\n- إعلاناتي\n- الجراج\n- ورش العمل\n- قطع الغيار\n- المنتدى\n- الملف الشخصي\n\nاكتب اسم الصفحة وسأنقلك لها مباشرة!`;
       conversation.push({ role: 'assistant', content: fallbackNavMsg });
       conversationStore.set(sid, conversation);
       return Response.json({
@@ -771,30 +779,33 @@ ${conversationContext}
           retries: 1,
           modelId,
         });
-        setCachedResponse(normalizedQuery, intent, aiResponse);
+        // Never cache the offline fallback as a real answer.
+        if (aiResponse !== generateArabicFallbackResponse(query)) {
+          setCachedResponse(normalizedQuery, intent, aiResponse);
+        }
       } catch (llmError) {
         console.error('[AI Chat] LLM error, using fallback:', llmError);
-        const greeting = userName ? `أهلاً بك يا ${userName} في منصة JO Cars 🚗` : `أهلاً بك في منصة JO Cars الأردنية 🚗`;
+        const greeting = userName ? `أهلاً بك يا ${userName} في منصة JO Cars ` : `أهلاً بك في منصة JO Cars الأردنية `;
 
         if (intent === 'car_search' || intent === 'general') {
           if (cars.length > 0) {
             aiResponse = greeting + '\n\nإليك أبرز السيارات المتاحة حالياً في السوق الأردني وفقاً لطلبك:\n\n' +
               cars.slice(0, 5).map((car: any, i: number) =>
-                `${i + 1}. **${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**\n   💵 السعر: **${car.price.toLocaleString()} د.أ** | 📍 ${car.city?.nameAr || 'الأردن'}\n   🏷️ الرمز المرجعي: ${car.refCode || 'N/A'}`
+                `${i + 1}. **${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**\n    السعر: **${car.price.toLocaleString()} د.أ** |  ${car.city?.nameAr || 'الأردن'}\n    الرمز المرجعي: ${car.refCode || 'N/A'}`
               ).join('\n\n') +
-              '\n\n💡 يمكنك السؤال عن أي سيارة باستخدام الرمز المرجعي أو استكشاف حاسبة الجمارك والترخيص وحاسبة التمويل.';
+              '\n\n يمكنك السؤال عن أي سيارة باستخدام الرمز المرجعي أو استكشاف حاسبة الجمارك والترخيص وحاسبة التمويل.';
           } else {
-            aiResponse = greeting + '\n\nأنا مساعدك الذكي المتخصص في سوق السيارات الأردني 🇯🇴.\n\nكيف يمكنني مساعدتك اليوم؟\n- 🚗 البحث عن سيارات مستعملة أو جديدة\n- 💰 تخمين جمارك وترخيص السيارات (/customs-calculator)\n- 🏦 حساب أقساط التمويل للبنوك الأردنية (/finance-calculator)\n- 🔧 البحث عن ورش الصيانة وقطع الغيار';
+            aiResponse = greeting + '\n\nأنا مساعدك الذكي المتخصص في سوق السيارات الأردني .\n\nكيف يمكنني مساعدتك اليوم؟\n-  البحث عن سيارات مستعملة أو جديدة\n-  تخمين جمارك وترخيص السيارات (/customs-calculator)\n-  حساب أقساط التمويل للبنوك الأردنية (/finance-calculator)\n-  البحث عن ورش الصيانة وقطع الغيار';
           }
         } else if (intent === 'workshop' && workshops.length > 0) {
           aiResponse = greeting + '\n\nإليك أفضل ورش الصيانة المتاحة المعتمدة:\n\n' +
             workshops.slice(0, 5).map((w: any, i: number) =>
-              `${i + 1}. **${w.name}** — 📍 ${w.address || 'الأردن'} | ⭐ ${w.rating || 5}/5`
+              `${i + 1}. **${w.name}** —  ${w.address || 'الأردن'} |  ${w.rating || 5}/5`
             ).join('\n\n');
         } else if (intent === 'parts' && parts.length > 0) {
           aiResponse = greeting + '\n\nإليك أحدث قطع الغيار المتوفرة لدينا:\n\n' +
             parts.slice(0, 5).map((p: any, i: number) =>
-              `${i + 1}. **${p.title}** — 💵 ${p.price?.toLocaleString() || 'غير محدد'} د.أ | 📍 ${p.city?.nameAr || 'الأردن'}`
+              `${i + 1}. **${p.title}** —  ${p.price?.toLocaleString() || 'غير محدد'} د.أ |  ${p.city?.nameAr || 'الأردن'}`
             ).join('\n\n');
         } else {
           aiResponse = greeting + '\n\nأنا جاهز لمساعدتك في كل ما يتعلق بالسيارات بالأردن! يمكنك السؤال عن أسعار السيارات، الجمارك والترخيص، أو البحث عن موديل معين.';

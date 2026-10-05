@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Newspaper, Fuel, Truck, FileText, Lightbulb, Loader2, Clock, User, ChevronLeft, Trash2, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { proxyNewsImage } from '@/lib/news-image';
 import type { Article } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -104,8 +106,15 @@ export default function NewsPage() {
                 <motion.div key={article.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                   <Link href={`/news/${article.slug}`} className="block card overflow-hidden group hover:border-blue-200 dark:hover:border-blue-500/20 transition-all">
                     {article.image && (
-                      <div className="h-48 overflow-hidden">
-                        <img src={article.image} alt={article.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <div className="relative h-48 overflow-hidden">
+                        <Image
+                          src={proxyNewsImage(article.image)}
+                          alt={article.title}
+                          fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                          onError={(e) => { (e.target as HTMLElement).closest('div')?.remove(); }}
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
                       </div>
                     )}
                     <div className="p-5">

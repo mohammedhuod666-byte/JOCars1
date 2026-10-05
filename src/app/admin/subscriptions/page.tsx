@@ -118,7 +118,7 @@ export default function AdminSubscriptionsPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ extendDays: days }),
       });
-      if (res.ok) { toast.success(`تم تمديد الاشتراك ${days} يوم ✅`); loadSubscriptions(); }
+      if (res.ok) { toast.success(`تم تمديد الاشتراك ${days} يوم `); loadSubscriptions(); }
       else { toast.error('فشل التمديد'); }
     } catch { toast.error('حدث خطأ'); }
   };

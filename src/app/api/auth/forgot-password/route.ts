@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimitAsync } from '@/lib/rate-limit';
 import { sanitizePlainText } from '@/lib/sanitize';
 import { sendWhatsApp } from '@/lib/whatsapp';
 import prisma from '@/lib/prisma';
@@ -12,7 +12,7 @@ import { hashPassword, passwordVersion, signPasswordResetToken, verifyPasswordRe
 export async function POST(request: NextRequest) {
   try {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`forgot-password:${ip}`, { windowMs: 60 * 1000, maxRequests: 3 });
+    const rateLimit = await checkRateLimitAsync(`forgot-password:${ip}`, { windowMs: 60 * 1000, maxRequests: 3 });
     if (!rateLimit.allowed) {
       return NextResponse.json({ success: false, error: 'تم تجاوز الحد المسموح. حاول بعد دقيقة.' }, { status: 429 });
     }
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`reset-password:${ip}`, { windowMs: 60 * 1000, maxRequests: 5 });
+    const rateLimit = await checkRateLimitAsync(`reset-password:${ip}`, { windowMs: 60 * 1000, maxRequests: 5 });
     if (!rateLimit.allowed) {
       return NextResponse.json({ success: false, error: 'تم تجاوز الحد المسموح. حاول بعد دقيقة.' }, { status: 429 });
     }

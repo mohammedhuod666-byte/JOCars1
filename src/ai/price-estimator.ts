@@ -43,7 +43,9 @@ export interface SimilarListing {
 
 export interface PriceOutput {
   minPrice: number;
-  fairPrice: number;
+  // Phase-1 FMV gate: null whenever the engine produced no FMV —
+  // never replaced by the listing (asking) price.
+  fairPrice: number | null;
   maxPrice: number;
   confidence: number;
   reasoning: string;
@@ -104,9 +106,10 @@ export class PriceEstimator extends BaseAIModule<PriceInput, PriceOutput> {
       useAiSynthesis: true,
     });
 
-    const fairPrice = report.fairMarketValue || input.listingPrice || 0;
-    const minPrice = report.range.low || Math.round(fairPrice * 0.9);
-    const maxPrice = report.range.high || Math.round(fairPrice * 1.1);
+    // Phase-1 FMV gate: fairPrice is null unless the contract carries an FMV.
+    const fairPrice = report.fairMarketValue ?? null;
+    const minPrice = report.range.low ?? (fairPrice !== null ? Math.round(fairPrice * 0.9) : 0);
+    const maxPrice = report.range.high ?? (fairPrice !== null ? Math.round(fairPrice * 1.1) : 0);
 
     const similarListings: SimilarListing[] = report.comparablesUsed.map((c) => ({
       site: c.source,

@@ -162,17 +162,17 @@ function PlateValuation({ plateNumber, type, price }: { plateNumber: string; typ
   const digits = (plateNumber || '').replace(/\D/g, '');
   const tags: string[] = [];
   let score = 50;
-  if (digits.length > 0 && digits.length <= 3) { tags.push('رقم قصير نادر 🏆'); score += 25; }
-  if (/^(\d)\1+$/.test(digits)) { tags.push('أرقام مكررة 💎'); score += 20; }
-  if (/^(012+|123+|234+|345+|456+|567+|678+|789+|987+|876+|765+|654+|543+|432+|321+|210+)$/.test(digits)) { tags.push('رقم متسلسل 🔢'); score += 15; }
-  if (digits === digits.split('').reverse().join('') && digits.length > 1) { tags.push('رقم متناظر 🪞'); score += 10; }
+  if (digits.length > 0 && digits.length <= 3) { tags.push('رقم قصير نادر'); score += 25; }
+  if (/^(\d)\1+$/.test(digits)) { tags.push('أرقام مكررة'); score += 20; }
+  if (/^(012+|123+|234+|345+|456+|567+|678+|789+|987+|876+|765+|654+|543+|432+|321+|210+)$/.test(digits)) { tags.push('رقم متسلسل'); score += 15; }
+  if (digits === digits.split('').reverse().join('') && digits.length > 1) { tags.push('رقم متناظر'); score += 10; }
   score = Math.min(100, score);
 
   const diff = avg && avg > 0 ? Math.round(((price - avg) / avg) * 100) : null;
 
   return (
     <div className="card p-6">
-      <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">تقييم تميّز اللوحة ✨</p>
+      <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">تقييم تميّز اللوحة </p>
       <div className="flex items-center gap-2 mb-2">
         <div className="flex-1 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
           <div className="h-full rounded-full bg-gradient-to-l from-amber-400 to-orange-500" style={{ width: `${score}%` }} />

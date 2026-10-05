@@ -83,6 +83,23 @@ export function resetRateLimit(key: string) {
   rateLimitMap.delete(key);
 }
 
+// Centralized client IP extraction.
+// Prefers x-real-ip (set by trusted proxy/CDN), falls back to first
+// public entry in x-forwarded-for. Never trust raw spoofable headers
+// for security decisions alone — combine with auth + rate limits.
+export function getClientIp(request: { headers: { get(name: string): string | null } }): string {
+  const realIp = request.headers.get('x-real-ip')?.trim();
+  if (realIp && realIp !== '127.0.0.1' && realIp !== '::1') return realIp;
+  const forwarded = request.headers.get('x-forwarded-for') || '';
+  const parts = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+  for (const ip of parts) {
+    if (ip !== '127.0.0.1' && ip !== '::1' && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.16.')) {
+      return ip;
+    }
+  }
+  return parts[0] || realIp || 'unknown';
+}
+
 // Cleanup old entries every 5 minutes
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {

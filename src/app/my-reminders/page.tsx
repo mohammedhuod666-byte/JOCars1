@@ -9,15 +9,15 @@ import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const reminderTypes = [
-  { value: 'OIL_CHANGE', label: 'تغيير زيت', icon: '🛢️', color: 'amber' },
-  { value: 'TIRE_CHANGE', label: 'تغيير إطارات', icon: '🛞', color: 'blue' },
-  { value: 'INSPECTION', label: 'فحص فني', icon: '🔍', color: 'green' },
-  { value: 'INSURANCE', label: 'تجديد تأمين', icon: '🛡️', color: 'purple' },
-  { value: 'BRAKES', label: 'فحوصات فرامل', icon: '⚙️', color: 'red' },
-  { value: 'BATTERY', label: 'بطارية', icon: '🔋', color: 'yellow' },
-  { value: 'TRANSMISSION', label: 'ناقل الحركة', icon: '🔩', color: 'indigo' },
-  { value: 'COOLANT', label: 'سائل التبريد', icon: '💧', color: 'cyan' },
-  { value: 'OTHER', label: 'أخرى', icon: '📋', color: 'gray' },
+  { value: 'OIL_CHANGE', label: 'تغيير زيت', icon: '', color: 'amber' },
+  { value: 'TIRE_CHANGE', label: 'تغيير إطارات', icon: '', color: 'blue' },
+  { value: 'INSPECTION', label: 'فحص فني', icon: '', color: 'green' },
+  { value: 'INSURANCE', label: 'تجديد تأمين', icon: '', color: 'purple' },
+  { value: 'BRAKES', label: 'فحوصات فرامل', icon: '', color: 'red' },
+  { value: 'BATTERY', label: 'بطارية', icon: '', color: 'yellow' },
+  { value: 'TRANSMISSION', label: 'ناقل الحركة', icon: '', color: 'indigo' },
+  { value: 'COOLANT', label: 'سائل التبريد', icon: '', color: 'cyan' },
+  { value: 'OTHER', label: 'أخرى', icon: '', color: 'gray' },
 ];
 
 const colorMap: Record<string, string> = {
@@ -176,8 +176,8 @@ export default function MyRemindersPage() {
                   <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
                     className={`card p-4 ${r.isCompleted ? 'opacity-60' : isOverdue ? 'border-red-300 dark:border-red-800' : ''}`}>
                     <div className="flex items-start gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl ${colorMap[typeInfo.color]}`}>
-                        {typeInfo.icon}
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorMap[typeInfo.color]}`}>
+                        <Bell className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -188,7 +188,7 @@ export default function MyRemindersPage() {
                         {(r.carBrand || r.plateNumber) && (
                           <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
                             <Car className="w-3 h-3" />
-                            <span>{[r.carBrand, r.carModel, r.carYear].filter(Boolean).join(' ')}</span>
+                            <span>{[r.carBrand, r.carModel, r.carYear].filter(Boolean).join('')}</span>
                             {r.plateNumber && <span>• {r.plateNumber}</span>}
                           </div>
                         )}
@@ -235,7 +235,7 @@ export default function MyRemindersPage() {
                     <label className="block text-sm font-medium mb-1">نوع التذكير *</label>
                     <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
                       className="w-full h-11 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm outline-none focus:border-blue-500">
-                      {reminderTypes.map(t => <option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
+                      {reminderTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
                   <div>

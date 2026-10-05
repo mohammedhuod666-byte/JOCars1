@@ -64,7 +64,7 @@ async function main() {
   const audit = baseRes.output?.auditTrace;
 
   if (audit && audit.sensitivity) {
-    console.log(`التقييم بوجود جميع المقارنات: ${audit.finalFmv.toLocaleString()} JOD (عرض: ${audit.displayFmv.toLocaleString()} JOD)\n`);
+    console.log(`التقييم بوجود جميع المقارنات: ${audit.finalFmv?.toLocaleString() ?? 'غير متاح'} JOD (عرض: ${audit.displayFmv?.toLocaleString() ?? 'غير متاح'} JOD)\n`);
     const sensTable = audit.sensitivity.removals.map(r => ({
       'المقارنة المحذوفة': `#${r.index}: ${r.title}`,
       'FMV بدونها': `${r.fmvWithout.toLocaleString()} JOD`,

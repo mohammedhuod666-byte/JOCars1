@@ -142,9 +142,10 @@ export function Header() {
                 <img src="/shield-logo-sm.png" alt="JO Cars" className="h-10 w-10 rounded-lg object-cover" />
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-gradient-to-r from-transparent via-gold-100/40 to-transparent opacity-60 blur-[2px]" />
               </div>
-              <span className="text-lg font-bold text-surface-200 hidden sm:block tracking-tight" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
-                <span className="text-accent-400">JO</span>
-                <span className="text-gold-100">Cars</span>
+              <span className="text-lg font-black text-surface-100 hidden sm:block tracking-tight" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+                <span className="text-gold-100">JO</span>
+                <span className="text-surface-100">Cars</span>
+                <span className="text-gold-100">.</span>
               </span>
             </Link>
 
@@ -290,8 +291,8 @@ export function Header() {
         >
           <div className="absolute top-0 left-0 right-0 h-0.5 bg-gold-100 opacity-90" />
           
-          {/* Scrollable Container — Fits 4 items initially (~180px) */}
-          <div className="p-1.5 max-h-[184px] overflow-y-auto scroll-smooth divide-y divide-surface-700/30">
+          {/* Scrollable Container — shows 8 items, less hidden */}
+          <div className="p-1.5 max-h-[360px] overflow-y-auto scroll-smooth divide-y divide-surface-700/30">
             {secondaryLinks.map((link) => {
               const Icon = link.icon;
               const active = pathname === link.href || pathname.startsWith(link.href + '/');

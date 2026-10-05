@@ -1,28 +1,53 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { useInScrollView, scrollStyle } from '@/hooks/useInScrollView';
+import { formatNumber } from '@/lib/utils';
 
-const cities = [
-  { slug: 'amman', name: 'عمّان', count: '800+' },
-  { slug: 'irbid', name: 'إربد', count: '120+' },
-  { slug: 'zarqa', name: 'الزرقاء', count: '80+' },
-  { slug: 'aqaba', name: 'العقبة', count: '40+' },
-  { slug: 'mafraq', name: 'المفرق', count: '30+' },
-  { slug: 'jerash', name: 'جرش', count: '25+' },
-  { slug: 'ajloun', name: 'عجلون', count: '15+' },
-  { slug: 'karak', name: 'الكرك', count: '20+' },
-  { slug: 'salt', name: 'السلط', count: '15+' },
-  { slug: 'madaba', name: 'مادبا', count: '10+' },
-  { slug: 'tafileh', name: 'الطفيلة', count: '8+' },
-  { slug: 'maan', name: 'معان', count: '8+' },
+interface CityItem {
+  slug: string;
+  name: string;
+  count?: number;
+}
+
+const FALLBACK_CITIES: CityItem[] = [
+  { slug: 'amman', name: 'عمّان' },
+  { slug: 'irbid', name: 'إربد' },
+  { slug: 'zarqa', name: 'الزرقاء' },
+  { slug: 'aqaba', name: 'العقبة' },
+  { slug: 'mafraq', name: 'المفرق' },
+  { slug: 'jerash', name: 'جرش' },
+  { slug: 'ajloun', name: 'عجلون' },
+  { slug: 'karak', name: 'الكرك' },
+  { slug: 'salt', name: 'السلط' },
+  { slug: 'madaba', name: 'مادبا' },
+  { slug: 'tafileh', name: 'الطفيلة' },
+  { slug: 'maan', name: 'معان' },
 ];
 
 export function CitiesSection() {
   const [expanded, setExpanded] = useState(false);
+  const [cities, setCities] = useState<CityItem[]>(FALLBACK_CITIES);
   const { ref, isInView } = useInScrollView(0.05);
+
+  // Real per-city ad counts from the API (no made-up numbers).
+  useEffect(() => {
+    fetch('/api/cars/cities')
+      .then((r) => r.json())
+      .then((d) => {
+        if (!Array.isArray(d?.data)) return;
+        setCities(
+          d.data.map((c: { slug: string; nameAr: string; _count?: { cars?: number } }) => ({
+            slug: c.slug,
+            name: c.nameAr,
+            count: c._count?.cars ?? 0,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const visibleCities = expanded ? cities : cities.slice(0, 8);
 
@@ -33,11 +58,9 @@ export function CitiesSection() {
       <div className="container-custom">
         <div className="text-center mb-10 sm:mb-12" style={scrollStyle(isInView)}>
           <div className="flex items-center justify-center gap-3 mb-4" style={scrollStyle(isInView, { delay: 0.05 })}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-600 shadow-lg shadow-success-500/20">
-              <MapPin className="w-5 h-5 text-white" />
-            </div>
+            <p className="kicker kicker-center justify-center">المدن</p>
           </div>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-surface-200 tracking-tight"
+          <h2 className="display text-2xl sm:text-3xl md:text-4xl text-surface-50"
             style={scrollStyle(isInView, { delay: 0.1 })}>
             تصفح حسب المدينة
           </h2>
@@ -61,7 +84,9 @@ export function CitiesSection() {
                   <span className="block text-sm font-semibold text-surface-200 group-hover:text-accent-300 transition-colors">
                     {city.name}
                   </span>
-                  <span className="text-xs text-surface-500">{city.count} إعلان</span>
+                  {city.count !== undefined && (
+                    <span className="text-xs text-surface-500 tabular-nums">{formatNumber(city.count)} إعلان</span>
+                  )}
                 </div>
               </Link>
             </div>

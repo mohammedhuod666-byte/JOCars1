@@ -109,6 +109,7 @@ export async function authenticateRequest(request: NextRequest) {
       banUntil: true,
       dealerName: true,
       dealerLogo: true,
+      dealerVerified: true,
       forumBannedCommentUntil: true,
       forumBannedTopicUntil: true,
       carCommentBannedUntil: true,

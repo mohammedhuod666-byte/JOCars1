@@ -431,6 +431,17 @@ export default function AddCarPage() {
   const [vinHistory, setVinHistory] = useState<any[]>([]);
   const [conditionDetails, setConditionDetails] = useState<ConditionItem[]>([]);
   const [draftRestored, setDraftRestored] = useState<{ at: number; hadFiles: boolean } | null>(null);
+  /**
+   * False until the restore attempt has finished.
+   *
+   * The autosave MUST NOT run before this is true. On mount the form holds its
+   * DEFAULTS (year 2026, kilometers 0), and the restore is an async fetch. So
+   * without this gate the debounced autosave fired at 1.2s with the empty form
+   * and overwrote the saved draft with it — the restore then read back the
+   * defaults it had just written, and the seller's work vanished with no error
+   * anywhere. An old comment claimed this was handled; it was not.
+   */
+  const [draftHydrated, setDraftHydrated] = useState(false);
   // Step-5 review. The completeness figure is produced by the SAME scoring
   // module the server uses (lib/listing-score), so the pre-publish number and
   // the post-publish /completeness endpoint cannot drift apart. The server
@@ -483,10 +494,15 @@ export default function AddCarPage() {
         }
         if (cancelled) return;
 
-        const hadFiles = Object.keys(serverDraft.form || {}).some((k) =>
-          ['licenseDocUrl', 'inspectionDocUrl', 'serviceRecordDocUrl'].includes(k),
+        // Documents are restorable server-side, so `hadFiles` must distinguish
+        // images (never stored) from documents (re-signed on read). Deriving it
+        // from form keys was wrong: the URLs live in a separate column.
+        applyDraft(
+          serverDraft.form,
+          serverDraft.step,
+          serverDraft.savedAt,
+          images.length > 0 || !!coverImage || !!licenseDoc || !!inspectionDoc || !!serviceRecordDoc,
         );
-        applyDraft(serverDraft.form, serverDraft.step, serverDraft.savedAt, hadFiles);
 
         // Live document links, re-signed server-side. Only wired up if the
         // seller actually has documents on file.
@@ -509,6 +525,10 @@ export default function AddCarPage() {
         // Network trouble must not block the form; the local fallback covers it.
         const local = loadAddCarDraft(user!.id);
         if (local && !cancelled) applyDraft(local.form, local.step, local.savedAt, local.hadFiles);
+      } finally {
+        // The restore has settled: the form now holds either the draft or the
+        // defaults, and the autosave may safely begin from whichever it is.
+        if (!cancelled) setDraftHydrated(true);
       }
     };
 
@@ -517,9 +537,29 @@ export default function AddCarPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user?.id]);
 
+  /**
+   * Release the autosave gate.
+   *
+   * Runs after the restore settles on every path — draft found, no draft, or the
+   * request failed. A `finally`-style guarantee, because a draft that is never
+   * released would leave the seller unable to save anything at all, which is a
+   * worse failure than the one being fixed.
+   */
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let done = false;
+    const release = () => { if (!done) { done = true; setDraftHydrated(true); } };
+    // Safety net: if the restore effect somehow never settles (a hung request,
+    // a thrown error outside its own try), release anyway after a short delay.
+    const t = setTimeout(release, 4000);
+    return () => { clearTimeout(t); release(); };
+  }, [isAuthenticated]);
+
   // Debounced autosave to BOTH layers.
   useEffect(() => {
-    if (!isAuthenticated || !user?.id) return;
+    // Gated on the restore: writing the initial (empty) form over a saved draft
+    // destroys the seller's work without any visible error.
+    if (!isAuthenticated || !user?.id || !draftHydrated) return;
     const hadFiles = images.length > 0 || !!coverImage || !!licenseDoc || !!inspectionDoc || !!serviceRecordDoc;
     const payload = { step, form: { ...form, conditionDetails } as Record<string, unknown>, hadFiles };
     const t = setTimeout(() => {
@@ -539,7 +579,7 @@ export default function AddCarPage() {
       }).catch(() => { /* local copy already saved */ });
     }, 1200);
     return () => clearTimeout(t);
-  }, [form, step, conditionDetails, images.length, coverImage, licenseDoc, inspectionDoc, stagedDocUrls, isAuthenticated, user?.id, token]);
+  }, [form, step, conditionDetails, images.length, coverImage, licenseDoc, inspectionDoc, stagedDocUrls, isAuthenticated, user?.id, token, draftHydrated]);
 
   // Warn before losing a long, partially-typed form.
   useEffect(() => {
@@ -1116,23 +1156,66 @@ export default function AddCarPage() {
       const formData = new FormData();
 
       /**
-       * Stage every document in its OWN request, then send only the signed
-       * references.
+       * Stage gallery images FIRST — each in its own request so they
+       * never travel inside the publish multipart body. This is the
+       * structural fix for "تعذر استلام البيانات": gallery images are
+       * the only bytes left in the publish body (text + references),
+       * so the 4.5MB platform ceiling stops being reachable.
        *
-       * This is the structural fix for "تعذر استلام البيانات": the publish body
-       * now carries nothing but gallery images (~200KB x 10 ≈ 2MB), so the 4.5MB
-       * platform ceiling stops being reachable regardless of how large the
-       * seller's PDFs are. Documents are still fully validated server-side and
-       * still stored privately (authenticated Cloudinary assets); they simply
-       * travel on a route where each request fits.
+       * Old path: gallery images inside FormData → multipart > 4.5MB →
+       * Vercel edge returns HTML 413 → res.json() throws → fake network
+       * error → misleading message.
+       * New path: images staged via /api/upload/stage → publish body =
+       * text data + image URLs only → always under ceiling.
        */
-      /**
-       * Uploads one document and returns BOTH forms of the result:
-       *   ref — the signed reference the publish call sends (the only trusted input)
-       *   url — the private asset URL, kept only so a draft can restore the
-       *         document later. Never sent to the publish endpoint, because a
-       *         bare URL is exactly what the signature exists to prevent.
-       */
+      setStageLabel('جارٍ رفع صور السيارة…');
+      const imageUrls: string[] = [];
+      for (let i = 0; i < sendImages.length; i++) {
+        setStageLabel(`جارٍ رفع صورة ${i + 1}/${sendImages.length}…`);
+        const fd = new FormData();
+        fd.append('kind', 'gallery');
+        fd.append('file', sendImages[i]);
+        const imgRes = await fetch('/api/upload/stage', {
+          method: 'POST',
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: fd,
+        });
+        const imgCt = imgRes.headers.get('content-type') || '';
+        if (isPlatformTooLarge(imgRes.status, imgCt)) {
+          throw new Error(singleFileTooLargeMessage(sendImages[i].size, `صورة السيارة ${i + 1}`));
+        }
+        let imgJson: any = null;
+        try { imgJson = await imgRes.json(); } catch { /* handled below */ }
+        if (!imgRes.ok || !imgJson?.success || !imgJson?.data?.url) {
+          throw new Error(imgJson?.error || `تعذر رفع صورة ${i + 1}`);
+        }
+        imageUrls.push(imgJson.data.url);
+        setStageLabel(`تم رفع صورة ${i + 1}/${sendImages.length}`);
+      }
+
+      // Cover: reuse gallery URL when index is valid, else upload the separate file.
+      let coverUrl: string | undefined;
+      if (!Number.isNaN(coverIndex) && imageUrls[coverIndex]) {
+        coverUrl = imageUrls[coverIndex];
+      } else if (sendCover) {
+        setStageLabel('جارٍ رفع صورة الغلاف…');
+        const fd = new FormData();
+        fd.append('kind', 'gallery');
+        fd.append('file', sendCover);
+        const covRes = await fetch('/api/upload/stage', {
+          method: 'POST', credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: fd,
+        });
+        const covCt = covRes.headers.get('content-type') || '';
+        if (isPlatformTooLarge(covRes.status, covCt)) throw new Error(singleFileTooLargeMessage(sendCover.size, 'صورة الغلاف'));
+        let covJson: any = null;
+        try { covJson = await covRes.json(); } catch {}
+        if (!covRes.ok || !covJson?.success || !covJson?.data?.url) throw new Error(covJson?.error || 'تعذر رفع صورة الغلاف');
+        coverUrl = covJson.data.url;
+      }
+
+      // ── Stage documents (each in its own request, signed refs) ──
       const stageDoc = async (file: File, kind: string, label: string): Promise<{ ref: string; url: string }> => {
         const fd = new FormData();
         fd.append('kind', kind);
@@ -1144,16 +1227,11 @@ export default function AddCarPage() {
           body: fd,
         });
         const ct = res.headers.get('content-type') || '';
-        // The edge answers an oversized body with HTML before our handler runs.
         if (isPlatformTooLarge(res.status, ct)) {
           throw new Error(singleFileTooLargeMessage(file.size, label));
         }
         let json: any = null;
-        try {
-          json = await res.json();
-        } catch {
-          throw new Error(`تعذر رفع ${label} (خطأ ${res.status}) — حاول مجدداً`);
-        }
+        try { json = await res.json(); } catch { /* handled below */ }
         if (!res.ok || !json?.success || !json?.data?.ref || !json?.data?.url) {
           throw new Error(json?.error || `تعذر رفع ${label}`);
         }
@@ -1217,10 +1295,12 @@ export default function AddCarPage() {
       if (!isNaN(acc) && acc > 0) formData.append('acceleration', String(acc));
 
       if (conditionDetails.length > 0) formData.append('conditionDetails', JSON.stringify(conditionDetails));
-      sendImages.forEach(img => formData.append('images', img));
-      // Index, not a second copy of the same bytes. The server resolves the
-      // cover from the gallery URL it already has.
-      if (coverIndex >= 0 && sendImages[coverIndex]) formData.append('coverIndex', String(coverIndex));
+      // Gallery images are now staged separately — send their CDN URLs
+      // instead of raw bytes so the publish body never exceeds the 4.5MB
+      // Vercel edge limit (the root cause of "تعذر استلام البيانات").
+      if (imageUrls.length > 0) formData.append('imageUrls', JSON.stringify(imageUrls));
+      if (coverUrl) formData.append('coverUrl', coverUrl);
+      else if (coverIndex >= 0 && imageUrls[coverIndex]) formData.append('coverIndex', String(coverIndex));
       else if (sendCover) formData.append('coverImage', sendCover);
       // Signed references only — no document bytes in this request.
       if (staged.license) formData.append('licenseDocRef', staged.license);
@@ -1278,9 +1358,9 @@ export default function AddCarPage() {
         }
       }
     } catch (err) {
-      // A staged-document failure carries a real, actionable reason (wrong
-      // format, too large, storage refused). Swallowing it into "connection
-      // error" is what made the original report impossible to diagnose.
+      // A staged-document/image failure carries a real, actionable reason.
+      // Swallowing it into "connection error" is what made the original
+      // report impossible to diagnose.
       const msg = err instanceof Error ? err.message : '';
       if (msg) {
         toast.error(msg, { duration: 9000, id: 'car-publish' });
@@ -1396,11 +1476,18 @@ export default function AddCarPage() {
               <RotateCcw className="w-5 h-5 text-amber-400 shrink-0" />
               <div className="text-xs text-amber-200 leading-relaxed flex-1 min-w-[220px]">
                 <p className="font-black">تمت استعادة بياناتك المحفوظة ({draftAgeLabel(draftRestored.at)})</p>
-                {draftRestored.hadFiles && (
-                  <p className="text-amber-200/80 mt-0.5">
-                    تنبيه: الصور والمستندات لا تُحفظ تلقائياً — يرجى رفعها من جديد قبل النشر.
-                  </p>
-                )}
+                {/*
+                  Images are never persisted — persisting base64 blobs would blow
+                  the storage quota and would be worthless in a database, since
+                  they are re-attached from the seller's device anyway. Documents
+                  ARE recovered: the draft keeps the private asset URL and the
+                  server re-signs it on read. Telling the seller documents are
+                  lost would be false, and would make them re-upload work the
+                  system already has.
+                */}
+                <p className="text-amber-200/80 mt-0.5">
+                  الصور لا تُحفظ — يرجى رفعها من جديد. أما المستندات فتم استرجاعها تلقائياً.
+                </p>
               </div>
               <button
                 type="button"

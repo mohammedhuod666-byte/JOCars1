@@ -34,9 +34,10 @@ function loadCache() {
 export function BadgeDisplay({ badges }: { badges?: string[] | string | null }) {
   const [, setTick] = useState(0);
   const arr: string[] = !badges ? [] : Array.isArray(badges) ? badges : (() => { try { return JSON.parse(badges); } catch { return []; } })();
-  if (arr.length === 0) return null;
 
+  // Hooks must run unconditionally (before any early return).
   useEffect(() => {
+    if (arr.length === 0) return;
     if (!cacheLoaded) {
       if (!loading) loadCache();
       const waiter = () => setTick(t => t + 1);
@@ -44,9 +45,12 @@ export function BadgeDisplay({ badges }: { badges?: string[] | string | null }) 
       return () => { const idx = waiters.indexOf(waiter); if (idx >= 0) waiters.splice(idx, 1); };
     }
     setTick(t => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resolved = arr.map(id => CACHE.get(id) || { icon: '🏆', nameAr: id });
+  if (arr.length === 0) return null;
+
+  const resolved = arr.map(id => CACHE.get(id) || { icon: '', nameAr: id });
 
   return (
     <div className="flex items-center gap-0.5">

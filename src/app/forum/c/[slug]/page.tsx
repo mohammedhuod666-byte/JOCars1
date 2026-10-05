@@ -155,9 +155,9 @@ export default function CategoryTopicsPage() {
           <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto scrollbar-none">
             {[
               { id: 'all', label: 'كافة المواضيع' },
-              { id: 'pinned', label: '📌 مثبتة' },
-              { id: 'solved', label: '✅ مجابة ومحلولة' },
-              { id: 'popular', label: '🔥 شائعة' },
+              { id: 'pinned', label: ' مثبتة' },
+              { id: 'solved', label: ' مجابة ومحلولة' },
+              { id: 'popular', label: ' شائعة' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -215,7 +215,7 @@ export default function CategoryTopicsPage() {
 
                         {topic.isSolved && (
                           <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-extrabold flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> مُحَلول ✅
+                            <CheckCircle2 className="w-3 h-3" /> مُحَلول 
                           </span>
                         )}
 

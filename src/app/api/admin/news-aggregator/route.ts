@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { isCronAuthorized } from '@/lib/cron-auth';
 import { chatCompletion } from '@/ai/nvidia-client';
 
 /**
@@ -15,6 +16,9 @@ import { chatCompletion } from '@/ai/nvidia-client';
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Scraping + AI summaries can run long — allow the full window on Vercel too.
+export const maxDuration = 300;
 
 // Structured RSS feeds (real article URLs — fastest & most reliable)
 const RSS_SOURCES = [
@@ -275,7 +279,7 @@ export async function POST(request: NextRequest) {
   // Admin button OR internal scheduler (same cron secret as backups)
   const cronSecret = process.env.BACKUP_CRON_SECRET;
   const headerSecret = request.headers.get('x-cron-secret') || '';
-  const isCron = !!cronSecret && headerSecret === cronSecret;
+  const isCron = (!!cronSecret && headerSecret === cronSecret) || isCronAuthorized(request);
   if ((!user || user.role !== 'ADMIN') && !isCron) return unauthorizedResponse();
 
   const authorId = user?.id || (await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true } }).catch(() => null))?.id;
@@ -362,7 +366,7 @@ export async function POST(request: NextRequest) {
       const summary = summaries[i];
       const excerpt = (summary || p.body.slice(0, 280)).slice(0, 300);
       const content = summary
-        ? `**الخلاصة الذكية ✨**\n${summary}\n\n---\n${p.body}\n\n---\n*المصدر: [${p.source}](${p.url})*`
+        ? `**الخلاصة الذكية **\n${summary}\n\n---\n${p.body}\n\n---\n*المصدر: [${p.source}](${p.url})*`
         : `${p.body}\n\n---\n*المصدر: [${p.source}](${p.url})*`;
 
       const slug = `news-${Date.now().toString(36)}-${i}`;
@@ -388,7 +392,7 @@ export async function POST(request: NextRequest) {
 
     const secs = Math.round((Date.now() - started) / 1000);
     return successResponse({
-      message: `تم استيراد ${created.length} خبر سيارات ✅ خلال ${secs} ثانية (فحص ${candidates.length} مرشحاً)`,
+      message: `تم استيراد ${created.length} خبر سيارات  خلال ${secs} ثانية (فحص ${candidates.length} مرشحاً)`,
       created,
       checked: candidates.length,
       verified: verified.length,
@@ -400,7 +404,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Vercel Cron fires GET + Authorization: Bearer <CRON_SECRET> — trigger the
+  // daily import when authorized; otherwise fall through to the listing below.
+  if (process.env.BACKUP_CRON_SECRET && isCronAuthorized(request)) return POST(request);
   try {
     const [articles, todayCount] = await Promise.all([
       prisma.article.findMany({

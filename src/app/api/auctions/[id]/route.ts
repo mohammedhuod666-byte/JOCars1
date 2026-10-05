@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
+import { createAuditLog } from '@/lib/audit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,13 +13,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     include: {
       bids: {
         orderBy: { amount: 'desc' },
+        take: 50,
         include: { user: { select: { id: true, name: true, image: true } } },
       },
       seller: { select: { id: true, name: true } },
       winner: { select: { id: true, name: true } },
       car: {
         select: {
-          id: true, slug: true, year: true, price: true, coverImage: true, images: true,
+          id: true, slug: true, year: true, price: true, coverImage: true,
+          images: { take: 20, orderBy: { order: 'asc' } },
           kilometers: true, fuelType: true, transmission: true, drivetrain: true,
           color: true, doors: true, engineCapacity: true, condition: true, description: true,
           brand: { select: { nameAr: true, nameEn: true } },
@@ -41,7 +45,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     auction.winnerId = winner?.userId || null;
   }
 
-  const myLastBid = user ? auction.bids.filter(b => b.userId === user.id).sort((a, b) => b.amount - a.amount)[0] : null;
+  const myLastBid = user
+    ? await prisma.bid.findFirst({
+        where: { auctionId: auction.id, userId: user.id },
+        orderBy: { amount: 'desc' },
+      })
+    : null;
 
   return Response.json({
     success: true,
@@ -58,8 +67,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!auction) return Response.json({ error: 'المزاد غير موجود' }, { status: 404 });
   if (auction.sellerId !== user.id && user.role !== 'ADMIN') return Response.json({ error: 'لا تملك صلاحية' }, { status: 403 });
 
-  const { status } = await request.json();
+  const statusSchema = z.object({
+    status: z.enum(['ACTIVE', 'ENDED', 'CANCELLED'], { errorMap: () => ({ message: 'حالة المزاد غير صالحة' }) }),
+  });
+  const parsedBody = statusSchema.safeParse(await request.json());
+  if (!parsedBody.success) return Response.json({ success: false, error: 'حالة المزاد غير صالحة' }, { status: 422 });
+  const { status } = parsedBody.data;
   const updated = await prisma.auction.update({ where: { id }, data: { status } });
+
+  await createAuditLog({
+    action: 'UPDATE_AUCTION', actorId: user.id,
+    entityType: 'Auction', entityId: id,
+    description: `تعديل المزاد ${id} إلى الحالة ${status}`,
+    oldValue: auction.status, newValue: status,
+  });
 
   return Response.json({ success: true, data: updated });
 }

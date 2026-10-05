@@ -17,17 +17,6 @@ const categoryLabels: Record<string, string> = {
   OTHER: 'أخرى',
 };
 
-const categoryIcons: Record<string, string> = {
-  OIL_CHANGE: '🛢️',
-  TIRES: '⚙️',
-  BODYWORK: '🔧',
-  MECHANIC: '🔩',
-  ELECTRICAL: '⚡',
-  AC: '❄️',
-  DETAILING: '✨',
-  OTHER: '🔧',
-};
-
 function CitySelector({ cities, selected, onSelect }: { cities: City[]; selected: string; onSelect: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -130,7 +119,7 @@ export default function MaintenancePage() {
               <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)}
                 className="w-full h-11 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm outline-none focus:border-blue-500">
                 <option value="">كل الخدمات</option>
-                {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{categoryIcons[k]} {v}</option>)}
+                {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
           </div>
@@ -148,7 +137,7 @@ export default function MaintenancePage() {
             {services.map(s => (
               <motion.div key={s.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card p-5 hover:shadow-lg transition-all">
                 <div className="flex items-start justify-between mb-3">
-                  <span className="text-2xl">{categoryIcons[s.category] || '🔧'}</span>
+                  <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-500"><Wrench className="w-5 h-5" /></span>
                   {(s.user as any)?.name && (
                     <span className="text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded-full">
                       {s.user?.name}

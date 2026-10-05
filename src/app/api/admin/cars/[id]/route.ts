@@ -46,6 +46,28 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (body.status === 'APPROVED') {
         try { await checkPriceAlerts(id); } catch {}
         try { await calculateFairPrice(id); } catch {}
+        // Fire-and-forget initial valuation so every approved car carries
+        // a market value without blocking the response (spec §13 revalue).
+        try {
+          const { runValuation } = await import('@/ai/valuation/engine');
+          const { sanitizeFeatures } = await import('@/lib/car-features');
+          runValuation(
+            {
+              brand: oldCar.brand?.nameAr || '', brandEn: oldCar.brand?.nameEn || null,
+              model: oldCar.model?.nameAr || '', modelEn: oldCar.model?.nameEn || null,
+              year: oldCar.year, trim: oldCar.trim || null,
+              kilometers: oldCar.kilometers || 0,
+              fuelType: oldCar.fuelType || null,
+              transmission: oldCar.transmission || null,
+              drivetrain: (oldCar as any).drivetrain || null,
+              condition: oldCar.condition || null,
+              city: null, engineCapacity: oldCar.engineCapacity || null,
+              horsepower: (oldCar as any).horsepower || null,
+              specs: sanitizeFeatures((oldCar as any).features),
+            },
+            { carId: id, userId: null, targetPrice: oldCar.price ?? null },
+          ).catch(() => {});
+        } catch { /* best-effort background valuation */ }
       }
     }
 

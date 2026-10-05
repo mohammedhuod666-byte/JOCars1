@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { proxyNewsImage } from '@/lib/news-image';
 import { Newspaper, Plus, Pencil, Eye, Loader2, Trash2, Clock, User, AlertTriangle } from 'lucide-react';
 import type { Article } from '@/types';
 import toast from 'react-hot-toast';
@@ -82,7 +84,7 @@ export default function AdminArticlesPage() {
           {articles.map(article => (
             <div key={article.id} className="card p-4 flex items-center justify-between">
               <div className="flex items-center gap-4 min-w-0">
-                {article.image && <img src={article.image} alt="" className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />}
+                {article.image && <Image src={proxyNewsImage(article.image)} alt="" width={56} height={56} onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} className="rounded-xl object-cover flex-shrink-0" />}
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-white truncate">{article.title}</p>
                   <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">

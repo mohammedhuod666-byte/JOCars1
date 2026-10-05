@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Award, Plus, X, Loader2, Edit3, Trash2, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const EMOJIS = ['🏆', '🥇', '🥈', '🥉', '⭐', '💎', '👑', '🔥', '✅', '🌟', '✨', '💫', '🎯', '🏅', '🎖️', '💪', '👍', '📦', '🚗', '🏪'];
+const EMOJIS = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
 
 interface BadgeItem {
   id: string;
@@ -25,7 +25,7 @@ export default function AdminBadgesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modal, setModal] = useState<{ open: boolean; edit?: BadgeItem }>({ open: false });
   const [formName, setFormName] = useState('');
-  const [formIcon, setFormIcon] = useState('🏆');
+  const [formIcon, setFormIcon] = useState('');
   const [formColor, setFormColor] = useState('#f59e0b');
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function AdminBadgesPage() {
       .catch(() => setLoading(false));
   }, [isAuthenticated, user, router]);
 
-  const openAdd = () => { setFormName(''); setFormIcon('🏆'); setFormColor('#f59e0b'); setModal({ open: true }); };
+  const openAdd = () => { setFormName(''); setFormIcon(''); setFormColor('#f59e0b'); setModal({ open: true }); };
   const openEdit = (b: BadgeItem) => { setFormName(b.nameAr); setFormIcon(b.icon); setFormColor(b.color); setModal({ open: true, edit: b }); };
 
   const handleSave = async () => {

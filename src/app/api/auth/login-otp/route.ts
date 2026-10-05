@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { checkRateLimit } from '@/lib/rate-limit';
-import { setOtp, normalizeJoPhone } from '@/lib/otp-store';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { setOtp, normalizeJoPhone, generateSecureOtp } from '@/lib/otp-store';
 import { sendWhatsApp, isWhatsAppConfigured } from '@/lib/whatsapp';
 
 // POST /api/auth/login-otp { phone } → send login code via WhatsApp
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`login-otp:${ip}`, { windowMs: 15 * 60 * 1000, maxRequests: 5 });
+    const ip = getClientIp(request);
+    const rateLimit = await checkRateLimitAsync(`login-otp:${ip}`, { windowMs: 15 * 60 * 1000, maxRequests: 5 });
     if (!rateLimit.allowed) {
       return NextResponse.json({ success: false, error: 'محاولات كثيرة — حاول بعد 15 دقيقة' }, { status: 429 });
     }
@@ -29,9 +29,30 @@ export async function POST(request: NextRequest) {
     }
 
     if (user) {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const code = generateSecureOtp();
       setOtp(phone, code);
-      await sendWhatsApp(phone, `🔑 *رمز دخول JO Cars*\n\nالرمز: *${code}*\n\nصالح 5 دقائق. لا تشاركه مع أحد.`);
+      const message = `رمز دخول JO Cars
+
+الرمز: ${code}
+
+صالح 5 دقائق. لا تشاركه مع أحد.`;
+      const result = await sendWhatsApp(phone, message);
+      // Always log the code server-side so admins can help users in dev/tests.
+      // In production with a real provider this line should be removed.
+      console.log(`[OTP] code for ${phone}: ${code} (delivered=${result.success} via=${result.method})`);
+
+      if (!result.success) {
+        return NextResponse.json({
+          success: false,
+          error: result.method === 'log'
+            ? 'خدمة الواتساب غير مفعلة على الخادم — تواصل مع الإدارة لتفعيل ULTRA_MSG_TOKEN'
+            : `فشل إرسال الواتساب: ${result.error || 'خطأ غير معروف'}`,
+          whatsappConfigured: false,
+          // Dev-only: expose the code so the tester can log in without WhatsApp.
+          // Never sent in production.
+          ...(process.env.NODE_ENV !== 'production' ? { devCode: code } : {}),
+        }, { status: 503 });
+      }
     }
 
     return NextResponse.json({

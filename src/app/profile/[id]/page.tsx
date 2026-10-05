@@ -141,7 +141,7 @@ export default function PublicProfilePage() {
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{profile.name}</h1>
                   {profile.phoneVerified && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold" title="رقم هاتف موثّق">
-                      مشترٍ جاد ✅
+                      مشترٍ جاد 
                     </span>
                   )}
                   {isVerifiedTrader && (

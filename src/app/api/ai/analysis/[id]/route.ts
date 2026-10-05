@@ -67,7 +67,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // ── 3) Price analysis with HARD TIMEOUT ──
     // The price estimator calls OpenSooq (external HTTP). If it hangs,
     // we must not block the entire response. Wrap in 6-second timeout.
-    let fairPrice = car.fairPriceEstimate || 0;
+    // Phase-1 FMV gate: null unless the DB carries a proven FMV (the column is
+    // only ever written when valuationMode === 'FMV'), or the estimator below
+    // produces one. Never seeded from the asking price.
+    let fairPrice: number | null = car.fairPriceEstimate ?? null;
     let minPrice = 0;
     let maxPrice = 0;
     let avgPrice = 0;
@@ -178,21 +181,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       conditionLabel = conditionScore >= 80 ? 'جيدة جداً' : conditionScore >= 60 ? 'جيدة' : conditionScore >= 40 ? 'مقبولة' : 'تحتاج صيانة';
     }
 
-    // Fallback price from DB
-    if (fairPrice <= 0) {
+    // Fallback price from DB — Phase-1 FMV gate: only REAL similar-car evidence
+    // may stand in when the engine produced no FMV. The asking price (car.price)
+    // must never become the "expected/fair" price.
+    if (fairPrice === null || fairPrice <= 0) {
       if (dbPrices.length >= 2) {
         avgPrice = Math.round(dbPrices.reduce((s, p) => s + p, 0) / dbPrices.length);
         const sorted = [...dbPrices].sort((a, b) => a - b);
         minPrice = sorted[0];
         maxPrice = sorted[sorted.length - 1];
-        fairPrice = avgPrice;
+        fairPrice = avgPrice; // "السعر المتوقع" = متوسط سيارات مشابهة حقيقية (ليس سعر عادل)
         priceConfidence = 70;
       } else {
-        fairPrice = car.price;
-        minPrice = Math.round(car.price * 0.88);
-        maxPrice = Math.round(car.price * 1.12);
-        avgPrice = car.price;
-        priceConfidence = 40;
+        fairPrice = null; // لا توجد أدلة → لا يُعرض أي رقم
+        minPrice = 0;
+        maxPrice = 0;
+        avgPrice = 0;
+        priceConfidence = 0;
       }
     } else {
       // Calculate avgPrice from DB similar cars (not from LLM)
@@ -206,12 +211,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Never report 0% confidence when we DO have an estimate (e.g. stored
     // fairPriceEstimate with a timed-out estimator) — derive it from the
     // strongest available evidence instead.
-    if (fairPrice > 0 && (!priceConfidence || priceConfidence <= 0)) {
+    if (fairPrice !== null && fairPrice > 0 && (!priceConfidence || priceConfidence <= 0)) {
       priceConfidence = dbPrices.length >= 2 ? 70 : 50;
     }
 
-    const pricePosition = car.price > avgPrice ? 'above' : car.price < avgPrice ? 'below' : 'match';
-    const priceDiffPercent = avgPrice > 0 ? Math.round(Math.abs(car.price - avgPrice) / avgPrice * 100) : 0;
+    // Phase-1: position/diff require a real market average; without one we
+    // report 'unknown' instead of pretending the asking price is "متوافق مع السوق".
+    const pricePosition = avgPrice > 0
+      ? (car.price > avgPrice ? 'above' : car.price < avgPrice ? 'below' : 'match')
+      : 'unknown';
+    const priceDiffPercent = avgPrice > 0 ? Math.round(Math.abs(car.price - avgPrice) / avgPrice * 100) : null;
 
     const dataFields = [car.trim, car.engineCapacity, car.cylinders, car.drivetrain, car.bodyType, car.color, car.vin];
     const filledFields = dataFields.filter(Boolean).length;
@@ -245,7 +254,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
       price: {
         estimate: fairPrice,
-        range: { min: minPrice || Math.round(fairPrice * 0.88), max: maxPrice || Math.round(fairPrice * 1.12) },
+        range: {
+          min: fairPrice !== null && fairPrice > 0 ? (minPrice || Math.round(fairPrice * 0.88)) : null,
+          max: fairPrice !== null && fairPrice > 0 ? (maxPrice || Math.round(fairPrice * 1.12)) : null,
+        },
         avgPrice, position: pricePosition, diffPercent: priceDiffPercent,
         similarCount: similarCarsDb.length + (similarListings.length || 0),
         similarCars: similarCarsDb.slice(0, 10), confidence: priceConfidence,

@@ -30,7 +30,7 @@ export function PushBell({ className = '' }: { className?: string }) {
       const r = await enablePush(token);
       if (r.ok) {
         setStatus('on');
-        toast.success('تم تفعيل الإشعارات! ستصلك تنبيهات انخفاض الأسعار 🔔');
+        toast.success('تم تفعيل الإشعارات! ستصلك تنبيهات انخفاض الأسعار');
       } else {
         toast.error(r.error || 'فشل التفعيل');
         const s = await getPushStatus();
@@ -67,7 +67,7 @@ export function PushBell({ className = '' }: { className?: string }) {
           : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
       } ${className}`}>
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-      {on ? 'الإشعارات مفعّلة 🔔' : 'فعّل إشعارات الأسعار'}
+      {on ? 'الإشعارات مفعّلة ' : 'فعّل إشعارات الأسعار'}
     </button>
   );
 }

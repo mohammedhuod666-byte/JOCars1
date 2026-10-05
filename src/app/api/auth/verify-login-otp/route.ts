@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { signToken, setAuthCookie } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimitAsync } from '@/lib/rate-limit';
 import { getOtp, deleteOtp, MAX_OTP_ATTEMPTS, normalizeJoPhone } from '@/lib/otp-store';
 import { createAuditLog } from '@/lib/audit';
 
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || request.headers.get('x-real-ip') || 'unknown';
 
-    const rateLimit = checkRateLimit(`verify-login-otp:${ip}`, { windowMs: 15 * 60 * 1000, maxRequests: 10 });
+    const rateLimit = await checkRateLimitAsync(`verify-login-otp:${ip}`, { windowMs: 15 * 60 * 1000, maxRequests: 10 });
     if (!rateLimit.allowed) {
       return errorResponse('محاولات كثيرة — حاول بعد 15 دقيقة', 429);
     }

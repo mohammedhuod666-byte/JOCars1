@@ -21,7 +21,7 @@ export default function AdminContentToolsPage() {
     const token = useAuth.getState().token;
     fetch('/api/admin/cars?status=APPROVED', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setRecentCars((data.data || []).slice(0, 20)))
+      .then(data => setRecentCars((Array.isArray(data.data) ? data.data : (data.data?.cars || [])).slice(0, 20)))
       .catch(() => {});
   }, [isAuthenticated, user, router]);
 

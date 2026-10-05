@@ -73,7 +73,7 @@ export default function JordanianInspectionReport({ data, score }: Props) {
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-bold text-white text-lg">كارت الفحص الأردني الموحد 🇯🇴</h3>
+            <h3 className="font-bold text-white text-lg">كارت الفحص الأردني الموحد </h3>
             <p className="text-xs text-slate-400">{report.inspectorName}</p>
           </div>
         </div>

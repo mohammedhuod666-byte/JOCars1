@@ -9,9 +9,11 @@ interface CarGridProps {
   columns?: 2 | 3 | 4;
   loading?: boolean;
   emptyMessage?: string;
+  /** Owner's own listings: enables the readiness/verification chips. */
+  isOwnerView?: boolean;
 }
 
-export function CarGrid({ cars, featured, columns = 3, loading, emptyMessage }: CarGridProps) {
+export function CarGrid({ cars, featured, columns = 3, loading, emptyMessage, isOwnerView = false }: CarGridProps) {
   const gridCols = {
     2: 'grid-cols-1 sm:grid-cols-2',
     3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
@@ -59,7 +61,7 @@ export function CarGrid({ cars, featured, columns = 3, loading, emptyMessage }: 
   return (
     <div className={`grid ${gridCols[columns]} gap-6`}>
       {cars.map((car, index) => (
-        <CarCard key={car.id} car={car} index={index} />
+        <CarCard key={car.id} car={car} index={index} isOwnerView={isOwnerView} />
       ))}
     </div>
   );

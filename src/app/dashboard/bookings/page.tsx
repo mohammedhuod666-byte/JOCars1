@@ -236,7 +236,7 @@ export default function TraderBookingsDashboard() {
           <div className="flex items-center gap-2">
             <Link href="/dealer/dashboard"
               className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow transition-colors flex items-center gap-1.5">
-              <LayoutDashboard className="w-4 h-4" /> لوحة المخزون والغلاف 🏪
+              <LayoutDashboard className="w-4 h-4" /> لوحة المخزون والغلاف 
             </Link>
             <Link href={`/profile/${user.id}`}
               className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1">

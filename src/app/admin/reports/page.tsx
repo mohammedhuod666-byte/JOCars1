@@ -158,8 +158,8 @@ export default function AdminReportsPage() {
                   )}
 
                   <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-400">
-                    <span>📅 {new Date(report.createdAt).toLocaleDateString('ar-JO')}</span>
-                    <span>👤 {report.user?.name || report.user?.email || 'غير معروف'}</span>
+                    <span> {new Date(report.createdAt).toLocaleDateString('ar-JO')}</span>
+                    <span> {report.user?.name || report.user?.email || 'غير معروف'}</span>
                   </div>
                 </div>
 

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { authenticateRequest } from '@/lib/auth';
-import { chatCompletionStream, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
+import { chatCompletionStream, generateArabicFallbackResponse, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';
 import { fetchOpenSooqListings } from '@/lib/opensooq-scrape';
 import { getCachedResponse, setCachedResponse } from '@/ai/chat-cache';
 import {
@@ -589,7 +589,13 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedQuery = normalizeDialect(query);
-    const intent = detectIntent(normalizedQuery);
+    let intent = detectIntent(normalizedQuery);
+    // How-to questions ("كيف أضيف إعلان؟", "اشرح لي طريقة البيع") are
+    // QUESTIONS, not flow triggers — answer them instead of hijacking
+    // the user into the ad-creation flow.
+    if (intent === 'car_listing' && /كيف|شرح|اشرح|طريقة|خطوات|وين|أين|اين|ممكن تشرح|شو الطريقة|هل يمكن|؟\s*$/i.test(normalizedQuery)) {
+      intent = 'site_info';
+    }
     const refCode = extractRefCode(query);
     const sid = sessionId || `user-${user.id}`;
     const conversation = conversationStore.get(sid) || [];
@@ -1095,8 +1101,11 @@ export async function POST(request: NextRequest) {
             sendSSE('token', { content: chunk });
           }
 
-          // Cache the response
-          setCachedResponse(normalizedQuery, intent, fullResponse);
+          // Cache the response — but NEVER cache the offline fallback as if
+          // it were a real answer (that poisons follow-up questions).
+          if (fullResponse && fullResponse !== generateArabicFallbackResponse(query)) {
+            setCachedResponse(normalizedQuery, intent, fullResponse);
+          }
 
           // Save to conversation memory
           conversation.push({ role: 'assistant', content: fullResponse });

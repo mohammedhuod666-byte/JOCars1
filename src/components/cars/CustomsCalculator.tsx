@@ -14,11 +14,11 @@ interface Props {
 }
 
 const FUEL_LABELS: Record<string, string> = {
-  PETROL: 'بنزين ⛽ (51%)',
-  DIESEL: 'ديزل 🛢️ (51%)',
-  HYBRID: 'هايبرد 🔋 (39%)',
-  ELECTRIC: 'كهرباء ⚡ (27%)',
-  PLUGIN_HYBRID: 'بلج-إن هايبرد 🔌 (39%)',
+  PETROL: 'بنزين  (51%)',
+  DIESEL: 'ديزل  (51%)',
+  HYBRID: 'هايبرد  (39%)',
+  ELECTRIC: 'كهرباء  (27%)',
+  PLUGIN_HYBRID: 'بلج-إن هايبرد  (39%)',
 };
 
 interface CalculationResult {
@@ -66,7 +66,7 @@ export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Pro
         }),
       });
       const d = await res.json();
-      if (d.success) { setRemindDone(true); toast.success('تم تفعيل تذكير الترخيص! 🔔'); }
+      if (d.success) { setRemindDone(true); toast.success('تم تفعيل تذكير الترخيص!'); }
       else toast.error(d.error || 'فشل');
     } catch { toast.error('تعذر الاتصال'); }
     setRemindBusy(false);
@@ -111,7 +111,7 @@ export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Pro
           </div>
           <div className="text-right">
             <div className="flex items-center gap-2">
-              <p className="font-semibold text-gray-900 dark:text-white">حاسبة الجمارك والترخيص الأردنية 🇯🇴</p>
+              <p className="font-semibold text-gray-900 dark:text-white">حاسبة الجمارك والترخيص الأردنية </p>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">تحديث 2026</span>
             </div>
             <p className="text-xs text-gray-500">حساب الرسوم الجمركية والترخيص والتأمين وفقاً للتعريفة الرسمية — هذه السيارة: <strong className="text-emerald-600 dark:text-emerald-400">{FUEL_LABELS[fuelType] || fuelType}</strong> • موديل {year} • {engineCapacity ? `${engineCapacity} CC` : 'بدون سعة محددة'}</p>
@@ -140,7 +140,7 @@ export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Pro
                         : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}
                   >
-                    مجمركة ومترخصة جاهزة ✅
+                    مجمركة ومترخصة جاهزة 
                   </button>
                   <button
                     type="button"
@@ -151,7 +151,7 @@ export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Pro
                         : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                     }`}
                   >
-                    المنطقة الحرة الزرقاء (حرة) 🏙️
+                    المنطقة الحرة الزرقاء (حرة) 
                   </button>
                 </div>
               </div>
@@ -248,7 +248,7 @@ export function CustomsCalculator({ year, engineCapacity, price, fuelType }: Pro
                           className="px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-gray-900 text-xs" />
                         <button onClick={handleRemind} disabled={remindBusy}
                           className="px-4 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-50 transition-all">
-                          {remindBusy ? '...' : 'تفعيل 🔔'}
+                          {remindBusy ? '...' : 'تفعيل'}
                         </button>
                       </div>
                     )}

@@ -72,21 +72,21 @@ export default function AdminFairPricePage() {
         <h2 className="text-lg font-bold mb-4">أنواع المؤشرات</h2>
         <div className="space-y-3 mb-8">
           <div className="card p-5 flex items-center gap-4 border-r-4 border-green-500">
-            <div className="w-10 h-10 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-xl">🟢</div>
+            <div className="w-10 h-10 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-xl"></div>
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">أقل من سعر السوق</p>
               <p className="text-sm text-gray-500">يظهر عندما يكون السعر أقل من سعر السوق بـ {Math.abs(data?.thresholds?.belowMarket || 8)}% أو أكثر</p>
             </div>
           </div>
           <div className="card p-5 flex items-center gap-4 border-r-4 border-amber-500">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-xl">🟡</div>
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-xl"></div>
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">مطابق للسوق</p>
               <p className="text-sm text-gray-500">يظهر عندما يكون السعر ضمن ±{data?.thresholds?.aboveMarket || 8}% من سعر السوق</p>
             </div>
           </div>
           <div className="card p-5 flex items-center gap-4 border-r-4 border-red-500">
-            <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-xl">🔴</div>
+            <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-xl"></div>
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">أعلى من سعر السوق</p>
               <p className="text-sm text-gray-500">يظهر عندما يكون السعر أعلى من سعر السوق بـ {data?.thresholds?.aboveMarket || 8}% أو أكثر</p>

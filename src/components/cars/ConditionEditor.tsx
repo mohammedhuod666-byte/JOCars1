@@ -29,7 +29,7 @@ export function ConditionEditor({ value, onChange }: Props) {
       <button type="button" onClick={() => setOpen(!open)}
         className="w-full p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-lg">📋</div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-lg"></div>
           <div className="text-right">
             <p className="font-semibold text-gray-900 dark:text-white">حالة السيارة التفصيلية</p>
             <p className="text-xs text-gray-500">التقييم العام: {avg} / 5  {open ? '(اختياري)' : '(اضغط للتوسيع)'}</p>

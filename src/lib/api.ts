@@ -3,7 +3,7 @@ import { ZodError } from 'zod';
 
 // Helper: ensures every JSON response ships with a charset so Arabic
 // (and other UTF-8 strings) renders correctly across all clients.
-function jsonWithCharset(body: unknown, init: ResponseInit = {}): NextResponse {
+export function jsonWithCharset(body: unknown, init: ResponseInit = {}): NextResponse {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json; charset=utf-8');
   return NextResponse.json(body, { ...init, headers });

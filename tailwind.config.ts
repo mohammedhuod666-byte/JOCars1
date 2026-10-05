@@ -10,19 +10,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // ===== Velocity Elite Surface System =====
+        // ===== Asphalt — warm neutral surface system =====
         surface: {
-          50: '#f5f5f5',
-          100: '#e5e5e5',
-          200: '#d4d4d4',
-          300: '#c6c6cc',
-          400: '#909096',
-          500: '#737887',
-          600: '#45474c',
-          700: '#333535',
-          800: '#1e2020',
-          900: '#121414',
-          950: '#0c0f0f',
+          50: '#f7f3e9',
+          100: '#ece5d3',
+          200: '#d9cfb8',
+          300: '#b8ab90',
+          400: '#8d8168',
+          500: '#6b6250',
+          600: '#4c4636',
+          700: '#353126',
+          800: '#221f17',
+          900: '#1a1712',
+          950: '#12100c',
         },
         // ===== Primary — Subtle blue-gray tint =====
         primary: {

@@ -10,7 +10,8 @@ import {
 import toast from 'react-hot-toast';
 
 interface EstimateData {
-  fairPrice: number;
+  // Phase-1 FMV gate: null whenever the engine produced no FMV.
+  fairPrice: number | null;
   minPrice: number;
   maxPrice: number;
   confidence: number;
@@ -74,7 +75,12 @@ export function AIPriceEstimator({
       const result = await res.json();
       if (result.success && result.data) {
         setData(result.data);
-        toast.success(`السعر المقترح: ${result.data.fairPrice?.toLocaleString()} د.أ`);
+        // Phase-1: never announce a price when none was produced.
+        if (result.data.fairPrice !== null && result.data.fairPrice > 0) {
+          toast.success(`السعر المقترح: ${result.data.fairPrice.toLocaleString()} د.أ`);
+        } else {
+          toast('لا تتوفر أدلة كافية لتقدير سعر عادل', { icon: '⚠️' });
+        }
       } else {
         toast.error(result.error || 'فشل التقدير');
       }
@@ -124,19 +130,28 @@ export function AIPriceEstimator({
 
               <div className="p-5 space-y-4">
 
-                {/* Fair Price */}
+                {/* Fair Price — Phase-1: only a real FMV may render here */}
                 <div className="text-center">
                   <p className="text-sm text-gray-500 mb-1">السعر المقترح للبيع</p>
-                  <p className="text-4xl font-black text-gray-900 dark:text-white">
-                    {data.fairPrice.toLocaleString()}
-                    <span className="text-lg font-medium text-gray-500 mr-1">د.أ</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    نطاق معقول: {data.minPrice.toLocaleString()} — {data.maxPrice.toLocaleString()} د.أ
-                  </p>
+                  {data.fairPrice !== null && data.fairPrice > 0 ? (
+                    <>
+                      <p className="text-4xl font-black text-gray-900 dark:text-white">
+                        {data.fairPrice.toLocaleString()}
+                        <span className="text-lg font-medium text-gray-500 mr-1">د.أ</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        نطاق معقول: {data.minPrice.toLocaleString()} — {data.maxPrice.toLocaleString()} د.أ
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      غير متاح — لا توجد أدلة سوقية كافية
+                    </p>
+                  )}
                 </div>
 
                 {/* Price Range Bar */}
+                {data.fairPrice !== null && data.fairPrice > 0 && (
                 <div className="relative">
                   <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-green-400 via-yellow-400 to-red-400 rounded-full" />
@@ -147,9 +162,10 @@ export function AIPriceEstimator({
                     <span>{data.maxPrice.toLocaleString()}</span>
                   </div>
                 </div>
+                )}
 
                 {/* Comparison with user price */}
-                {currentPrice > 0 && (
+                {currentPrice > 0 && data.fairPrice !== null && data.fairPrice > 0 && (
                   <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
                     <div>
                       <p className="text-xs text-gray-500">سعرك المحدد</p>
@@ -180,11 +196,11 @@ export function AIPriceEstimator({
                   </div>
                 )}
 
-                {/* Use Suggested Price Button */}
-                {onPriceSelect && currentPrice !== data.fairPrice && (
-                  <button type="button" onClick={() => onPriceSelect(data.fairPrice)}
+                {/* Use Suggested Price Button — only when a real FMV exists */}
+                {onPriceSelect && data.fairPrice !== null && data.fairPrice > 0 && currentPrice !== data.fairPrice && (
+                  <button type="button" onClick={() => onPriceSelect(data.fairPrice!)}
                     className="w-full py-2.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all">
-                    استخدام السعر المقترح ({data.fairPrice.toLocaleString()} د.أ)
+                    استخدام السعر المقترح ({data.fairPrice!.toLocaleString()} د.أ)
                   </button>
                 )}
 

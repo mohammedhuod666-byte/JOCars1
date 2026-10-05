@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 import { Car, Mail, Lock, Eye, EyeOff, ArrowRight, Shield, Zap, Users, ChevronLeft, Phone, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,17 +36,23 @@ export default function LoginPage() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
+      let data: { success?: boolean; error?: string; data?: { user: Parameters<typeof login>[0]; token: string } } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        toast.error(`تعذر الوصول للخادم (${res.status}) — تحقق من الإنترنت وحاول مجددا`);
+        return;
+      }
 
-      if (data.success) {
+      if (data && data.success && data.data) {
         login(data.data.user, data.data.token);
         toast.success('تم تسجيل الدخول بنجاح');
         router.push('/');
       } else {
-        toast.error(data.error || 'فشل تسجيل الدخول');
+        toast.error((data && data.error) || `فشل تسجيل الدخول (${res.status})`);
       }
     } catch {
-      toast.error('حدث خطأ في الاتصال');
+      toast.error('حدث خطأ في الاتصال — تحقق من الإنترنت وحاول مجددا');
     } finally {
       setLoading(false);
     }
@@ -60,18 +67,30 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: otpPhone }),
       });
-      const data = await res.json();
-      if (data.success) {
+      let data: { success?: boolean; message?: string; error?: string; whatsappConfigured?: boolean; devCode?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        toast.error(`تعذر الوصول للخادم (${res.status}) — تحقق من الإنترنت وحاول مجددا`);
+        return;
+      }
+      if (data && data.success) {
         setOtpStep('code');
-        toast.success(data.message);
+        toast.success(data.message || 'تم إرسال الرمز');
         if (data.whatsappConfigured === false) {
           toast.error('تنبيه: خدمة واتساب غير مفعلة — تواصل مع الإدارة لتفعيل الرموز', { duration: 6000 });
         }
       } else {
-        toast.error(data.error || 'فشل إرسال الرمز');
+        toast.error((data && data.error) || `فشل إرسال الرمز (${res.status})`, { duration: 6000 });
+        // Dev mode: server returns the code when WhatsApp is not configured
+        if (data && data.devCode) {
+          setOtpCode(data.devCode);
+          setOtpStep('code');
+          toast.success(`وضع التطوير: رمزك هو ${data.devCode}`, { duration: 10000 });
+        }
       }
     } catch {
-      toast.error('حدث خطأ في الاتصال');
+      toast.error('حدث خطأ في الاتصال — تحقق من الإنترنت وحاول مجددا');
     } finally {
       setOtpLoading(false);
     }
@@ -403,6 +422,9 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {/* Google login */}
+              <GoogleLoginButton />
+
               {/* Register Link */}
               <Link
                 href="/auth/register"
@@ -451,11 +473,11 @@ export default function LoginPage() {
             transition={{ duration: 0.5, delay: 0.7 }}
             className="text-center text-[#909096] text-xs mt-8 leading-relaxed"
           >
-            بالدخول إلى حسابك، أنت توافق على{' '}
+            بالدخول إلى حسابك، أنت توافق على{''}
             <Link href="/terms" className="text-[#c6c6cc] hover:text-[#ffc640] transition-colors underline underline-offset-2">
               شروط الاستخدام
             </Link>
-            {' '}و{' '}
+            {''}و{''}
             <Link href="/privacy" className="text-[#c6c6cc] hover:text-[#ffc640] transition-colors underline underline-offset-2">
               سياسة الخصوصية
             </Link>

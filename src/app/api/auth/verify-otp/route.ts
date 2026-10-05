@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { checkRateLimit } from '@/lib/rate-limit';
-import { otpStore } from '../send-otp/route';
+import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { getOtp, deleteOtp, incrementOtpAttempts, normalizeJoPhone } from '@/lib/otp-store';
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Brute-force protection: max 10 verify attempts per IP per minute
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const rateLimit = checkRateLimit(`verify-otp:${ip}`, { windowMs: 60 * 1000, maxRequests: 10 });
+    const ip = getClientIp(request);
+    const rateLimit = await checkRateLimitAsync(`verify-otp:${ip}`, { windowMs: 60 * 1000, maxRequests: 10 });
     if (!rateLimit.allowed) {
       return NextResponse.json({ success: false, error: 'محاولات كثيرة. حاول بعد دقيقة' }, { status: 429 });
     }
@@ -27,34 +27,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'رقم الهاتف والرمز مطلوبان' }, { status: 400 });
     }
 
-    let formattedPhone = phone.replace(/[^0-9+]/g, '');
-    if (formattedPhone.startsWith('0')) formattedPhone = '+962' + formattedPhone.slice(1);
-    if (!formattedPhone.startsWith('+')) formattedPhone = '+' + formattedPhone;
+    const formattedPhone = normalizeJoPhone(String(phone));
+    if (!formattedPhone) {
+      return NextResponse.json({ success: false, error: 'رقم هاتف أردني غير صالح' }, { status: 400 });
+    }
 
-    const record = otpStore.get(formattedPhone);
+    const record = getOtp(formattedPhone);
 
     if (!record) {
       return NextResponse.json({ success: false, error: 'لم يتم العثور على رمز تحقق صالح لهذا الرقم' }, { status: 400 });
     }
 
     if (Date.now() > record.expiresAt) {
-      otpStore.delete(formattedPhone);
+      deleteOtp(formattedPhone);
       return NextResponse.json({ success: false, error: 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد' }, { status: 400 });
     }
 
-    if (record.code !== code.trim()) {
+    if (record.code !== String(code).trim()) {
       // Count wrong attempts — burn the code after too many guesses
-      const attempts = (record.attempts || 0) + 1;
+      const attempts = incrementOtpAttempts(formattedPhone);
       if (attempts >= MAX_OTP_ATTEMPTS) {
-        otpStore.delete(formattedPhone);
+        deleteOtp(formattedPhone);
         return NextResponse.json({ success: false, error: 'تجاوزت عدد المحاولات. اطلب رمزاً جديداً' }, { status: 400 });
       }
-      otpStore.set(formattedPhone, { ...record, attempts });
       return NextResponse.json({ success: false, error: 'رمز التحقق غير صحيح' }, { status: 400 });
     }
 
     // Success! Update user phone & phoneVerified status in DB
-    otpStore.delete(formattedPhone);
+    deleteOtp(formattedPhone);
 
     await prisma.user.update({
       where: { id: user.id },

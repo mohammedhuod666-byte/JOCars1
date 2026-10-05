@@ -136,7 +136,7 @@ export function CarReviews({ carId, carName, aggregate }: Props) {
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 flex-1 min-w-[200px]">
           التقييمات هنا مبنية على تجارب حقيقية لمشترين أتموا صفقة عبر منصة الحجز.
-          كل تقييم موثّق بطلب حجز مكتمل ✓
+          كل تقييم موثّق بطلب حجز مكتمل 
         </p>
       </div>
 

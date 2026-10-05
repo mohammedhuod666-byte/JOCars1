@@ -86,7 +86,7 @@ export default function StatusPage() {
                   ? <CheckCircle2 className="w-8 h-8 text-emerald-400" />
                   : <XCircle className="w-8 h-8 text-amber-400" />}
                 <div>
-                  <p className="font-black text-lg">{allOk ? 'جميع الأنظمة تعمل ✅' : 'بعض الخدمات تحتاج إعداداً ⚠️'}</p>
+                  <p className="font-black text-lg">{allOk ? 'جميع الأنظمة تعمل ' : 'بعض الخدمات تحتاج إعداداً'}</p>
                   <p className="text-xs text-slate-400">مدة التشغيل: {fmtUptime(data.uptimeSec)} • الاستجابة: {data.responseMs}ms</p>
                 </div>
               </div>

@@ -22,7 +22,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       return successResponse({ count: 0, avgOverPct: null, score: null, label: 'لا توجد بيانات كافية' });
     }
 
-    const diffs = cars.map((c) => ((c.price - (c.fairPriceEstimate || c.price)) / (c.fairPriceEstimate || c.price)) * 100);
+    // Phase-1: no asking-price fallback — rows here are already filtered to
+    // fairPriceEstimate > 0 (proven FMV only), so use the value directly.
+    const diffs = cars
+      .filter((c) => c.fairPriceEstimate !== null && c.fairPriceEstimate > 0)
+      .map((c) => ((c.price - c.fairPriceEstimate!) / c.fairPriceEstimate!) * 100);
+    if (diffs.length === 0) {
+      return successResponse({ count: 0, avgOverPct: null, score: null, label: 'لا توجد بيانات كافية' });
+    }
     const avgOverPct = Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
     // Score: 100 at fair-or-below, loses 3 points per 1% average overpricing
     const score = Math.max(0, Math.min(100, Math.round(100 - Math.max(0, avgOverPct) * 3)));

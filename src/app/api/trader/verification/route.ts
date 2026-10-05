@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (profile?.dealerVerified) {
-    return errorResponse('حسابك موثّق مسبقاً ✅', 400);
+    return errorResponse('حسابك موثّق مسبقاً ', 400);
   }
 
   const rateLimit = checkRateLimit(`verify-req:${user.id}`, { windowMs: 60 * 60 * 1000, maxRequests: 3 });
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
     if (existing) {
-      return errorResponse('لديك طلب توثيق معلّق قيد المراجعة ⏳', 400);
+      return errorResponse('لديك طلب توثيق معلّق قيد المراجعة ', 400);
     }
 
     const body = await request.json().catch(() => ({}));

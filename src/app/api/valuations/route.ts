@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       { userId: user.id, askingPriceOverride: targetPrice }
     );
 
-    if (s24.status === 'INSUFFICIENT_DATA' || !s24.fairMarketValue) {
+    if (s24.status === 'INSUFFICIENT_DATA') {
       return successResponse({
         status: 'INSUFFICIENT',
         section24: s24,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const legacyReport = {
+    const legacyReport = s24.fairMarketValue ? {
       estimatedPrice: s24.fairMarketValue,
       minPrice: s24.range.low ?? s24.fairMarketValue,
       maxPrice: s24.range.high ?? s24.fairMarketValue,
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       pipeline: [],
       calculatedAt: new Date().toISOString(),
       targetDiffPct: s24.pricePosition.differencePercent,
-    };
+    } : null;
 
     return successResponse({
       status: s24.status,
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       historyForCar(carId).catch(() => []),
     ]);
 
-    if (s24.status === 'INSUFFICIENT_DATA' || !s24.fairMarketValue) {
+    if (s24.status === 'INSUFFICIENT_DATA') {
       return successResponse({
         status: 'INSUFFICIENT',
         section24: s24,
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const latest = {
+    const latest = s24.fairMarketValue ? {
       estimatedPrice: s24.fairMarketValue,
       minPrice: s24.range.low ?? s24.fairMarketValue,
       maxPrice: s24.range.high ?? s24.fairMarketValue,
@@ -127,10 +127,10 @@ export async function GET(request: NextRequest) {
       calculatedAt: new Date().toISOString(),
       targetDiffPct: s24.pricePosition.differencePercent,
       comparables: s24.comparablesUsed,
-    };
+    } : null;
 
     return successResponse({
-      status: 'DONE',
+      status: s24.status,
       section24: s24,
       latest,
       history,

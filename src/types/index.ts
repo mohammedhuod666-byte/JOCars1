@@ -26,6 +26,7 @@ export interface User {
   banUntil?: string | null;
   lastLoginAt?: string | null;
   lastLoginIp?: string | null;
+  lastSeenAt?: string | null;
   badges?: string[];
   createdAt: Date;
   _count?: { cars: number };
@@ -107,12 +108,34 @@ export interface Car {
   whatsapp?: string | null;
   coverImage?: string | null;
   videoUrl?: string | null;
+  licenseDocUrl?: string | null;
+  inspectionDocUrl?: string | null;
   isNegotiable: boolean;
   hasWarranty: boolean;
   hasServiceHistory: boolean;
   isDamaged: boolean;
   isPaintOriginal: boolean;
   ownerCount: number;
+  firstRegistrationYear?: number | null;
+  interiorColor?: string | null;
+  seats?: number | null;
+  keysCount?: number | null;
+  ownershipSource?: string | null;
+  isFirstOwner?: boolean | null;
+  accidentHistory?: string | null;
+  accidentDetails?: string | null;
+  accidentAreas?: string | null;
+  bodyPaintStatus?: string | null;
+  chassisStatus?: string | null;
+  engineStatus?: string | null;
+  transmissionStatus?: string | null;
+  serviceRecordStatus?: string | null;
+  lastServiceDate?: string | null;
+  lastServiceType?: string | null;
+  serviceNotes?: string | null;
+  customsStatus?: string | null;
+  customsTransactionStatus?: string | null;
+  customsNotes?: string | null;
   aiScore?: number | null;
   fairPriceEstimate?: number | null;
   model3dUrl?: string | null;
@@ -338,7 +361,8 @@ export interface AIAnalysisResult {
 
 export interface PriceEstimate {
   minPrice: number;
-  fairPrice: number;
+  // Phase-1 FMV gate: null when the engine produced no FMV.
+  fairPrice: number | null;
   maxPrice: number;
   confidence: number;
   reasoning: string;

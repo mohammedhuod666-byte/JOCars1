@@ -1,1 +1,0 @@
-audio_play_sound(So_145 ,1 , false)

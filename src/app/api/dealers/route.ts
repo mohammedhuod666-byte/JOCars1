@@ -4,7 +4,9 @@ import { successResponse, errorResponse } from '@/lib/api';
 export async function GET() {
   try {
     const dealers = await prisma.user.findMany({
-      where: { role: 'DEALER', isActive: true },
+      // Only verified dealers are public. Self-registered DEALER accounts
+      // stay hidden until an admin verifies them.
+      where: { role: 'DEALER', isActive: true, dealerVerified: true },
       select: {
         id: true, name: true, phone: true, image: true,
         dealerName: true, dealerLogo: true, dealerDescription: true,

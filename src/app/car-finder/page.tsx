@@ -231,7 +231,7 @@ export default function CarFinderPage() {
                     }}
                     icon={<Bell className="w-4 h-4" />}
                   >
-                    {alertDone ? 'تم تفعيل التنبيه ✅' : 'نبّهني بسيارات بميزانيتي 🔔'}
+                    {alertDone ? 'تم تفعيل التنبيه ' : 'نبّهني بسيارات بميزانيتي'}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => { setStep(0); setResults(null); setAlertDone(false); }}>إعادة الاختبار</Button>
                 </div>

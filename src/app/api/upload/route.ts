@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { authenticateRequest } from '@/lib/auth';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 import { compressToWebP } from '@/lib/image-compress';
 
 const ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'غير مصرح' }, { status: 401 });
     }
 
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const ip = getClientIp(request);
     const rateLimit = checkRateLimit(`upload:${ip}`, RATE_LIMITS.UPLOAD);
     if (!rateLimit.allowed) {
       return NextResponse.json({ success: false, error: 'تم تجاوز الحد المسموح' }, { status: 429 });
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ success: false, error: 'حجم الملف يتجاوز 5 ميجابايت' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'حجم الملف يتجاوز 10 ميجابايت' }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
@@ -84,7 +84,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: { url: result.secure_url, provider: 'cloudinary' } });
     }
 
-    // Try local upload first for fast clean URL
+    // Try local upload for fast clean URL (persistent disk).
+    // NOTE: never fall back to data-URI-in-DB — it bloats Postgres by ~37%
+    // and kills list performance. Fail loudly so ops fixes storage instead.
     try {
       const fileName = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${finalExt}`;
       const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
@@ -98,10 +100,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, data: { url: relativeUrl, provider: 'local' } });
     } catch (writeErr) {
       console.error('Local upload failed:', writeErr);
-      // Fallback: store as base64 data URI in database
-      const base64 = finalBuffer.toString('base64');
-      const dataUri = `data:${finalMime};base64,${base64}`;
-      return NextResponse.json({ success: true, data: { url: dataUri, provider: 'data-uri' } });
+      return NextResponse.json({ success: false, error: 'فشل تخزين الصورة. حاول لاحقا' }, { status: 503 });
     }
   } catch (err) {
     console.error('Upload error:', err);

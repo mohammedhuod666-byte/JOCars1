@@ -370,7 +370,7 @@ export function generateDiagnosis(
       isEngineSound: false,
       pattern,
       confidence,
-      report: `⚠️ **الصوت المسجل لا يبدو كصوت محرك سيارة.**
+      report: ` **الصوت المسجل لا يبدو كصوت محرك سيارة.**
 
 يبدو أن الصوت更像是 صوت ${analysis.zeroCrossingRate > 0.1 ? 'إنسان أو حوار' : 'ضوضاء عامة'}.
 
@@ -384,37 +384,37 @@ export function generateDiagnosis(
     };
   }
 
-  let report = `🔍 **تشخيص صوت المحرك**\n\n`;
-  report += `📊 **النتيجة:** ${pattern.nameAr}\n`;
-  report += `⚡ **التصنيف:** ${pattern.category === 'normal' ? '✅ طبيعي' : pattern.category === 'warning' ? '⚠️ تحذيري' : '🚨 حرج'}\n`;
-  report += `📈 **الثقة:** ${Math.round(confidence * 100)}%\n\n`;
-  report += `📝 **الوصف:** ${pattern.description}\n\n`;
+  let report = ` **تشخيص صوت المحرك**\n\n`;
+  report += ` **النتيجة:** ${pattern.nameAr}\n`;
+  report += ` **التصنيف:** ${pattern.category === 'normal' ? ' طبيعي' : pattern.category === 'warning' ? ' تحذيري' : ' حرج'}\n`;
+  report += ` **الثقة:** ${Math.round(confidence * 100)}%\n\n`;
+  report += ` **الوصف:** ${pattern.description}\n\n`;
 
   if (carInfo) {
-    report += `🚗 **السيارة:** ${carInfo.brand || ''} ${carInfo.model || ''} ${carInfo.year || ''}\n`;
+    report += ` **السيارة:** ${carInfo.brand || ''} ${carInfo.model || ''} ${carInfo.year || ''}\n`;
     if (carInfo.kilometers) {
-      report += `🛣️ **الممشى:** ${carInfo.kilometers.toLocaleString()} كم\n`;
+      report += ` **الممشى:** ${carInfo.kilometers.toLocaleString()} كم\n`;
     }
     report += '\n';
   }
 
-  report += `🔧 **الأسباب المحتملة:**\n`;
+  report += ` **الأسباب المحتملة:**\n`;
   pattern.possibleCauses.forEach((cause, i) => {
     report += `${i + 1}. ${cause}\n`;
   });
 
-  report += `\n💰 **التكلفة التقديرية:** ${pattern.estimatedCost}\n`;
-  report += `\n💡 **التوصية:** ${pattern.recommendation}\n`;
+  report += `\n **التكلفة التقديرية:** ${pattern.estimatedCost}\n`;
+  report += `\n **التوصية:** ${pattern.recommendation}\n`;
 
   const recommendations = [...pattern.recommendation.split('. ')];
 
   // Add urgency-specific advice
   if (pattern.urgency === 'critical') {
-    report += '\n🚨 **تنبيه عاجل:** لا تستمر بالقيادة! قد ينتج عن ذلك تلف خطير في المحرك.';
+    report += '\n **تنبيه عاجل:** لا تستمر بالقيادة! قد ينتج عن ذلك تلف خطير في المحرك.';
     recommendations.unshift('أوقف المحرك فوراً');
     recommendations.unshift('لا تستمر بالقيادة');
   } else if (pattern.urgency === 'high') {
-    report += '\n⚠️ **ملاحظة:** يُفضل عدم القيادة لمسافات طويلة.';
+    report += '\n **ملاحظة:** يُفضل عدم القيادة لمسافات طويلة.';
   }
 
   return {

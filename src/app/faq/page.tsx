@@ -82,7 +82,7 @@ export default function FaqPage() {
           <p className="font-bold mb-1">ما لقيت جوابك؟</p>
           <p className="text-xs text-slate-400 mb-4">اسأل المساعد الذكي أو راسل الدعم مباشرة</p>
           <div className="flex gap-2 justify-center flex-wrap">
-            <Link href="/ai" className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all">اسأل المساعد الذكي ✨</Link>
+            <Link href="/ai" className="px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-all">اسأل المساعد الذكي </Link>
             <Link href="/contact" className="px-5 py-2.5 rounded-xl bg-slate-800 text-xs font-bold hover:bg-slate-700 transition-all flex items-center gap-1.5">
               <MessageCircle className="w-3.5 h-3.5" /> تواصل معنا
             </Link>

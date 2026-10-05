@@ -9,7 +9,7 @@
 Provider: NVIDIA
 Model: openai/gpt-oss-120b
 Base URL: https://integrate.api.nvidia.com/v1
-API Key: nvapi-0Rpxo...5t4uzG
+API Key: <set-via-env-NVIDIA_API_KEY>
 ```
 
 ---

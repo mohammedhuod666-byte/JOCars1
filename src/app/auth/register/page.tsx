@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 import { Car, User, Mail, Lock, Phone, Store, Eye, EyeOff, ArrowRight, Check, Wrench, ChevronLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -233,6 +234,14 @@ export default function RegisterPage() {
                 <div className="relative flex justify-center"><span className="px-4 bg-[#141616]/80 text-[#909096] text-xs uppercase tracking-wider">أو</span></div>
               </div>
 
+              {/* Google signup/login */}
+              <GoogleLoginButton />
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#333535]/40" /></div>
+                <div className="relative flex justify-center"><span className="px-4 bg-[#141616]/80 text-[#909096] text-xs uppercase tracking-wider">لديك حساب؟</span></div>
+              </div>
+
               <Link href="/auth/login" className="flex items-center justify-center gap-2 w-full h-12 rounded-xl border border-[#333535]/60 text-[#c6c6cc] font-medium hover:bg-[#1a1c1c] hover:border-[#ffc640]/30 transition-all duration-300 text-sm">
                 لديك حساب بالفعل؟ تسجيل الدخول
                 <ChevronLeft className="w-4 h-4" />
@@ -241,9 +250,9 @@ export default function RegisterPage() {
           </motion.div>
 
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.7 }} className="text-center text-[#909096] text-xs mt-8 leading-relaxed">
-            بالتسجيل، أنت توافق على{' '}
+            بالتسجيل، أنت توافق على{''}
             <Link href="/terms" className="text-[#c6c6cc] hover:text-[#ffc640] transition-colors underline underline-offset-2">شروط الاستخدام</Link>
-            {' '}و{' '}
+            {''}و{''}
             <Link href="/privacy" className="text-[#c6c6cc] hover:text-[#ffc640] transition-colors underline underline-offset-2">سياسة الخصوصية</Link>
           </motion.p>
         </div>

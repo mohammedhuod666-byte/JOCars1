@@ -52,7 +52,7 @@ export function CarComments({ carId, currentUser }: Props) {
         body: JSON.stringify({ content: content.trim() }),
       });
       const d = await res.json();
-      if (d.success) { setComments(p => [d.data, ...p]); setContent(''); toast.success('تم نشر تعليقك! 💬'); }
+      if (d.success) { setComments(p => [d.data, ...p]); setContent(''); toast.success('تم نشر تعليقك!'); }
       else toast.error(d.error || 'فشل نشر التعليق');
     } catch {
       toast.error('تعذر الاتصال — تحقق من الإنترنت وحاول مجدداً');
@@ -137,7 +137,7 @@ export function CarComments({ carId, currentUser }: Props) {
                     <Link href={`/profile/${comment.userId}`} title="فحص الحساب"
                       className="text-sm font-medium hover:text-blue-500 hover:underline transition-colors">{comment.user.name}</Link>
                     {comment.user.phoneVerified && (
-                      <span title="رقم هاتف موثّق — مشترٍ جاد" className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">مشترٍ جاد ✅</span>
+                      <span title="رقم هاتف موثّق — مشترٍ جاد" className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">مشترٍ جاد </span>
                     )}
                     {comment.user.role === 'ADMIN' && <span className="mr-1 text-xs text-amber-500">مدير</span>}
                     <span className="mr-2 text-xs text-gray-400">{formatDate(comment.createdAt)}</span>

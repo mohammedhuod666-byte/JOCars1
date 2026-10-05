@@ -1,14 +1,20 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { sendWhatsApp, buildCarMessage } from '@/lib/whatsapp';
+import { trackMessageSent } from '@/lib/sentinel';
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);
   if (!user) return unauthorizedResponse();
 
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+    const skip = (page - 1) * limit;
+
     const conversations = await prisma.conversation.findMany({
       where: { OR: [{ buyerId: user.id }, { sellerId: user.id }] },
       include: {
@@ -23,6 +29,8 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { updatedAt: 'desc' },
+      skip,
+      take: limit,
     });
 
     const enriched = conversations.map((c) => {
@@ -30,7 +38,10 @@ export async function GET(request: NextRequest) {
       return { ...c, lastMessage: lastMsg, unreadCount: c._count.messages };
     });
 
-    return successResponse(enriched);
+    return NextResponse.json(
+      { success: true, data: enriched, pagination: { page, limit, hasMore: enriched.length === limit } },
+      { headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+    );
   } catch (error) {
     return errorResponse('فشل تحميل المحادثات', 500);
   }
@@ -107,6 +118,8 @@ export async function POST(request: NextRequest) {
           include: { sender: { select: { id: true, name: true, image: true } } },
         });
 
+        trackMessageSent(user.id).catch(() => {}); // Sentinel: spam burst check
+
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: { updatedAt: new Date() },
@@ -176,6 +189,8 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          trackMessageSent(user.id).catch(() => {}); // Sentinel: spam burst check
+
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: { updatedAt: new Date() },
@@ -236,6 +251,8 @@ export async function POST(request: NextRequest) {
           sender: { select: { id: true, name: true, image: true } },
         },
       });
+
+      trackMessageSent(user.id).catch(() => {}); // Sentinel: spam burst check
 
       await prisma.conversation.update({
         where: { id: conversation.id },

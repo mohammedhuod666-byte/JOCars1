@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
 import prisma from '@/lib/prisma';
 import { chatCompletionJSON, type ChatMessage } from '@/ai/nvidia-client';
@@ -201,6 +202,8 @@ export async function POST(
     const user = await authenticateRequest(request);
     if (!user) return unauthorizedResponse();
 
+    // BOLA: only the recording owner, the car owner, or an admin may
+    // trigger (paid LLM) analysis on someone else's recording.
     const { id } = await params;
     const body = await request.json();
     recordingId = body.recordingId;
@@ -208,10 +211,23 @@ export async function POST(
     if (!recordingId) return errorResponse('معرف التسجيل مطلوب');
 
     const recording = await prisma.carSoundRecording.findUnique({
-      where: { id: recordingId }, include: { car: true },
+      where: { id: recordingId },
+      include: { car: { select: { userId: true, brandId: true, modelId: true, year: true, fuelType: true, kilometers: true, engineCapacity: true } } },
     });
 
     if (!recording || recording.carId !== id) return notFoundResponse('التسجيل');
+
+    const isOwner = recording.userId === user.id || recording.car?.userId === user.id;
+    if (!isOwner && user.role !== 'ADMIN') {
+      return errorResponse('لا تملك صلاحية تحليل هذا التسجيل', 403);
+    }
+
+    // Cost guard: each analysis burns paid LLM tokens.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateLimit = checkRateLimit(`sound-analyze:${user.id}:${ip}`, RATE_LIMITS.AI);
+    if (!rateLimit.allowed) {
+      return errorResponse('تم تجاوز حد التحليل المسموح. حاول لاحقا', 429);
+    }
 
     await prisma.carSoundRecording.update({
       where: { id: recordingId }, data: { status: 'analyzing' },

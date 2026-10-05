@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Providers } from '@/components/layout/Providers';
 import { LayoutWrapper } from '@/components/layout/LayoutWrapper';
 import { NetworkBanner } from '@/components/ui/NetworkBanner';
+import { ClientErrorReporter } from '@/components/layout/ClientErrorReporter';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -31,17 +32,18 @@ export const metadata: Metadata = {
     follow: true,
   },
   manifest: '/manifest.webmanifest',
-  themeColor: '#059669',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'JO Cars',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#059669',
 };
 
 export default function RootLayout({
@@ -68,6 +70,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen antialiased">
+        <ClientErrorReporter />
         <Providers>
           <NetworkBanner />
           <LayoutWrapper>

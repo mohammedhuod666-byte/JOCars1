@@ -108,7 +108,7 @@ export async function POST(
 
       // Send notification message to workshop owner safely
       const bookingDate = new Date(date).toLocaleDateString('ar-JO', { year: 'numeric', month: 'long', day: 'numeric' });
-      const notificationContent = `📅 موعد جديد: ${user.name} حجز موعداً في ${bookingDate} الساعة ${time}\nالخدمة: ${serviceType}${carMake ? `\nالسيارة: ${carMake} ${carModel || ''}${carYear ? ` (${carYear})` : ''}${plateNumber ? ` [${plateNumber}]` : ''}` : ''}${isUrgent ? `\n⚡ حجز طارئ` : ''}${budget ? `\nالميزانية المقدرة: ${budget} د.أ` : ''}${description ? `\nملاحظات: ${description}` : ''}`;
+      const notificationContent = ` موعد جديد: ${user.name} حجز موعداً في ${bookingDate} الساعة ${time}\nالخدمة: ${serviceType}${carMake ? `\nالسيارة: ${carMake} ${carModel || ''}${carYear ? ` (${carYear})` : ''}${plateNumber ? ` [${plateNumber}]` : ''}` : ''}${isUrgent ? `\n حجز طارئ` : ''}${budget ? `\nالميزانية المقدرة: ${budget} د.أ` : ''}${description ? `\nملاحظات: ${description}` : ''}`;
 
       try {
         let conv = await tx.conversation.findFirst({

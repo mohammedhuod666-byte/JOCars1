@@ -4,8 +4,8 @@
 # ============================================
 
 # Set environment variables for this session
-$env:NVIDIA_API_KEY = "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"
-$env:OPENAI_API_KEY = "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"
+$env:NVIDIA_API_KEY = "<PUT-YOUR-NVIDIA-KEY-HERE>"
+$env:OPENAI_API_KEY = "<PUT-YOUR-NVIDIA-KEY-HERE>"
 $env:OPENAI_API_BASE = "https://integrate.api.nvidia.com/v1"
 $env:OPENAI_MODEL = "openai/gpt-oss-120b"
 

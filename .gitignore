@@ -67,3 +67,12 @@ __pycache__/
 !.vscode/extensions.json
 
 *.apk
+
+# local databases (never commit)
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+.vercel
+.env*

@@ -17,7 +17,7 @@ export function EmergencyBanner() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-black border border-rose-500/30">
-                  خدمة طوارئ الطرق 24/7 🚨
+                  خدمة طوارئ الطرق 24/7 
                 </span>
                 <span className="text-slate-400 text-xs font-semibold">عُطل على الطريق؟</span>
               </div>
@@ -36,7 +36,7 @@ export function EmergencyBanner() {
               className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs transition-all shadow-lg shadow-rose-600/30"
             >
               <PhoneCall className="w-4 h-4" />
-              <span>اتصال طوارئ سريع 📞</span>
+              <span>اتصال طوارئ سريع </span>
             </a>
 
             <Link
@@ -44,7 +44,7 @@ export function EmergencyBanner() {
               className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-slate-300 font-bold text-xs hover:text-white hover:border-slate-700 transition-all"
             >
               <Wrench className="w-4 h-4 text-emerald-400" />
-              <span>أقرب ورشة سحب 🗺️</span>
+              <span>أقرب ورشة سحب </span>
             </Link>
           </div>
 

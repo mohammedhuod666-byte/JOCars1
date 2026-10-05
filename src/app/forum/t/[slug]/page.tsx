@@ -434,7 +434,7 @@ export default function TopicDetailPage() {
 
               {topic.isSolved && (
                 <span className="px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-xs flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> تمت إجابته بنجاح ✅
+                  <CheckCircle2 className="w-3.5 h-3.5" /> تمت إجابته بنجاح 
                 </span>
               )}
 
@@ -454,7 +454,7 @@ export default function TopicDetailPage() {
                     topic.isSolved ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-emerald-500/40'
                   }`}
                 >
-                  {topic.isSolved ? 'مُحَلول ✅' : 'تعليم كمُحَلول'}
+                  {topic.isSolved ? 'مُحَلول ' : 'تعليم كمُحَلول'}
                 </button>
 
                 {isAdmin && (
@@ -599,7 +599,7 @@ export default function TopicDetailPage() {
                   {post.isAnswer && (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black shadow-md">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      إجابة معتمدة وحل معتمد للمشكلة ✅
+                      إجابة معتمدة وحل معتمد للمشكلة 
                     </div>
                   )}
 
@@ -616,7 +616,7 @@ export default function TopicDetailPage() {
                           <Link href={`/profile/${post.user?.id || post.userId}`} title="فحص الحساب"
                             className="font-extrabold text-white text-sm hover:text-emerald-400 hover:underline transition-colors">{post.user?.dealerName || post.user?.name}</Link>
                           {(post.user as any)?.phoneVerified && (
-                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-bold" title="رقم هاتف موثّق">مشترٍ جاد ✅</span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[10px] font-bold" title="رقم هاتف موثّق">مشترٍ جاد </span>
                           )}
                           {post.user?.role === 'ADMIN' && (
                             <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-400 text-[10px] font-bold">مشرف</span>
@@ -831,7 +831,7 @@ export default function TopicDetailPage() {
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20"
               >
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                <span>إرسال الرد 🚀</span>
+                <span>إرسال الرد </span>
               </button>
             </div>
 

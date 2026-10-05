@@ -15,7 +15,7 @@ interface Props {
 export default function WhatsAppShareButton({ title, price, year, city, carUrl, className = '' }: Props) {
   const handleShare = () => {
     const url = carUrl || (typeof window !== 'undefined' ? window.location.href : '');
-    const message = `🚗 *إعلان سيارة مميز على JO Cars الأردن* 🇯🇴\n\n📌 *${title}*\n💰 *السعر:* ${price.toLocaleString()} دينار أردني\n📅 *الموديل:* ${year || ''}\n📍 *الموقع:* ${city || 'الأردن'}\n\n👇 للمزيد من التفاصيل والصور والتواصل مع البائع:\n${url}`;
+    const message = ` *إعلان سيارة مميز على JO Cars الأردن* \n\n *${title}*\n *السعر:* ${price.toLocaleString()} دينار أردني\n *الموديل:* ${year || ''}\n *الموقع:* ${city || 'الأردن'}\n\n للمزيد من التفاصيل والصور والتواصل مع البائع:\n${url}`;
 
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');

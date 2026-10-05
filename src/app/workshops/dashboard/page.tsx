@@ -628,7 +628,7 @@ export default function WorkshopDashboard() {
                             <span className="text-white font-medium">{appt.userName}</span>
                             <span className="text-gray-400 text-sm mr-3" dir="ltr">{appt.userPhone}</span>
                             {appt.isUrgent && (
-                              <span className="mr-2 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold align-middle">⚡ طارئ</span>
+                              <span className="mr-2 px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-bold align-middle"> طارئ</span>
                             )}
                           </div>
                           <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}>
@@ -639,13 +639,13 @@ export default function WorkshopDashboard() {
                           <span>{appt.service}</span>
                           <span>{appt.date} {appt.time}</span>
                           {(appt.carMake || appt.carModel) && (
-                            <span>🚗 {appt.carMake} {appt.carModel}{appt.carYear ? ` ${appt.carYear}` : ''}{appt.plateNumber ? ` (${appt.plateNumber})` : ''}</span>
+                            <span> {appt.carMake} {appt.carModel}{appt.carYear ? ` ${appt.carYear}` : ''}{appt.plateNumber ? ` (${appt.plateNumber})` : ''}</span>
                           )}
                           {appt.budget != null && appt.budget > 0 && (
-                            <span>💰 الميزانية: {appt.budget} د.أ</span>
+                            <span> الميزانية: {appt.budget} د.أ</span>
                           )}
                           {appt.finalPrice != null && appt.finalPrice > 0 && (
-                            <span className="text-green-400">💵 السعر النهائي: {appt.finalPrice} د.أ</span>
+                            <span className="text-green-400"> السعر النهائي: {appt.finalPrice} د.أ</span>
                           )}
                         </div>
                         {appt.description && <p className="text-gray-300 text-sm mb-2">{appt.description}</p>}

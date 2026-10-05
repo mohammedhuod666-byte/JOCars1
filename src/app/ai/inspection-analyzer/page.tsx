@@ -28,9 +28,9 @@ interface AnalysisResult {
 }
 
 const EXAMPLES = [
-  { label: '7 جيد فحص كامل ✨', text: 'الشواصي الأربعة: جيد خالي العلام، المحرك: جيد، الجير: جيد، الهايبرد: جيد، البدي: خالي ملاحظات' },
-  { label: 'دقة بنكيت ⚠️', text: 'امامي يمين: ضربه بنكيت او قصعات، خلفي: جيد، المحرك: تبخيره زيت خفيفه، التكييف: كمبريسر ضعيف' },
-  { label: 'شاصي مضروب 🚫', text: 'شاصي امامي يمين: مضروب ومشغول، شمال: مقصوص. بطاريه الهايبرد: تحتاج استبدال خلايا. الجير: نتعه' },
+  { label: '7 جيد فحص كامل', text: 'الشواصي الأربعة: جيد خالي العلام، المحرك: جيد، الجير: جيد، الهايبرد: جيد، البدي: خالي ملاحظات' },
+  { label: 'دقة بنكيت', text: 'امامي يمين: ضربه بنكيت او قصعات، خلفي: جيد، المحرك: تبخيره زيت خفيفه، التكييف: كمبريسر ضعيف' },
+  { label: 'شاصي مضروب', text: 'شاصي امامي يمين: مضروب ومشغول، شمال: مقصوص. بطاريه الهايبرد: تحتاج استبدال خلايا. الجير: نتعه' },
 ];
 
 const GRADE_STYLE: Record<string, { badge: string; text: string }> = {
@@ -93,7 +93,7 @@ export default function InspectionAnalyzerPage() {
       <main className="container-custom max-w-4xl mx-auto px-4 py-8 flex-1">
         <div className="card p-6 sm:p-8 bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white mb-8 border border-emerald-500/30 shadow-2xl relative overflow-hidden text-center sm:text-right">
           <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30 inline-flex items-center gap-1.5 mb-3">
-            <Brain className="w-4 h-4" /> محلل الشاصي بالذكاء الاصطناعي الحقيقي 🇯🇴
+            <Brain className="w-4 h-4" /> محلل الشاصي بالذكاء الاصطناعي الحقيقي 
           </span>
           <h1 className="text-2xl sm:text-4xl font-black mb-2">محلل كشف فحص السيارات والشواصي (AI)</h1>
           <p className="text-sm text-gray-300 max-w-2xl leading-relaxed">
@@ -135,7 +135,7 @@ export default function InspectionAnalyzerPage() {
                 <div className="flex flex-wrap items-center gap-2 mb-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold border inline-flex items-center gap-1.5 ${g.badge}`}>
                     <Sparkles className="w-3.5 h-3.5" />
-                    {result.source === 'ai' ? 'تحليل الذكاء الاصطناعي ✨' : 'المحرك الخبير المحلي 🧠'}
+                    {result.source === 'ai' ? 'تحليل الذكاء الاصطناعي ' : 'المحرك الخبير المحلي'}
                   </span>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                     الثقة {result.confidence}%
@@ -189,7 +189,7 @@ export default function InspectionAnalyzerPage() {
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                   {result.systems.map((s) => (
-                    <div key={s.id} title={s.notes.join(' • ') || 'غير مذكور بالنص'}
+                    <div key={s.id} title={s.notes.join(' •') || 'غير مذكور بالنص'}
                       className="p-3 rounded-2xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className={`w-2.5 h-2.5 rounded-full ${STATUS_DOT[s.status]}`} />
@@ -216,7 +216,7 @@ export default function InspectionAnalyzerPage() {
                   <ul className="space-y-1">
                     {result.issues.map((iss, i) => (
                       <li key={i} className="text-xs text-gray-700 dark:text-gray-300">
-                        {iss.severity === 'critical' ? '🔴' : iss.severity === 'major' ? '🟠' : iss.severity === 'minor' ? '🟡' : 'ℹ️'} {iss.text}
+                        {iss.severity === 'critical' ? '' : iss.severity === 'major' ? '' : iss.severity === 'minor' ? '' : 'ℹ'} {iss.text}
                       </li>
                     ))}
                   </ul>

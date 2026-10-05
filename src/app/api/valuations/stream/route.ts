@@ -57,7 +57,14 @@ export async function POST(request: NextRequest) {
           }
         );
 
-        if (s24.status === 'INSUFFICIENT_DATA' || !s24.fairMarketValue) {
+        if (s24.status === 'INSUFFICIENT_DATA') {
+          send(controller, 'insufficient', {
+            status: 'INSUFFICIENT',
+            section24: s24,
+            reason: s24.warnings[0] || 'البيانات غير كافية لإنتاج تقييم عادل',
+            comparablesFound: s24.marketEvidence.totalListings,
+            sources: [],
+          });
           send(controller, 'done', {
             status: 'INSUFFICIENT',
             section24: s24,
@@ -69,7 +76,7 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        const legacyReport = {
+        const legacyReport = s24.fairMarketValue ? {
           estimatedPrice: s24.fairMarketValue,
           minPrice: s24.range.low ?? s24.fairMarketValue,
           maxPrice: s24.range.high ?? s24.fairMarketValue,
@@ -87,16 +94,20 @@ export async function POST(request: NextRequest) {
           pipeline: [],
           calculatedAt: new Date().toISOString(),
           targetDiffPct: s24.pricePosition.differencePercent,
-        };
+        } : null;
 
-        send(controller, 'done', {
+        const payload = {
           status: s24.status,
           section24: s24,
           report: legacyReport,
+          latest: legacyReport,
           comparables: s24.comparablesUsed,
           rejected: s24.marketEvidence.excludedListings,
           sources: [],
-        });
+        };
+
+        send(controller, 'result', payload);
+        send(controller, 'done', payload);
       } catch (e: any) {
         send(controller, 'error', { message: e?.message || 'فشل التحليل' });
       }

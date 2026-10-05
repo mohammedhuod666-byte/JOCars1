@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { createAuditLog } from '@/lib/audit';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
@@ -67,12 +68,24 @@ export async function PUT(request: NextRequest) {
       if (key === 'logo' || key === 'logoDark' || key === 'favicon') {
         if (value instanceof File && value.size > 0) {
           const ext = value.name.split('.').pop() || 'png';
-          const filename = `${key}-${Date.now()}.${ext}`;
-          const dir = path.join(process.cwd(), 'public', 'uploads', 'settings');
-          await mkdir(dir, { recursive: true });
           const bytes = await value.arrayBuffer();
-          await writeFile(path.join(dir, filename), Buffer.from(bytes));
-          data[key] = `/uploads/settings/${filename}`;
+          // Preferred: Cloudinary — local disk writes vanish on serverless hosts.
+          const hasCloudinary = !!(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+          if (hasCloudinary) {
+            const { uploadImage } = await import('@/lib/cloudinary');
+            const mime = value.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+            const result = await uploadImage(`data:${mime};base64,${Buffer.from(bytes).toString('base64')}`, {
+              folder: 'jo-cars/settings',
+              publicId: key,
+            });
+            data[key] = result.secure_url;
+          } else {
+            const filename = `${key}-${Date.now()}.${ext}`;
+            const dir = path.join(process.cwd(), 'public', 'uploads', 'settings');
+            await mkdir(dir, { recursive: true });
+            await writeFile(path.join(dir, filename), Buffer.from(bytes));
+            data[key] = `/uploads/settings/${filename}`;
+          }
         }
       } else if (key === 'taxPercent') {
         data[key] = parseFloat(value as string) || 0;
@@ -89,6 +102,13 @@ export async function PUT(request: NextRequest) {
       where: { id: 'default' },
       update: data,
       create: { id: 'default', ...data } as any,
+    });
+
+    await createAuditLog({
+      action: 'UPDATE_SITE_SETTINGS', actorId: user.id,
+      entityType: 'SiteSettings', entityId: 'default',
+      description: 'تحديث إعدادات الموقع',
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
     });
 
     return successResponse(settings);

@@ -3,9 +3,10 @@ import prisma from '@/lib/prisma';
 import { verifyPassword, signToken, setAuthCookie } from '@/lib/auth';
 import { loginSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
-import { checkRateLimit, RATE_LIMITS, resetRateLimit } from '@/lib/rate-limit';
+import { checkRateLimitAsync, RATE_LIMITS, resetRateLimit } from '@/lib/rate-limit';
 import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
 import { createAuditLog } from '@/lib/audit';
+import { recordSignal } from '@/lib/sentinel';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     const rateLimitKey = `login:${ip}`;
-    const rateLimit = checkRateLimit(rateLimitKey, RATE_LIMITS.LOGIN);
+    const rateLimit = await checkRateLimitAsync(rateLimitKey, RATE_LIMITS.LOGIN);
     if (!rateLimit.allowed) {
       if (trackSuspiciousActivity(ip)) {
         blockIP(ip, 'Excessive login attempts');
@@ -27,7 +28,8 @@ export async function POST(request: NextRequest) {
       return errorResponse('تم تجاوز الحد المسموح', 429);
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') return errorResponse('بيانات غير صالحة', 400);
     const validation = loginSchema.safeParse(body);
     if (!validation.success) return validationErrorResponse(validation.error);
 
@@ -69,6 +71,15 @@ export async function POST(request: NextRequest) {
       }
 
       await prisma.user.update({ where: { id: user.id }, data: updateData });
+      // Sentinel: brute-force signal at 5 and 10 consecutive failures.
+      if (failedAttempts === 5 || failedAttempts === 10) {
+        recordSignal({
+          userId: user.id, ip,
+          type: 'BRUTE_FORCE',
+          weight: failedAttempts === 10 ? 25 : 15,
+          detail: `${failedAttempts} محاولات دخول فاشلة متتالية`,
+        }).catch(() => {});
+      }
       return errorResponse('بيانات الدخول غير صحيحة');
     }
 
@@ -78,6 +89,7 @@ export async function POST(request: NextRequest) {
       data: {
         lastLoginAt: new Date(),
         lastLoginIp: ip,
+        lastSeenAt: new Date(),
         failedLoginAttempts: 0,
         lockedUntil: null,
       },

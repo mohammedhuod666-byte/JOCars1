@@ -61,9 +61,6 @@ export default function AdminTradersApprovalPage() {
     if (user && user.role !== 'ADMIN') router.push('/');
   }, [user, router]);
 
-  if (!user) return null;
-  if (user.role !== 'ADMIN') return null;
-
   const loadRequests = async () => {
     setLoading(true);
     try {
@@ -78,10 +75,14 @@ export default function AdminTradersApprovalPage() {
     }
   };
 
+  // Hooks must run unconditionally (before any early return).
   useEffect(() => {
-    loadRequests();
+    if (user && user.role === 'ADMIN') loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, user]);
+
+  if (!user) return null;
+  if (user.role !== 'ADMIN') return null;
 
   const handleApprove = async (id: string, dealerName: string) => {
     setActionLoading(id);

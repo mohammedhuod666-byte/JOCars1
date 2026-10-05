@@ -326,7 +326,7 @@ export default function CreateWorkshopPage() {
               className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2"
             >
               <AlertCircle className="w-5 h-5 shrink-0" />
-              {errors.filter((e) => e.field === 'auth' || e.field === 'submit').map((e) => e.message).join(', ')}
+              {errors.filter((e) => e.field === 'auth' || e.field === 'submit').map((e) => e.message).join(',')}
             </motion.div>
           )}
         </AnimatePresence>
@@ -483,7 +483,7 @@ export default function CreateWorkshopPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-amber-400 mb-1.5 flex items-center gap-1.5">
-                    🚨 رقم طوارئ / خدمة 24/7 (اختياري)
+                     رقم طوارئ / خدمة 24/7 (اختياري)
                   </label>
                   <input
                     type="tel"
@@ -553,27 +553,27 @@ export default function CreateWorkshopPage() {
 
               {/* Extra Facilities & Toggles */}
               <div className="pt-4 border-t border-gray-700/60">
-                <label className="block text-sm font-semibold text-white mb-3">مميزات وتسهيلات الورشة الخاصة 🌟</label>
+                <label className="block text-sm font-semibold text-white mb-3">مميزات وتسهيلات الورشة الخاصة </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.isMobileService ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
                     <input type="checkbox" checked={form.isMobileService} onChange={(e) => setForm(p => ({ ...p, isMobileService: e.target.checked }))} className="hidden" />
-                    <span>🚚 خدمة صيانة متنقلة</span>
+                    <span> خدمة صيانة متنقلة</span>
                   </label>
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasTowingService ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
                     <input type="checkbox" checked={form.hasTowingService} onChange={(e) => setForm(p => ({ ...p, hasTowingService: e.target.checked }))} className="hidden" />
-                    <span>🚨 خدمة سحب/ونش 24 ساعة</span>
+                    <span> خدمة سحب/ونش 24 ساعة</span>
                   </label>
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasWarranty ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
                     <input type="checkbox" checked={form.hasWarranty} onChange={(e) => setForm(p => ({ ...p, hasWarranty: e.target.checked }))} className="hidden" />
-                    <span>🛡️ كفالة وضمان على الإصلاح</span>
+                    <span> كفالة وضمان على الإصلاح</span>
                   </label>
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.hasWaitingArea ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
                     <input type="checkbox" checked={form.hasWaitingArea} onChange={(e) => setForm(p => ({ ...p, hasWaitingArea: e.target.checked }))} className="hidden" />
-                    <span>☕ استراحة زبائن مكيفة</span>
+                    <span> استراحة زبائن مكيفة</span>
                   </label>
                   <label className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${form.offersSpareParts ? 'border-[#0084ff] bg-[#0084ff]/10 text-white' : 'border-gray-700 bg-[#0f3460] text-gray-300'}`}>
                     <input type="checkbox" checked={form.offersSpareParts} onChange={(e) => setForm(p => ({ ...p, offersSpareParts: e.target.checked }))} className="hidden" />
-                    <span>⚙️ توفير قطع غيار</span>
+                    <span> توفير قطع غيار</span>
                   </label>
                 </div>
               </div>
@@ -581,7 +581,7 @@ export default function CreateWorkshopPage() {
               {/* Discount Offer */}
               <div>
                 <label className="block text-sm font-medium text-emerald-400 mb-1.5 flex items-center gap-1.5">
-                  🏷️ عرض خاص أو خصم لمستخدمي Cars JO (اختياري)
+                   عرض خاص أو خصم لمستخدمي Cars JO (اختياري)
                 </label>
                 <input
                   type="text"

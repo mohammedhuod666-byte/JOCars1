@@ -25,7 +25,7 @@ export default function DealsPage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1.5 mb-3">
-            <BadgePercent className="w-3.5 h-3.5" /> صفقات اليوم 🔥
+            <BadgePercent className="w-3.5 h-3.5" /> صفقات اليوم 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">سيارات تحت سعر السوق</h1>
           <p className="text-sm text-slate-400">إعلانات سعرها أقل من تقييم الذكاء الاصطناعي العادل بـ 5% فأكثر — تتحدث تلقائياً كل يوم</p>

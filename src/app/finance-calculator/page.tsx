@@ -9,7 +9,6 @@ interface BankOption {
   id: string;
   nameAr: string;
   nameEn: string;
-  logo: string;
   interestRate: number; // annual percentage
   maxYears: number;
   minDownPaymentPercent: number;
@@ -21,7 +20,6 @@ const JORDANIAN_BANKS: BankOption[] = [
     id: 'islamic-jordan',
     nameAr: 'البنك الإسلامي الأردني',
     nameEn: 'Jordan Islamic Bank',
-    logo: '🕌',
     interestRate: 3.33, // رسمي: مرابحة "سيارتي" 3.33% مع تحويل الراتب (3.99% بدونه)
     maxYears: 7, // حتى 84 شهراً، تمويل حتى 100%، المركبة حتى 20 سنة
     minDownPaymentPercent: 0, // تمويل حتى 100% بدون دفعة أولى
@@ -31,7 +29,6 @@ const JORDANIAN_BANKS: BankOption[] = [
     id: 'arabi-bank',
     nameAr: 'البنك العربي',
     nameEn: 'Arab Bank',
-    logo: '🏦',
     interestRate: 6.0, // تقديري (النسبة الرسمية غير منشورة)
     maxYears: 7,
     minDownPaymentPercent: 20,
@@ -41,7 +38,6 @@ const JORDANIAN_BANKS: BankOption[] = [
     id: 'etihad-bank',
     nameAr: 'بنك الاتحاد',
     nameEn: 'Bank al Etihad',
-    logo: '✨',
     interestRate: 5.5, // تقديري (النسبة الرسمية غير منشورة)
     maxYears: 8,
     minDownPaymentPercent: 15,
@@ -51,7 +47,6 @@ const JORDANIAN_BANKS: BankOption[] = [
     id: 'jordan-bank',
     nameAr: 'بنك الأردن',
     nameEn: 'Bank of Jordan',
-    logo: '🏛️',
     interestRate: 6.25, // تقديري: لديها برنامج تمويل حتى 100% حتى 96 شهراً
     maxYears: 8, // حتى 96 شهراً
     minDownPaymentPercent: 0, // تمويل حتى 100% (برنامج 100%)
@@ -61,7 +56,6 @@ const JORDANIAN_BANKS: BankOption[] = [
     id: 'safwa-bank',
     nameAr: 'بنك صفوة الإسلامي',
     nameEn: 'Safwa Islamic Bank',
-    logo: '🌙',
     interestRate: 4.9, // تقديري (النسبة الرسمية غير منشورة)
     maxYears: 8,
     minDownPaymentPercent: 15,
@@ -95,7 +89,7 @@ export default function FinanceCalculatorPage() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium mb-4">
             <Landmark className="w-4 h-4" />
-            حاسبة أقساط البنوك الأردنية 🇯🇴
+            حاسبة أقساط البنوك الأردنية 
           </div>
           <h1 className="text-3xl sm:text-5xl font-black text-white mb-4 tracking-tight">
             حاسبة تمويل السيارات والتمويل الإسلامي
@@ -126,7 +120,7 @@ export default function FinanceCalculatorPage() {
                       : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:border-slate-600'
                   }`}
                 >
-                  <span className="text-2xl">{bank.logo}</span>
+                  <Landmark className="w-7 h-7 text-blue-400 shrink-0" />
                   <div>
                     <span className="font-bold block text-sm">{bank.nameAr}</span>
                     <span className="text-xs text-blue-400 font-semibold">
@@ -211,7 +205,7 @@ export default function FinanceCalculatorPage() {
           <div className="lg:col-span-5 flex flex-col justify-between bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
             <div>
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-800">
-                <span className="text-3xl">{selectedBank.logo}</span>
+                <Landmark className="w-9 h-9 text-blue-400 shrink-0" />
                 <div>
                   <h3 className="font-bold text-white text-lg">{selectedBank.nameAr}</h3>
                   <span className="text-xs text-slate-400">{selectedBank.type === 'ISLAMIC' ? 'مرابحة إسلامية معتمدة' : 'تمويل سيارات مباشر'}</span>
@@ -252,11 +246,11 @@ export default function FinanceCalculatorPage() {
               <div className="mt-4 p-4 rounded-xl bg-slate-800/50 border border-slate-700 text-xs text-slate-400 leading-relaxed">
                 {selectedBank.id === 'islamic-jordan' ? (
                   <span>
-                    🕌 <strong className="text-slate-200">برنامج "سيارتي" الرسمي (حملة حتى 31/8/2026):</strong> مرابحة 3.33% مع تحويل الراتب و3.99% بدونه، تمويل حتى 100% وحتى 84 شهراً، والمركبة حتى 20 سنة. السيارات الكهربائية والهايبرد بنفس العروض حتى 31/12/2026.
+                     <strong className="text-slate-200">برنامج "سيارتي" الرسمي (حملة حتى 31/8/2026):</strong> مرابحة 3.33% مع تحويل الراتب و3.99% بدونه، تمويل حتى 100% وحتى 84 شهراً، والمركبة حتى 20 سنة. السيارات الكهربائية والهايبرد بنفس العروض حتى 31/12/2026.
                   </span>
                 ) : selectedBank.id === 'jordan-bank' ? (
                   <span>
-                    🏛️ <strong className="text-slate-200">برامج بنك الأردن:</strong> تمويل حتى 100% وحتى 96 شهراً، برنامج 85/15 (تمويل 85% حتى 84 شهراً)، وبرنامج 50/50 (تمويل 50% حتى 60 شهراً). النسبة السنوية توضع بعد التقديم.
+                     <strong className="text-slate-200">برامج بنك الأردن:</strong> تمويل حتى 100% وحتى 96 شهراً، برنامج 85/15 (تمويل 85% حتى 84 شهراً)، وبرنامج 50/50 (تمويل 50% حتى 60 شهراً). النسبة السنوية توضع بعد التقديم.
                   </span>
                 ) : (
                   <span>

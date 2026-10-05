@@ -34,7 +34,7 @@ export default function SwapCalculatorPage() {
         
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 inline-flex items-center gap-1.5 mb-3">
-            <Sparkles className="w-3.5 h-3.5" /> أداة البدل والمقاصة الأردنية 🇯🇴
+            <Sparkles className="w-3.5 h-3.5" /> أداة البدل والمقاصة الأردنية 
           </span>
           <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">حاسبة فرق البدل للسيارات (Trade-in)</h1>
           <p className="text-sm text-gray-500 leading-relaxed">

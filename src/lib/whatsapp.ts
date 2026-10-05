@@ -40,14 +40,17 @@ async function sendUltraMsg(to: string, message: string): Promise<WhatsAppResult
       messageId: data.messageId,
       error: data.error || data.description,
     };
-  } catch (err: any) {
-    return { success: false, method: 'ultramsg', error: err.message };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown UltraMsg error';
+    return { success: false, method: 'ultramsg', error: msg };
   }
 }
 
+// Dev-only fallback: logs to server console. NEVER reports success —
+// callers must check `success` and tell the user when delivery failed.
 function logNotification(to: string, message: string): WhatsAppResult {
   console.log(`[WhatsApp Notification] To: ${to} | Message: ${message}`);
-  return { success: true, method: 'log' };
+  return { success: false, method: 'log', error: 'WhatsApp provider not configured (ULTRA_MSG_TOKEN missing)' };
 }
 
 export async function sendWhatsApp(
@@ -60,8 +63,10 @@ export async function sendWhatsApp(
 
   if (ULTRA_MSG_TOKEN) {
     const result = await sendUltraMsg(to, message);
-    if (result.success) return result;
-    console.warn('[WhatsApp] UltraMsg failed, falling back to log:', result.error);
+    if (!result.success) {
+      console.warn('[WhatsApp] UltraMsg failed:', result.error);
+    }
+    return result;
   }
 
   return logNotification(to, message);

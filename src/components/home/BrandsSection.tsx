@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, ArrowUpLeft } from 'lucide-react';
+import { ArrowUpLeft } from 'lucide-react';
 import { useInScrollView, scrollStyle } from '@/hooks/useInScrollView';
 import type { Brand } from '@/types';
 
@@ -63,12 +63,8 @@ export function BrandsSection() {
     <section className="py-16 sm:py-20 relative">
       <div className="container-custom">
         <div className="text-center mb-10 sm:mb-12">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-600 shadow-primary">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
-          </div>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-surface-200 tracking-tight">
+          <p className="kicker kicker-center justify-center mb-3">الماركات</p>
+          <h2 className="display text-2xl sm:text-3xl md:text-4xl text-surface-50">
             تصفح حسب الماركة
           </h2>
           <p className="text-surface-500 mt-2 text-sm sm:text-base">

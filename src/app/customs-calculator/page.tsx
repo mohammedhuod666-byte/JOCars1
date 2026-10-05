@@ -88,7 +88,7 @@ export default function CustomsCalculatorPage() {
             حاسبة التخمين الرسمية 2026
           </div>
           <h1 className="text-3xl sm:text-5xl font-black text-white mb-4 tracking-tight">
-            حاسبة الجمارك والترخيص الأردنية 🇯🇴
+            حاسبة الجمارك والترخيص الأردنية 
           </h1>
           <p className="text-slate-400 max-w-2xl mx-auto text-base sm:text-lg leading-relaxed">
             احسب التكلفة التقديرية لجمارك ورسوم ترخيص وتأمين سيارتك (كهرباء، هايبرد، بنزين) وفقاً للتعريفة الجمركية والترخيص المعمول بها في الأردن.

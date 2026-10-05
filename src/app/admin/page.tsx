@@ -93,6 +93,8 @@ export default function AdminPage() {
 
   const menuItems = [
     { href: '/admin/users', label: 'المستخدمين', icon: Users, desc: 'إدارة المستخدمين والتجار' },
+    { href: '/admin/sentinel', label: 'الحارس الأمني', icon: ShieldCheck, desc: 'المراقبة التلقائية والحظر الذكي' },
+    { href: '/admin/valuations', label: 'محرك التقييم', icon: BarChart3, desc: 'تقييمات القيمة السوقية والمصادر والأداء' },
     { href: '/admin/traders-approval', label: 'اعتماد التجار', icon: ShieldCheck, desc: 'مراجعة وقبول أو رفض طلبات اعتماد التجار' },
     { href: '/admin/cars', label: 'السيارات', icon: Car, desc: 'إدارة جميع السيارات' },
     { href: '/admin/reports', label: 'البلاغات', icon: Flag, desc: 'البلاغات المقدمة' },
@@ -211,7 +213,7 @@ export default function AdminPage() {
                 <Download className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900 dark:text-white">استيراد أخبار السيارات 🚗</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-white">استيراد أخبار السيارات </h3>
                 <p className="text-xs text-gray-500">أخبار سيارات فقط (وقود • جمارك • كهرباء • سوق) من 10 مصادر — مع تحقق مزدوج وملخص ذكي</p>
                 {newsToday !== null && (
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">مستورد اليوم: {newsToday} خبر</p>

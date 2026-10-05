@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Newspaper, Fuel, Truck, FileText, Lightbulb, Loader2, Clock, User, ChevronLeft, Share2, Calendar, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { proxyNewsImage } from '@/lib/news-image';
 import type { Article } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -51,8 +53,16 @@ export default function ArticleDetailPage() {
 
         <motion.article initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           {article.image && (
-            <div className="h-64 sm:h-96 rounded-3xl overflow-hidden mb-8">
-              <img src={article.image} alt={article.title} className="w-full h-full object-cover" />
+            <div className="relative h-64 sm:h-96 rounded-3xl overflow-hidden mb-8">
+              <Image
+                src={proxyNewsImage(article.image)}
+                alt={article.title}
+                fill
+                sizes="(max-width: 896px) 100vw, 896px"
+                onError={(e) => { (e.target as HTMLElement).closest('div')?.remove(); }}
+                className="object-cover"
+                priority
+              />
             </div>
           )}
 

@@ -19,7 +19,7 @@ const PART_TYPES: Record<string, string> = {
 };
 
 const CONDITIONS: Record<string, string> = {
-  NEW: 'جديدة وكالة ✨', USED: 'مستعملة أصلية ⚙️', REFURBISHED: 'مُجددة ومفحوصة 🛠️',
+  NEW: 'جديدة وكالة', USED: 'مستعملة أصلية', REFURBISHED: 'مُجددة ومفحوصة',
 };
 
 export default function PartDetailPage() {
@@ -275,7 +275,7 @@ export default function PartDetailPage() {
                 <div className="flex items-baseline gap-3">
                   <p className="text-3xl font-black text-blue-400">{formatPrice(part.price)}</p>
                   {part.isNegotiable && (
-                    <span className="text-xs font-bold text-emerald-400">السعر قابل للتفاوض 💬</span>
+                    <span className="text-xs font-bold text-emerald-400">السعر قابل للتفاوض </span>
                   )}
                 </div>
               </div>
@@ -367,7 +367,7 @@ export default function PartDetailPage() {
                     className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-bold text-xs transition-colors"
                   >
                     <Sparkles className="w-4 h-4 text-blue-400" />
-                    <span>تقديم عرض سعر / استفسار 💬</span>
+                    <span>تقديم عرض سعر / استفسار </span>
                   </button>
                 </div>
               </div>

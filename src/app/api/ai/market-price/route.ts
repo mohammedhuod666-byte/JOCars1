@@ -32,9 +32,14 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const fmv = report.fairMarketValue || 0;
-    const min = report.range.low || Math.round(fmv * 0.9);
-    const max = report.range.high || Math.round(fmv * 1.1);
+    // Phase-1 FMV gate: null whenever the engine produced no FMV — the asking
+    // price must never stand in for a missing fair price (was `|| 0`, which
+    // rendered as a fake "0 د.أ" fair value).
+    const fmv = report.fairMarketValue ?? null;
+    const min = report.range.low ?? (fmv !== null ? Math.round(fmv * 0.9) : null);
+    const max = report.range.high ?? (fmv !== null ? Math.round(fmv * 1.1) : null);
+    const hasFmv = fmv !== null;
+    const classification = report.pricePosition.classification;
 
     return Response.json({
       success: true,
@@ -49,18 +54,30 @@ export async function POST(request: NextRequest) {
             median: fmv,
           },
           estimatedPrice: fmv,
+          // Label keys on whether an FMV ACTUALLY exists (hasFmv). A FMV-mode
+          // result with no asking price has classification UNKNOWN but still
+          // carries a real fairMarketValue — it must NOT be labeled "لا تتوفر
+          // قيمة سوقية عادلة" while a number is displayed next to it.
           pricePosition: {
-            label: report.pricePosition.classification === 'BELOW_MARKET'
+            label: !hasFmv
+              ? 'لا تتوفر قيمة سوقية عادلة (أدلة داعمة فقط)'
+              : classification === 'UNKNOWN'
+              ? 'قيمة سوقية عادلة (FMV) متوفرة — لا يوجد سعر معروض للمقارنة'
+              : classification === 'BELOW_MARKET'
               ? 'أقل من متوسط السوق'
-              : report.pricePosition.classification === 'ABOVE_MARKET'
+              : classification === 'ABOVE_MARKET'
               ? 'أعلى من متوسط السوق'
               : 'مطابق لسعر السوق العادل',
-            color: report.pricePosition.classification === 'BELOW_MARKET'
+            color: !hasFmv
+              ? 'text-amber-500'
+              : classification === 'UNKNOWN'
+              ? 'text-blue-500'
+              : classification === 'BELOW_MARKET'
               ? 'text-green-500'
-              : report.pricePosition.classification === 'ABOVE_MARKET'
+              : classification === 'ABOVE_MARKET'
               ? 'text-red-500'
               : 'text-emerald-500',
-            icon: 'CheckCircle',
+            icon: !hasFmv ? 'HelpCircle' : 'Info',
           },
           conditionAdjustment: 0,
           sources: Array.from(new Set(report.comparablesUsed.map(c => c.source))),

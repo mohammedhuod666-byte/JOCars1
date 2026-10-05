@@ -1,15 +1,26 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { successResponse, errorResponse } from '@/lib/api';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   try {
+    // Anti-inflation: view counting is anonymous by design, but each IP
+    // gets a bounded budget so bots can't pump an ad's view counter.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip') || 'unknown';
+    const rateLimit = checkRateLimit(`viewers:${ip}`, { windowMs: 60 * 1000, maxRequests: 60 });
+    if (!rateLimit.allowed) {
+      return errorResponse('محاولات كثيرة. حاول بعد دقيقة', 429);
+    }
+
     const body = await request.json().catch(() => ({}));
-    const sessionId = body.sessionId || crypto.randomUUID();
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
-    const userAgent = request.headers.get('user-agent') || '';
+    const rawSession = typeof body.sessionId === 'string' ? body.sessionId : '';
+    // Accept only sane session ids (cuid/uuid-ish), else mint one server-side.
+    const sessionId = /^[A-Za-z0-9_-]{8,100}$/.test(rawSession) ? rawSession : crypto.randomUUID();
+    const userAgent = (request.headers.get('user-agent') || '').slice(0, 500);
 
     const existing = await prisma.carViewer.findUnique({
       where: { carId_sessionId: { carId: id, sessionId } },

@@ -64,11 +64,12 @@ interface AnalysisData {
     aiDescription: string | null;
   };
   price: {
-    estimate: number;
-    range: { min: number; max: number };
+    // Phase-1 FMV gate: null whenever no FMV / no real market evidence exists.
+    estimate: number | null;
+    range: { min: number | null; max: number | null };
     avgPrice: number;
-    position: 'above' | 'below' | 'match';
-    diffPercent: number;
+    position: 'above' | 'below' | 'match' | 'unknown';
+    diffPercent: number | null;
     similarCount: number;
     similarCars: any[];
     confidence?: number;
@@ -175,18 +176,22 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
     return 'bg-red-50 dark:bg-red-500/10';
   };
   const getPricePositionIcon = (pos: string) => {
+    if (pos === 'unknown') return <AlertTriangle className="w-4 h-4 text-amber-500" />;
     if (pos === 'above') return <TrendingUp className="w-4 h-4 text-red-500" />;
     if (pos === 'below') return <TrendingDown className="w-4 h-4 text-green-500" />;
     return <Minus className="w-4 h-4 text-blue-500" />;
   };
   const getPricePositionLabel = (pos: string) =>
-    pos === 'above' ? 'أعلى من السوق' : pos === 'below' ? 'أقل من السوق' : 'متوافق مع السوق';
+    pos === 'unknown' ? 'لا تتوفر مقارنة سوقية'
+    : pos === 'above' ? 'أعلى من السوق' : pos === 'below' ? 'أقل من السوق' : 'متوافق مع السوق';
   const getPricePositionColor = (pos: string) =>
-    pos === 'above'
-      ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200'
-      : pos === 'below'
-        ? 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border-green-200'
-        : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200';
+    pos === 'unknown'
+      ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200'
+      : pos === 'above'
+        ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200'
+        : pos === 'below'
+          ? 'bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 border-green-200'
+          : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200';
 
   const subtitleMap: Record<string, string> = { MANUAL: 'يدوي', AUTOMATIC: 'أوتوماتيك', CVT: 'CVT', DCT: 'DCT', SEMI_AUTOMATIC: 'نصف أوتوماتيك' };
   const fuelMap: Record<string, string> = { PETROL: 'بنزين', DIESEL: 'ديزل', HYBRID: 'هايبرد', ELECTRIC: 'كهرباء', PLUGIN_HYBRID: 'هايبرد بلج إن' };
@@ -222,7 +227,7 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
         <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-100 dark:border-gray-800">
           <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200">
             <Sparkles className="w-3.5 h-3.5" />
-            تحليل بالذكاء الاصطناعي ✨
+            تحليل بالذكاء الاصطناعي 
           </span>
           {price.confidence !== undefined && price.confidence > 0 ? (
             <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -256,15 +261,23 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="p-3 rounded-xl bg-white dark:bg-gray-800/50">
               <p className="text-xs text-gray-500">السعر المتوقع للسيارة</p>
-              <p className="font-bold text-lg text-emerald-600">{formatPrice(price.estimate)} د.أ</p>
+              <p className="font-bold text-lg text-emerald-600">
+                {price.estimate !== null && price.estimate > 0 ? `${formatPrice(price.estimate)} د.أ` : 'غير متاح'}
+              </p>
             </div>
             <div className="p-3 rounded-xl bg-white dark:bg-gray-800/50">
               <p className="text-xs text-gray-500">متوسط سعر السيارات المشابهة</p>
-              <p className="font-bold text-lg text-gray-900 dark:text-white">{formatPrice(price.avgPrice)} د.أ</p>
+              <p className="font-bold text-lg text-gray-900 dark:text-white">
+                {price.avgPrice > 0 ? `${formatPrice(price.avgPrice)} د.أ` : 'غير متاح'}
+              </p>
             </div>
             <div className="p-3 rounded-xl bg-white dark:bg-gray-800/50">
               <p className="text-xs text-gray-500">نطاق الأسعار في السوق</p>
-              <p className="font-bold text-gray-900 dark:text-white">{formatPrice(price.range.min)} - {formatPrice(price.range.max)} د.أ</p>
+              <p className="font-bold text-gray-900 dark:text-white">
+                {price.range.min !== null && price.range.max !== null
+                  ? `${formatPrice(price.range.min)} - ${formatPrice(price.range.max)} د.أ`
+                  : 'غير متاح'}
+              </p>
             </div>
           </div>
 
@@ -274,7 +287,7 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 ${getPricePositionColor(price.position)}`}>
                   {getPricePositionIcon(price.position)}
                   {getPricePositionLabel(price.position)}
-                  {price.diffPercent > 0 && <span className="ml-1">({price.diffPercent}%)</span>}
+                  {price.diffPercent !== null && price.diffPercent > 0 && <span className="ml-1">({price.diffPercent}%)</span>}
                 </span>
                 <span className="px-3 py-1 rounded-full text-xs text-gray-500 bg-gray-50 dark:bg-gray-800 border border-gray-200">
                   <BarChart3 className="w-3 h-3 inline mr-1" /> {price.similarCount} سيارة مشابهة في السوق
@@ -566,7 +579,7 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
           </div>
           <ul className="space-y-1 text-right">
             <li>• {price.similarCount + (price.similarListings?.length || 0)} سيارة مشابهة (JO Cars DB + السوق المفتوح)</li>
-            <li>• {price.sources?.length || 0} مصدر بيانات: {(price.sources || []).join('، ')}</li>
+            <li>• {price.sources?.length || 0} مصدر بيانات: {(price.sources || []).join('،')}</li>
             <li>• {price.marketFactors?.length || 0} عامل محلي + {condition.factors?.length || 0} عامل حالة</li>
             <li>• {images.count} صور مرفقة — {images.analyzed} مرئية للخوارزمية</li>
             <li>• السعر العادل المقترح من صفحة الإعلان: {car.fairPriceEstimate ? formatPrice(car.fairPriceEstimate) + ' د.أ' : 'غير متاح'}</li>

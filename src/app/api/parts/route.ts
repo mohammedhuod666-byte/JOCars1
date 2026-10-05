@@ -5,6 +5,7 @@ import { generateSlug } from '@/lib/utils';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { sanitizePlainText, sanitizeHtml } from '@/lib/sanitize';
+import { validateUploadedImage } from '@/lib/image-validate';
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
 
@@ -86,12 +87,30 @@ export async function POST(request: NextRequest) {
       }
 
       const saveFile = async (file: File) => {
+        // Validates magic bytes + dimensions; throws Arabic error on bad files.
+        // Let it throw: the outer catch returns 500 — convert to a clean 400.
+        try {
+          await validateUploadedImage(file);
+        } catch (imgErr) {
+          throw new Error(imgErr instanceof Error ? imgErr.message : 'ملف صورة غير صالح');
+        }
         const bytes = await file.arrayBuffer();
         if (!bytes || bytes.byteLength === 0) return null;
         const buffer = Buffer.from(bytes);
         const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
         if (!ALLOWED_EXTENSIONS.includes(ext)) return null;
         if (buffer.length > 10 * 1024 * 1024) return null;
+        // Preferred: Cloudinary (persistent across deploys, CDN-served).
+        // Local disk writes silently vanish on serverless hosts (Vercel).
+        const hasCloudinary = !!(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+        if (hasCloudinary) {
+          const { uploadImage } = await import('@/lib/cloudinary');
+          const mime = file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+          const result = await uploadImage(`data:${mime};base64,${buffer.toString('base64')}`, {
+            folder: 'jo-cars/parts',
+          });
+          return result.secure_url;
+        }
         const filename = `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const dir = path.join(process.cwd(), 'public', 'uploads');
         await mkdir(dir, { recursive: true });
@@ -99,11 +118,15 @@ export async function POST(request: NextRequest) {
         return `/uploads/${filename}`;
       };
 
-      for (const img of uploadedFiles) {
-        if (typeof img !== 'string') {
-          const url = await saveFile(img);
-          if (url) urls.push(url);
+      try {
+        for (const img of uploadedFiles) {
+          if (typeof img !== 'string') {
+            const url = await saveFile(img);
+            if (url) urls.push(url);
+          }
         }
+      } catch (imgErr) {
+        return NextResponse.json({ success: false, error: imgErr instanceof Error ? imgErr.message : 'ملف صورة غير صالح' }, { status: 400 });
       }
     } else {
       data = await request.json();

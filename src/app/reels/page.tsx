@@ -38,7 +38,7 @@ export default function ReelsPage() {
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 inline-flex items-center gap-1.5 mb-3">
-            <Clapperboard className="w-3.5 h-3.5" /> ريلز السيارات 🎬
+            <Clapperboard className="w-3.5 h-3.5" /> ريلز السيارات 
           </span>
           <h1 className="text-3xl font-extrabold mb-2">شاهد السيارات فيديو قبل المعاينة</h1>
           <p className="text-sm text-slate-400">جولات فيديو حقيقية من البائعين —mov إعلانات فيها فيديو تظهر هنا تلقائياً</p>

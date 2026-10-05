@@ -247,7 +247,7 @@ function NewTopicForm() {
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-emerald-500/20"
             >
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              نشر الموضوع في المنتدى 🚀
+              نشر الموضوع في المنتدى 
             </button>
           </div>
 

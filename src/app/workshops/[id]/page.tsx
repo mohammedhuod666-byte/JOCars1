@@ -614,7 +614,7 @@ export default function WorkshopDetailPage() {
                 <Tag className="w-5 h-5" />
               </div>
               <div>
-                <span className="text-emerald-400 text-xs font-bold block">عرض حصري لأعضاء موقع Cars JO 🏷️</span>
+                <span className="text-emerald-400 text-xs font-bold block">عرض حصري لأعضاء موقع Cars JO </span>
                 <p className="text-white text-sm font-extrabold mt-0.5">{workshop.discountOffer}</p>
               </div>
             </div>
@@ -898,7 +898,7 @@ export default function WorkshopDetailPage() {
                       onClick={() => setShowReviewForm(true)}
                       className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shrink-0"
                     >
-                      أضف تقييمك للورشة ⭐
+                      أضف تقييمك للورشة 
                     </button>
                   </div>
 
@@ -1102,7 +1102,7 @@ export default function WorkshopDetailPage() {
             {/* Quick Appointment Call-to-Action Card */}
             <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border border-emerald-500/30 space-y-4 shadow-xl">
               <div className="space-y-1">
-                <span className="text-emerald-400 text-xs font-bold block">حجز موعد مسبق 🗓️</span>
+                <span className="text-emerald-400 text-xs font-bold block">حجز موعد مسبق </span>
                 <h4 className="text-white font-extrabold text-base">تجنب الانتظار واضمن دورك في الورشة</h4>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
@@ -1112,7 +1112,7 @@ export default function WorkshopDetailPage() {
                 onClick={() => setShowBookForm(true)}
                 className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-colors shadow-lg shadow-emerald-500/20"
               >
-                احجز موعدك الآن 🚀
+                احجز موعدك الآن 
               </button>
             </div>
 
@@ -1242,7 +1242,7 @@ export default function WorkshopDetailPage() {
                       onChange={(e) => setBookForm(b => ({ ...b, isUrgent: e.target.checked }))}
                       className="w-4 h-4 accent-emerald-500"
                     />
-                    <span className="text-rose-400 font-bold text-xs">⚡ حالة طارئة تعطل على الطريق (أولوية فحص)</span>
+                    <span className="text-rose-400 font-bold text-xs"> حالة طارئة تعطل على الطريق (أولوية فحص)</span>
                   </label>
 
                   <div>
@@ -1265,7 +1265,7 @@ export default function WorkshopDetailPage() {
                     disabled={bookStatus === 'loading' || !bookForm.date || !bookForm.time || !bookForm.serviceType}
                     className="w-full py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {bookStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد الحجز والإرسال 🚀'}
+                    {bookStatus === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'تأكيد الحجز والإرسال'}
                   </button>
                 </div>
               )}
