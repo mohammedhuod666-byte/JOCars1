@@ -93,9 +93,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // short-lived signed URL from /api/cars/[id]/documents instead.
       licenseDocUrl: null,
       inspectionDocUrl: null,
-      // Only the boolean is public: it drives the "documents on file" chip.
+      serviceRecordDocUrl: null,
+      inspectionDocUrls: null,
+      // Only booleans and a COUNT are public: they drive the "documents on file"
+      // chip and let the owner see how many pages their report has. The URLs
+      // themselves stay behind /documents and its ownership check.
       hasLicenseDoc: !!car.licenseDocUrl,
       hasInspectionDoc: !!car.inspectionDocUrl,
+      hasServiceRecordDoc: !!car.serviceRecordDocUrl,
+      extraInspectionCount: (() => {
+        if (!car.inspectionDocUrls) return 0;
+        try {
+          const parsed = JSON.parse(car.inspectionDocUrls);
+          return Array.isArray(parsed) ? parsed.length : 0;
+        } catch {
+          // A corrupt column means "unknown", never a crash on the ad page.
+          return 0;
+        }
+      })(),
     });
   } catch (error) {
     console.error('Car fetch error:', error);

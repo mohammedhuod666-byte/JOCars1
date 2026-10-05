@@ -644,6 +644,8 @@ export default function CarDetailPage() {
               carId={car.id}
               hasLicenseDoc={!!(car as any).hasLicenseDoc}
               hasInspectionDoc={!!(car as any).hasInspectionDoc}
+              hasServiceRecordDoc={!!(car as any).hasServiceRecordDoc}
+              extraInspectionCount={Number((car as any).extraInspectionCount) || 0}
               canViewDocuments={isOwner || currentUser?.role === 'ADMIN'}
               verificationStatus={
                 (car as any).hasLicenseDoc && (car as any).hasInspectionDoc

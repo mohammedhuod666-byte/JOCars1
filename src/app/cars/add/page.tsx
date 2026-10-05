@@ -16,7 +16,7 @@ import {
   Info, RefreshCw, Layers, FileCheck2, RotateCcw, CalendarCheck
 } from 'lucide-react';
 import { MapPicker } from '@/components/cars/MapPicker';
-import { compressImagesClient, compressDocsClient } from '@/lib/image-compress-client';
+import { compressImagesClient, compressDocsClient, fitGalleryToBudget } from '@/lib/image-compress-client';
 import { AIPriceEstimator } from '@/components/cars/AIPriceEstimator';
 import toast from 'react-hot-toast';
 
@@ -173,7 +173,7 @@ import type { DocKind } from '@/lib/doc-upload';
 import { directUploadAvailable, uploadVideoDirect, SAFE_INLINE_MAX_BYTES } from '@/lib/video-upload';
 import {
   MAX_PUBLISH_BODY_BYTES, MAX_SINGLE_FILE_BYTES, formatMB,
-  isPlatformTooLarge, tooLargeMessage, singleFileTooLargeMessage,
+  isPlatformTooLarge, tooLargeMessage, singleFileTooLargeMessage, galleryBudget,
 } from '@/lib/upload-limits';
 
 /**
@@ -955,12 +955,16 @@ export default function AddCarPage() {
         ...(licenseDoc && licenseDoc.type !== 'application/pdf' ? [licenseDoc] : []),
         ...(inspectionDoc && inspectionDoc.type !== 'application/pdf' ? [inspectionDoc] : []),
       ];
-      const [imgs, cover, docs] = await Promise.all([
-        compressImagesClient(images),
+      const [fit, cover, docs] = await Promise.all([
+        // ADAPTIVE, not fixed: the wizard promises up to 20 photos, so the
+        // compression has to fit the count rather than reject it. A fixed
+        // 1280px/q0.78 profile gave ~180KB each, and 20 of them straddled the
+        // platform ceiling — the seller picked 20 valid photos and was refused.
+        fitGalleryToBudget(images, galleryBudget(images.length)),
         sendCoverFile ? compressImagesClient([sendCoverFile]) : null,
         compressDocsClient(compressibleDocs),
       ]);
-      sendImages = imgs.files;
+      sendImages = fit.files;
       if (cover) sendCover = cover.files[0] || null;
       let cursor = 0;
       if (licenseDoc && licenseDoc.type !== 'application/pdf') {
@@ -980,18 +984,22 @@ export default function AddCarPage() {
       .reduce((n, f) => n + (f.size || 0), 0);
     if (totalBytes > MAX_PUBLISH_BODY_BYTES) {
       setLoading(false);
-      // Name the biggest offender instead of only the total, so the seller knows
-      // which photo to remove rather than guessing.
-      const parts = sendImages
-        .map((f, i) => ({ label: `صورة ${i + 1}`, mb: f.size / 1024 / 1024 }))
-        .sort((a, b) => b.mb - a.mb);
-      const worst = parts.slice(0, 2).map((p) => `${p.label} (${p.mb.toFixed(1)}MB)`).join('، ');
-      toast.error(tooLargeMessage(totalBytes), { duration: 9000, id: 'car-publish' });
-      if (worst) {
-        applyErrors({
-          images: `الأكبر حالياً: ${worst}. الإجمالي المسموح ${formatMB(MAX_PUBLISH_BODY_BYTES)} ميجابايت.`,
-        });
-      }
+      // Safety net. fitGalleryToBudget should have made this unreachable, so
+      // reaching it means the images are pathological (e.g. a decoder failure
+      // left them un-recompressable). The message says exactly that instead of
+      // the vague "too many images", because the seller's actual mistake here is
+      // choosing many photos, which is ALLOWED — so blaming the count is wrong.
+      const over = totalBytes - MAX_PUBLISH_BODY_BYTES;
+      toast.error(
+        `تعذر تجهيز ${sendImages.length} صورة ضمن الحد المسموح ` +
+        `(${formatMB(MAX_PUBLISH_BODY_BYTES)} ميجابايت، والزيادة ${formatMB(over)} ميجابايت).\n` +
+        'قلّل عدد الصور قليلاً — عادةً تكفي صورة أقل.',
+        { duration: 9000, id: 'car-publish' },
+      );
+      applyErrors({
+        images: `عدد الصور كبير جداً على حجم الطلب الواحد. الحد ` +
+          `${formatMB(MAX_PUBLISH_BODY_BYTES)} ميجابايت — احذف ${Math.max(1, Math.ceil(over / 400000))} صورة.`,
+      });
       return;
     }
 

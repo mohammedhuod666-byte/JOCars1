@@ -47,9 +47,54 @@ const nextConfig = {
         ],
       },
       {
+        // DEFAULT-DENY for the whole API surface.
+        //
+        // Next/Vercel stamp `public, max-age=0, must-revalidate` on dynamic route
+        // handlers by default. `max-age=0` forces a compliant cache to revalidate
+        // on every use, so it is not a live stale-data leak — but `public` on a
+        // response that varies by authentication is still the wrong declaration,
+        // and it applies to ~190 routes at once. Any non-compliant intermediary
+        // (corporate proxy, some older browsers) is then free to store and
+        // replay a seller's or an admin's response.
+        //
+        // Measured across 22 protected endpoints: 19 carried `public` with no
+        // `Vary`. Two routes genuinely want long public caching and are
+        // re-declared below so the more specific rule wins.
+        //
+        // The perf cost is nil: these responses already revalidated every time.
+        // Ordering matters — Next applies matching rules in order and the last
+        // header for a key wins, so the specific rules below override this one.
+        source: '/api/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+          { key: 'Vary', value: 'Authorization, Cookie' },
+        ],
+      },
+      {
+        // Public, immutable, and identical for every caller.
+        source: '/api/news-image',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' },
+        ],
+      },
+      {
+        // Audio for an APPROVED listing. The route itself returns
+        // `private, no-store` for the unapproved branch, so only the public case
+        // is declared cacheable here.
+        source: '/api/sounds/stream/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        // (The cars API needed its own rule once; it is now covered by the
+        // blanket /api/:path* deny above. Kept as an explicit, self-documenting
+        // entry because the cars prefix carries the document endpoints, and a
+        // future edit to the blanket rule should not silently re-expose them.)
         source: '/api/cars/:path*',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=30, stale-while-revalidate=60' },
+          { key: 'Cache-Control', value: 'private, no-store, max-age=0' },
+          { key: 'Vary', value: 'Authorization, Cookie' },
         ],
       },
       {

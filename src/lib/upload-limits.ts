@@ -58,6 +58,26 @@ export function formatMB(bytes: number): string {
  */
 export const MAX_SINGLE_FILE_BYTES = 3.8 * 1024 * 1024;
 
+/**
+ * The byte budget the gallery must fit, given how many photos the seller chose.
+ *
+ * The wizard allows up to 20 photos, so the per-photo allowance has to shrink as
+ * the count grows — otherwise "20 photos" is a promise the transport cannot keep.
+ * A flat allowance of ~180KB/photo put 20 photos at ~3.6MB, right on the edge of
+ * a 3.8MB budget, and a seller with slightly busier scenes was rejected with an
+ * error naming no cause. That was a contradiction between the UI and the guard,
+ * and the guard losing.
+ *
+ * 95% of the cap is used because the multipart framing is added on top of the
+ * file bytes; leaving 5% keeps a "fits" verdict from becoming a 413 at the edge.
+ */
+export function galleryBudget(imageCount: number): number {
+  if (imageCount <= 0) return MAX_PUBLISH_BODY_BYTES;
+  // A separate cover file is only sent when no gallery image is chosen, so it is
+  // not part of the gallery allowance; it is checked on its own.
+  return Math.floor(MAX_PUBLISH_BODY_BYTES * 0.95) / imageCount;
+}
+
 /** Message for a single file that cannot fit, explaining the real reason. */
 export function singleFileTooLargeMessage(bytes: number, label = 'الملف'): string {
   return (

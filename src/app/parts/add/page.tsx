@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { compressImagesClient } from '@/lib/image-compress-client';
-import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge } from '@/lib/upload-limits';
+import { fitGalleryToBudget } from '@/lib/image-compress-client';
+import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge, galleryBudget } from '@/lib/upload-limits';
 
 const PART_TYPES = [
   { value: 'engine', label: 'محرك وفواصل' },
@@ -108,7 +108,12 @@ export default function AddPartPage() {
     setLoading(true);
     let sendImages = images;
     try {
-      sendImages = (await compressImagesClient(images)).files;
+      // ADAPTIVE, matching the car wizard. A fixed 1280px/q0.78 profile measures
+      // ~395KB per real phone photo (measured, not assumed), so a seller picking
+      // several part photos could pass the UI's own limit and still be rejected
+      // by the guard below. The ladder adapts to the count instead.
+      const fit = await fitGalleryToBudget(images, galleryBudget(images.length));
+      sendImages = fit.files;
     } catch { /* best-effort */ }
     // The 9MB figure this used to advertise was fiction: the platform caps a
     // route-handler body at 4.5MB (measured, see src/lib/upload-limits.ts), so

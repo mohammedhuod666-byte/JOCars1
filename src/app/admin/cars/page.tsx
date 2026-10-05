@@ -37,7 +37,8 @@ export default function AdminCarsPage() {
       fetch('/api/admin/plans', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch('/api/admin/tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
     ]).then(([carsData, plansData, tagsData]) => {
-      setCars(carsData.data || []);
+      const d = carsData.data;
+      setCars(Array.isArray(d) ? d : (d?.cars || []));
       setPlans(plansData.data || []);
       setAvailableTags((tagsData.data || []).filter((t: any) => t.isActive));
       setLoading(false);
@@ -46,15 +47,13 @@ export default function AdminCarsPage() {
 
   const loadCounts = () => {
     const token = useAuth.getState().token;
-    Promise.all([
-      fetch('/api/admin/cars?status=PENDING', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('/api/admin/cars?status=APPROVED', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('/api/admin/cars?status=REJECTED', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([p, a, r]) => {
+    fetch('/api/admin/cars?counts=true', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+    .then((res) => {
+      const d = res.data || {};
       setCarCounts({
-        PENDING: (p.data || []).length,
-        APPROVED: (a.data || []).length,
-        REJECTED: (r.data || []).length,
+        PENDING: d.PENDING || 0,
+        APPROVED: d.APPROVED || 0,
+        REJECTED: d.REJECTED || 0,
       });
     }).catch(() => {});
   };
@@ -104,7 +103,7 @@ export default function AdminCarsPage() {
       const d = await res.json();
       if (d.success) {
         setCars(cars.map(c => c.id === carId ? { ...c, inspectionVerified: !current } as CarType : c));
-        toast.success(!current ? 'تم منح شارة الفحص المعتمد ✅' : 'تم إلغاء شارة الفحص');
+        toast.success(!current ? 'تم منح شارة الفحص المعتمد ' : 'تم إلغاء شارة الفحص');
       } else { toast.error('فشل التحديث'); }
     } catch { toast.error('فشل التحديث'); }
   };
@@ -217,6 +216,8 @@ export default function AdminCarsPage() {
                     <th className="text-right p-4 text-sm text-gray-500">السعر</th>
                     <th className="text-right p-4 text-sm text-gray-500">مميزة</th>
                     <th className="text-right p-4 text-sm text-gray-500">الحالة</th>
+                    <th className="text-right p-4 text-sm text-gray-500">الاكتمال</th>
+                    <th className="text-right p-4 text-sm text-gray-500">المستندات</th>
                     <th className="text-left p-4 text-sm text-gray-500">إجراءات</th>
                   </tr>
               </thead>
@@ -271,6 +272,63 @@ export default function AdminCarsPage() {
                       }`}>
                         {car.status === 'APPROVED' ? 'مقبول' : car.status === 'PENDING' ? 'قيد المراجعة' : 'مرفوض'}
                       </span>
+                    </td>
+                    {/*
+                      Moderation signals, computed SERVER-side by the same module
+                      the wizard uses (lib/listing-score.ts) so this figure cannot
+                      drift from the one the seller saw at step 5.
+
+                      The document label states only what is ON FILE. It is
+                      deliberately not called "verified": nothing in the system
+                      compares the documents against the car, and an admin screen
+                      is exactly where an overstated label would do real damage.
+                    */}
+                    <td className="p-4">
+                      {typeof (car as any).completeness === 'number' ? (
+                        <div className="space-y-1 min-w-[92px]">
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-bold">
+                            <span className="text-gray-500">الاكتمال</span>
+                            <span className="tabular-nums text-gray-700 dark:text-gray-300">
+                              {(car as any).completeness}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                (car as any).completeness >= 80 ? 'bg-green-500'
+                                  : (car as any).completeness >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.max(2, (car as any).completeness)}%` }}
+                            />
+                          </div>
+                          {(car as any).missingRequired > 0 && (
+                            <p className="text-[10px] font-bold text-red-500">
+                              ناقص {(car as any).missingRequired} إلزامي
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      {(() => {
+                        const state = (car as any).documentState;
+                        if (!state || state === 'NONE') {
+                          return <span className="text-red-500 text-xs font-semibold">بدون مستندات</span>;
+                        }
+                        const complete = state === 'COMPLETE';
+                        return (
+                          <div className="space-y-0.5">
+                            <span className={`text-xs font-semibold ${complete ? 'text-green-600' : 'text-amber-600'}`}>
+                              {complete ? 'مستندات كاملة' : 'مستند واحد'}
+                            </span>
+                            <p className="text-[10px] text-gray-400">
+                              {((car as any)._count?.images) || 0} صورة
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="p-4 text-left">
                       <div className="flex items-center gap-2 justify-end">

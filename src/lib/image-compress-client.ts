@@ -81,6 +81,98 @@ export async function compressImagesClient(files: File[]): Promise<{ files: File
   return { files: out, savedMB: (before - after) / 1024 / 1024 };
 }
 
+/**
+ * Quality ladder, best first. `fitGalleryToBudget` walks it and stops at the first
+ * rung whose total fits.
+ *
+ * The rungs exist because the wizard allows up to 20 photos while a single
+ * request body cannot exceed ~3.8MB (see src/lib/upload-limits.ts). A fixed
+ * 1280px/q0.78 profile produced a 20-photo body of 7.7MB, so every such seller
+ * was rejected — and the two behaviours contradicted each other: the UI promised
+ * 20 photos while the guard refused them.
+ *
+ * The sizes below are MEASURED, not assumed: 20 noisy 4000x3000 phone photos
+ * encoded in Chrome, per-image WebP bytes.
+ *
+ *   1280px @0.78 -> 395KB   7.71MB for 20   (does not fit)
+ *   1200px @0.72 -> 308KB   6.01MB
+ *   1024px @0.66 -> 199KB   3.89MB          (just over)
+ *    900px @0.60 -> 159KB   3.10MB          (fits 20 with margin)
+ *    800px @0.55 -> 139KB   2.71MB
+ *
+ * An earlier note here claimed ~180KB at the top rung. That was wrong by 2.2x,
+ * and the mistake was invisible because the end-to-end test used synthetic
+ * gradient images that compress far better than real photographs. The bug it
+ hid was larger than the reported one: at 395KB per photo even a TEN-photo
+ * gallery of real photos overshoots the budget, so the failure was never really
+ * about 20.
+ *
+ * Two extra rungs below the measured sweet spot are kept as headroom for
+ * noisier scenes (a night shot, a gravel road) that encode worse than the test
+ * set. The ladder stops at the first rung that fits, so they cost nothing when
+ * the higher rungs suffice.
+ */
+const LADDER: Profile[] = [
+  { maxDim: 1280, quality: 0.78 },
+  { maxDim: 1200, quality: 0.72 },
+  { maxDim: 1024, quality: 0.66 },
+  { maxDim: 900, quality: 0.60 },
+  { maxDim: 800, quality: 0.55 },
+  { maxDim: 720, quality: 0.50 },
+  { maxDim: 640, quality: 0.45 },
+];
+
+const sum = (files: File[]) => files.reduce((n, f) => n + (f.size || 0), 0);
+
+export interface FitResult {
+  files: File[];
+  /** Rung index actually used; -1 means the inputs already fitted untouched. */
+  rung: number;
+  totalBytes: number;
+}
+
+/**
+ * Compresses a gallery so the whole set fits `budgetBytes`.
+ *
+ * Deterministic and dependency-free: no guesswork, no server round-trip, no
+ * upload-then-fail cycle. Worst case it returns the lowest rung without fitting,
+ * and the caller's honest guard still fires — the goal is that it almost never
+ * has to, not that it can silently truncate the seller's gallery.
+ */
+export async function fitGalleryToBudget(
+  files: File[],
+  budgetBytes: number,
+): Promise<FitResult> {
+  if (!files.length) return { files, rung: -1, totalBytes: 0 };
+
+  const originals = sum(files);
+  if (originals <= budgetBytes) {
+    // Still normalise: an already-small PNG re-encoded to WebP is smaller and
+    // keeps the upload homogeneous.
+    const normalised = await compressImagesClient(files);
+    if (sum(normalised.files) <= budgetBytes) {
+      return { files: normalised.files, rung: -1, totalBytes: sum(normalised.files) };
+    }
+  }
+
+  let best: FitResult = { files, rung: -1, totalBytes: originals };
+  for (let i = 0; i < LADDER.length; i++) {
+    const profile = LADDER[i];
+    // Recompress from the ORIGINAL each rung, never from the previous rung:
+    // re-encoding an already-reduced WebP compounds artefacts.
+    const out = await Promise.all(files.map((f) => compressWith(f, profile)));
+    const total = sum(out);
+    if (i === 0 && total > originals) {
+      // Compression inflated everything (e.g. already-optimised files); there is
+      // nothing to gain by walking the rest of the ladder.
+      return { files, rung: -1, totalBytes: originals };
+    }
+    if (total <= budgetBytes) return { files: out, rung: i, totalBytes: total };
+    best = { files: out, rung: i, totalBytes: total };
+  }
+  return best;
+}
+
 /** Document variant of {@link compressImagesClient}. */
 export async function compressDocsClient(files: File[]): Promise<{ files: File[]; savedMB: number }> {
   const before = files.reduce((n, f) => n + f.size, 0);

@@ -32,8 +32,23 @@ export async function uploadImage(
   }
   const uploadOptions = {
     folder: options?.folder || 'jo-cars',
+    /**
+     * `quality: 'auto'` asks Cloudinary to optimise the stored bytes.
+     *
+     * `fetch_format: 'auto'` was here too, and it was undoing the client's work.
+     * That option is a DELIVERY-time instruction — "serve WebP/AVIF to browsers
+     * that support it" — but on upload there is no client to sniff, so Cloudinary
+     * resolved it to JPEG. Measured: a photo the wizard compressed to 159KB of
+     * WebP came back out of storage as 202KB of JPEG (+27%), plus a wasted
+     * transcode on every single upload.
+     *
+     * Removing it lets the uploaded format survive. Delivery-side format
+     * negotiation still happens through the URLs themselves (and Next's image
+     * loader requests AVIF/WebP), so nothing is lost for browsers that can do
+     * better. Existing assets are untouched — only new uploads change.
+     */
     transformation: options?.transformation || [
-      { quality: 'auto', fetch_format: 'auto' },
+      { quality: 'auto' },
     ],
     public_id: options?.publicId,
   };

@@ -15,6 +15,7 @@
     "start": "node server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "audit:cache": "node scripts/audit-cache-headers.cjs",
     "test:e2e": "playwright test",
     "test:valuation": "tsx --test src/ai/valuation/__tests__/engine.test.ts src/ai/valuation/__tests__/url-verifier.test.ts src/ai/valuation/__tests__/eligibility.test.ts src/ai/valuation/__tests__/contract-scope.test.ts src/ai/valuation/__tests__/condition-flow.test.ts src/ai/valuation/__tests__/data-hygiene.test.ts src/ai/valuation/__tests__/similarity.test.ts src/ai/valuation/__tests__/description-flow.test.ts",
     "postinstall": "prisma generate",

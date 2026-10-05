@@ -5,9 +5,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Car, TrendingUp, Eye, MessageCircle, Clock, BarChart3, Trash2, RotateCcw, CheckCircle, Timer, Loader2, X, Plus, Settings } from 'lucide-react';
+import { Car, TrendingUp, Eye, MessageCircle, Clock, BarChart3, Trash2, RotateCcw, CheckCircle, Timer, Loader2, X, Plus, Settings, Images } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Car as CarType } from '@/types';
+import PhotoOrderEditor from '@/components/cars/PhotoOrderEditor';
 
 export default function MyCarsPage() {
   const { user, isAuthenticated, _hydrated } = useAuth();
@@ -15,6 +16,8 @@ export default function MyCarsPage() {
   const [cars, setCars] = useState<(CarType & { _count: { favorites: number; messages: number; carViews: number } })[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'active' | 'sold' | 'deleted'>('active');
+  // Which listing's gallery is being reordered, if any.
+  const [reorderingId, setReorderingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (_hydrated && !isAuthenticated) { router.push('/login'); return; }
@@ -170,6 +173,15 @@ export default function MyCarsPage() {
                   <div className="flex items-center gap-2">
                     {activeTab === 'active' && (
                       <>
+                        {/* Photo order decides what a buyer sees first, and it was
+                            frozen after publishing. Offered here so a seller can
+                            fix the gallery without creating a new listing. */}
+                        <button
+                          onClick={() => setReorderingId(car.id)}
+                          className="px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors flex items-center gap-1"
+                        >
+                          <Images className="w-3 h-3" /> ترتيب الصور
+                        </button>
                         <button onClick={() => markSold(car.id)}
                           className="px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-semibold hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors flex items-center gap-1">
                           <CheckCircle className="w-3 h-3" /> تم البيع
@@ -200,6 +212,15 @@ export default function MyCarsPage() {
           </div>
         )}
       </div>
+
+      {reorderingId && (
+        <PhotoOrderEditor
+          carId={reorderingId}
+          onClose={() => setReorderingId(null)}
+          // The list thumbnail comes from images[0], so a reorder must refresh it.
+          onSaved={loadCars}
+        />
+      )}
     </div>
   );
 }
