@@ -30,8 +30,14 @@ export async function uploadImage(
   if (typeof file === 'string' && !/^(data:|https?:\/\/|file:)/i.test(file)) {
     throw new Error('مصدر صورة غير صالح: base64 خام بدون data URI — حوّله إلى data:<mime>;base64,…');
   }
-  const uploadOptions = {
+  const uploadOptions: {
+    folder: string;
+    resource_type: 'image' | 'raw' | 'video' | 'auto';
+    transformation: object;
+    public_id?: string;
+  } = {
     folder: options?.folder || 'jo-cars',
+    resource_type: 'image',
     /**
      * `quality: 'auto'` asks Cloudinary to optimise the stored bytes.
      *
