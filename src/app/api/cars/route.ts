@@ -777,13 +777,32 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ ...car, licenseDocUrl, inspectionDocUrl, completeness }, 201);
   } catch (error) {
-    console.error('Car create error:', error);
-    // Never leak raw internals (e.g. undici "Failed to parse body as
-    // FormData") — map known technical failures to actionable Arabic.
-    const raw = error instanceof Error ? error.message : '';
-    const msg = /formdata|multipart|body/i.test(raw)
+    // Log a COMPACT classification, never the raw message returned to the client.
+    // The name and a body-related flag are enough to tell a platform/transport
+    // failure apart from a bug in our own validation, which is the distinction
+    // that was impossible to make from the outside before.
+    const raw = error instanceof Error ? error.message : String(error);
+    const bodyRelated = /formdata|multipart|body|stream|aborted|socket|timeout/i.test(raw);
+    console.error('[cars] create failed', JSON.stringify({
+      name: error instanceof Error ? error.name : typeof error,
+      bodyRelated,
+      // A short, non-sensitive head of the message. Cloudinary URLs and ids are
+      // not secrets, and this is what made the previous "too many images" message
+      // impossible to diagnose.
+      head: raw.slice(0, 180).replace(/\s+/g, ' '),
+    }));
+
+    /**
+     * Only a genuine body/transport failure gets the "too many images" wording.
+     *
+     * That message used to be the fallback for EVERY unknown error, so it told
+     * sellers their photo count was the problem when the real cause was an
+     * upload failure. Wrong advice costs more than a vague message: the seller
+     * deletes good photos, retries, and hits it again.
+     */
+    const msg = bodyRelated
       ? 'تعذر استلام البيانات — قلل عدد الصور وحجمها وتأكد من الإنترنت ثم حاول مجدداً.'
-      : 'فشل إضافة السيارة';
+      : 'تعذر حفظ الإعلان بسبب تقني مؤقت — لم يُحفظ أي شيء. حاول مجدداً بعد قليل.';
     return errorResponse(msg, 500);
   }
 }

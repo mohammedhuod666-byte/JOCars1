@@ -69,12 +69,51 @@ export async function uploadImage(
   };
 }
 
+/**
+ * How many uploads may be in flight at once.
+ *
+ * This was `Promise.all(files.map(...))`, i.e. one request per image fired
+ * simultaneously. With the wizard's 20-photo limit that meant 20 concurrent
+ * Cloudinary multipart POSTs from a single serverless function, each carrying a
+ * base64 data URI that is ~33% larger than the image. That is a memory spike, a
+ * likely rate-limit trip, and a strong candidate for the transient failure that
+ * surfaced as "تعذر استلام البيانات" — a message that blamed the seller's photo
+ * count for an infrastructure problem.
+ *
+ * Four is a compromise: enough to keep a 20-image publish well under the
+ * function's duration budget, few enough that memory and Cloudinary's
+ * concurrency limits are never in play.
+ */
+const UPLOAD_CONCURRENCY = 4;
+
 export async function uploadMultipleImages(
   files: (string | Buffer)[],
   folder?: string
 ): Promise<UploadResult[]> {
-  const uploads = files.map((file) => uploadImage(file, { folder }));
-  return Promise.all(uploads);
+  if (files.length === 0) return [];
+  if (files.length === 1) return [await uploadImage(files[0], { folder })];
+
+  const results = new Array<UploadResult>(files.length);
+  let cursor = 0;
+
+  // A fixed pool of workers pulling from a shared cursor. Results are written to
+  // their original index, so ORDER IS PRESERVED — the gallery order decides the
+  // cover image, so reordering here would silently swap photos.
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = cursor++;
+      if (index >= files.length) return;
+      results[index] = await uploadImage(files[index], { folder });
+    }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(UPLOAD_CONCURRENCY, files.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+
+  return results;
 }
 
 export async function deleteImage(publicId: string): Promise<boolean> {
