@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { MAX_SINGLE_FILE_BYTES, formatMB } from '@/lib/upload-limits';
 import { motion } from 'framer-motion';
 import {
   Bot, Send, Sparkles, Car, ShoppingBag, Search, TrendingUp, Fuel, DollarSign, BarChart3,
   ArrowRight, Shield, Zap, ThumbsUp, ThumbsDown, Mic, Clock, RotateCcw, ChevronDown,
-  Settings, MessageSquare, Wrench, ImagePlus, Loader2, CheckCircle2, Upload,
+  Settings, MessageSquare, Wrench, ImagePlus, Loader2, CheckCircle2, Upload, ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,12 +17,12 @@ const CONVERSATION_STORAGE_KEY = 'jo-cars-ai-conversation';
 const CONVERSATION_META_KEY = 'jo-cars-ai-meta';
 
 type AIModelId = 'glm' | 'minimax' | 'mistral' | 'gpt-oss';
-interface AIModelOption { id: AIModelId; nameAr: string; nameEn: string; description: string; icon: string; }
+interface AIModelOption { id: AIModelId; nameAr: string; nameEn: string; description: string; }
 const AI_MODELS_LIST: AIModelOption[] = [
-  { id: 'glm', nameAr: 'GLM 5.3 Flash (الأسرع ⚡)', nameEn: 'GLM 5.3 Flash', description: 'الأسرع — رد فوري للمحادثات', icon: '⚡' },
-  { id: 'gpt-oss', nameAr: 'GPT OSS 20B', nameEn: 'GPT OSS 20B', description: 'الأذكى والأدق — لكن أبطأ', icon: '✨' },
-  { id: 'minimax', nameAr: 'Kimi K2.6', nameEn: 'Kimi K2.6', description: 'قوي للنصوص الطويلة — التحليل المعمّق', icon: '🧠' },
-  { id: 'mistral', nameAr: 'Mistral Large', nameEn: 'Mistral Large', description: 'ذكي مع reasoning — الأسئلة المعقدة', icon: '🔮' },
+  { id: 'gpt-oss', nameAr: 'GPT OSS 20B (الافتراضي)', nameEn: 'GPT OSS 20B', description: 'الأسرع حالياً — رد خلال ثانية' },
+  { id: 'glm', nameAr: 'GLM 5.3 Flash', nameEn: 'GLM 5.3 Flash', description: 'بديل — قد يتأخر أحياناً من جهة المزود' },
+  { id: 'minimax', nameAr: 'Kimi K3', nameEn: 'Kimi K3', description: 'قوي للنصوص الطويلة — التحليل المعمّق' },
+  { id: 'mistral', nameAr: 'Mistral Large', nameEn: 'Mistral Large', description: 'ذكي مع reasoning — الأسئلة المعقدة' },
 ];
 
 function loadConversation(): { messages: Message[]; sessionId: string } | null {
@@ -89,11 +90,11 @@ type MpStep = 'brand' | 'model' | 'year' | 'kilometers' | 'condition';
 type MpStepOrNull = MpStep | null;
 
 const personalityQuestions = [
-  { id: 'q1', text: 'إيش نوع الطقس اللي تحبه؟', options: [{ label: '☀️ مشمس ودافئ', value: 'A' }, { label: '🌧️ ممطر ورومانسي', value: 'B' }, { label: '❄️ بارد ومشوق', value: 'C' }] },
-  { id: 'q2', text: 'كيف تشرب قهوتك؟', options: [{ label: '☕ قهوة عربية تقليدية', value: 'A' }, { label: '🥛 لاتيه حلو وحلات', value: 'B' }, { label: '💪 اسبريسو قوي وسريع', value: 'C' }] },
-  { id: 'q3', text: 'إيش أغنية حياتك؟', options: [{ label: '🎵 أغنية هادية وعميقة', value: 'A' }, { label: '🎸 أغنية حماسية وصاخبة', value: 'B' }, { label: '🎹 أغنية كلاسيكية أنيقة', value: 'C' }] },
-  { id: 'q4', text: 'لو سافرت، وين تروح؟', options: [{ label: '🏔️ بر وصحراء ومغامرة', value: 'A' }, { label: '🏖️ شاطئ وهدوء واسترخاء', value: 'B' }, { label: '🏙️ مدينة كبيرة وفخمة', value: 'C' }] },
-  { id: 'q5', text: 'كيف تنظّم يومك؟', options: [{ label: '📋 كل شي مخطط ومرتب', value: 'A' }, { label: '🎲 عشوائي وتفاجئ نفسي', value: 'B' }, { label: '👥 مع الأهل والأصدقاء', value: 'C' }] },
+  { id: 'q1', text: 'إيش نوع الطقس اللي تحبه؟', options: [{ label: ' مشمس ودافئ', value: 'A' }, { label: ' ممطر ورومانسي', value: 'B' }, { label: ' بارد ومشوق', value: 'C' }] },
+  { id: 'q2', text: 'كيف تشرب قهوتك؟', options: [{ label: ' قهوة عربية تقليدية', value: 'A' }, { label: ' لاتيه حلو وحلات', value: 'B' }, { label: ' اسبريسو قوي وسريع', value: 'C' }] },
+  { id: 'q3', text: 'إيش أغنية حياتك؟', options: [{ label: ' أغنية هادية وعميقة', value: 'A' }, { label: ' أغنية حماسية وصاخبة', value: 'B' }, { label: ' أغنية كلاسيكية أنيقة', value: 'C' }] },
+  { id: 'q4', text: 'لو سافرت، وين تروح؟', options: [{ label: ' بر وصحراء ومغامرة', value: 'A' }, { label: ' شاطئ وهدوء واسترخاء', value: 'B' }, { label: ' مدينة كبيرة وفخمة', value: 'C' }] },
+  { id: 'q5', text: 'كيف تنظّم يومك؟', options: [{ label: ' كل شي مخطط ومرتب', value: 'A' }, { label: ' عشوائي وتفاجئ نفسي', value: 'B' }, { label: ' مع الأهل والأصدقاء', value: 'C' }] },
 ];
 
 // ── Car Listing Flow ──
@@ -101,7 +102,7 @@ type CarFlowStep = 'brand' | 'model' | 'year_km' | 'fuel_trans' | 'color_drivetr
 const CAR_FLOW_STEP_LABELS: Record<CarFlowStep, string> = {
   brand: 'الماركة', model: 'الموديل', year_km: 'السنة والممشى', fuel_trans: 'الوقود والجير',
   color_drivetrain: 'اللون والدفع', condition_price: 'الحالة والسعر', city_desc: 'المدينة والوصف',
-  phone: 'الهاتف', images: 'الصور', done: '✅ مكتمل',
+  phone: 'الهاتف', images: 'الصور', done: ' مكتمل',
 };
 const CAR_FLOW_STEPS: CarFlowStep[] = ['brand', 'model', 'year_km', 'fuel_trans', 'color_drivetrain', 'condition_price', 'city_desc', 'phone', 'images', 'done'];
 
@@ -139,12 +140,16 @@ export default function AIPage() {
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [lastSuggestions, setLastSuggestions] = useState<string[]>([]);
   const [isRecordingSound, setIsRecordingSound] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<AIModelId>('glm');
+  const [selectedModel, setSelectedModel] = useState<AIModelId>('gpt-oss');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const [carFlowStep, setCarFlowStep] = useState<CarFlowStep | null>(null);
   const [carFlowData, setCarFlowData] = useState<Record<string, string>>({});
   const [carFlowImages, setCarFlowImages] = useState<string[]>([]);
+  // Official documents (required by POST /api/cars) — collected in the chat
+  // flow so a chat-created ad is not rejected at publish time.
+  const [licenseDoc, setLicenseDoc] = useState<string | null>(null);
+  const [inspectionDoc, setInspectionDoc] = useState<string | null>(null);
   const [carFlowResult, setCarFlowResult] = useState<any>(null);
   const [isCreatingCar, setIsCreatingCar] = useState(false);
   const [carFlowHint, setCarFlowHint] = useState<string>('');
@@ -165,7 +170,7 @@ export default function AIPage() {
     } else {
       setMessages([{
         id: 'welcome', type: 'bot',
-        content: 'مرحباً! 🤖 أنا المساعد الذكي JO Cars.\n\nأخبرني بميزانيتك واحتياجاتك عشان ألاقي لك السيارة المناسبة، أو اسأل عن أي شيء متعلق بالسيارات!',
+        content: 'مرحباً!  أنا المساعد الذكي JO Cars.\n\nأخبرني بميزانيتك واحتياجاتك عشان ألاقي لك السيارة المناسبة، أو اسأل عن أي شيء متعلق بالسيارات!',
         timestamp: new Date(),
       }]);
     }
@@ -288,24 +293,24 @@ export default function AIPage() {
         const range = d.stats.priceRange;
         const trend = d.trend;
 
-        let msg = `📊 **تحليل سعر ${d.query.brand} ${d.query.model} ${d.query.year}**\n\n`;
-        msg += `💰 **السعر التقديري:** ${price.toLocaleString()} د.أ\n`;
-        msg += `📈 ${d.stats.pricePosition.label}\n\n`;
-        msg += `📉 **نطاق السوق:** ${range.min.toLocaleString()} - ${range.max.toLocaleString()} د.أ\n`;
-        msg += `📊 **متوسط السوق:** ${range.avg.toLocaleString()} د.أ\n`;
-        msg += `📋 **عدد الإعلانات المشابهة:** ${d.stats.totalListings}\n\n`;
+        let msg = ` **تحليل سعر ${d.query.brand} ${d.query.model} ${d.query.year}**\n\n`;
+        msg += ` **السعر التقديري:** ${price.toLocaleString()} د.أ\n`;
+        msg += ` ${d.stats.pricePosition.label}\n\n`;
+        msg += ` **نطاق السوق:** ${range.min.toLocaleString()} - ${range.max.toLocaleString()} د.أ\n`;
+        msg += ` **متوسط السوق:** ${range.avg.toLocaleString()} د.أ\n`;
+        msg += ` **عدد الإعلانات المشابهة:** ${d.stats.totalListings}\n\n`;
 
-        if (d.query.kilometers > 0) msg += `🛣️ **الممشى:** ${d.query.kilometers.toLocaleString()} كم\n`;
+        if (d.query.kilometers > 0) msg += ` **الممشى:** ${d.query.kilometers.toLocaleString()} كم\n`;
         if (d.query.condition) {
-          msg += `⭐ **الحالة:** ${d.query.condition}\n`;
-          msg += `🔧 **تعديل السعر حسب الحالة:** ${d.stats.conditionAdjustment > 0 ? '+' : ''}${d.stats.conditionAdjustment}%\n\n`;
+          msg += ` **الحالة:** ${d.query.condition}\n`;
+          msg += ` **تعديل السعر حسب الحالة:** ${d.stats.conditionAdjustment > 0 ? '+' : ''}${d.stats.conditionAdjustment}%\n\n`;
         }
 
         msg += `${trend.emoji} **اتجاه السوق:** ${trend.direction}`;
         if (trend.percent > 0) msg += ` (${trend.percent}%)`;
 
         msg += '\n\n';
-        if (d.similarCars.length > 0) msg += '🔄 **سيارات مشابهة في السوق:**';
+        if (d.similarCars.length > 0) msg += ' **سيارات مشابهة في السوق:**';
 
         botReply(msg, {
           marketPriceResult: d, cars: d.similarCars,
@@ -336,27 +341,27 @@ export default function AIPage() {
         let msg = `${d.personality.emoji} **شخصيتك هي: ${d.personality.type}**\n\n`;
         msg += `${d.personality.description}\n\n`;
 
-        msg += '**📊 تحليل شخصيتك:**\n';
-        msg += `⚡ الطاقة: ${d.personality.dimensions.energy > 0 ? 'نشيط' : 'هادئ'}\n`;
-        msg += `✨ الأناقة: ${d.personality.dimensions.style > 0 ? 'فاخر' : 'عملي'}\n`;
-        msg += `🏔️ المغامرة: ${d.personality.dimensions.adventure > 0 ? 'جريء' : 'هاديء'}\n`;
-        msg += `👥 الاجتماعي: ${d.personality.dimensions.social > 0 ? 'عائلي' : 'فردي'}\n`;
-        msg += `🏎️ السرعة: ${d.personality.dimensions.pace > 0 ? 'سريع' : 'اقتصادي'}\n\n`;
+        msg += '** تحليل شخصيتك:**\n';
+        msg += ` الطاقة: ${d.personality.dimensions.energy > 0 ? 'نشيط' : 'هادئ'}\n`;
+        msg += ` الأناقة: ${d.personality.dimensions.style > 0 ? 'فاخر' : 'عملي'}\n`;
+        msg += ` المغامرة: ${d.personality.dimensions.adventure > 0 ? 'جريء' : 'هاديء'}\n`;
+        msg += ` الاجتماعي: ${d.personality.dimensions.social > 0 ? 'عائلي' : 'فردي'}\n`;
+        msg += ` السرعة: ${d.personality.dimensions.pace > 0 ? 'سريع' : 'اقتصادي'}\n\n`;
 
         if (d.recommendedCars && d.recommendedCars.length > 0) {
-          msg += '**🚗 سيارات ننصحك تبحث عنها بالسوق:**\n\n';
+          msg += '** سيارات ننصحك تبحث عنها بالسوق:**\n\n';
           d.recommendedCars.forEach((car: any, i: number) => {
             msg += `${i + 1}. **${car.brand} ${car.model}** (${car.yearRange})\n`;
-            msg += `   💰 ${car.priceRange}\n`;
-            msg += `   📝 ${car.reason}\n`;
-            msg += `   🏷️ ${car.category}\n\n`;
+            msg += `    ${car.priceRange}\n`;
+            msg += `    ${car.reason}\n`;
+            msg += `    ${car.category}\n\n`;
           });
         }
 
         if (d.cars && d.cars.length > 0) {
-          msg += '**📦 سيارات متوفرة حالياً في موقعنا:**';
+          msg += '** سيارات متوفرة حالياً في موقعنا:**';
         } else {
-          msg += '\n💡 **ملاحظة:** ما لقينا سيارات مطابقة في قاعدة بياناتنا حالياً، لكن السيارات اللي فوق متاحة بالسوق الأردني وتقدر تدور عليها!';
+          msg += '\n **ملاحظة:** ما لقينا سيارات مطابقة في قاعدة بياناتنا حالياً، لكن السيارات اللي فوق متاحة بالسوق الأردني وتقدر تدور عليها!';
         }
 
         botReply(msg, {
@@ -382,7 +387,7 @@ export default function AIPage() {
         id: Date.now().toString(), type: 'user', content: content.trim(), timestamp: new Date(),
       }]);
       setInput('');
-      botReply('🔒 المساعد الذكي يتطلب تسجيل الدخول.\n\nاضغط زر "دخول" أعلى الصفحة وسجّل الدخول، ثم ارجع واسألني أي شيء عن السيارات! 🚗');
+      botReply(' المساعد الذكي يتطلب تسجيل الدخول.\n\nاضغط زر "دخول" أعلى الصفحة وسجّل الدخول، ثم ارجع واسألني أي شيء عن السيارات!');
       return;
     }
 
@@ -410,7 +415,7 @@ export default function AIPage() {
       setPersonalityResult(null);
       setIsTyping(true);
       setTimeout(() => {
-        botReply('🔮 راح أسوي لك اختبار شخصية بسيط عشان ألاقي السيارة اللي تناسبك! جاهز؟');
+        botReply(' راح أسوي لك اختبار شخصية بسيط عشان ألاقي السيارة اللي تناسبك! جاهز؟');
         setTimeout(() => {
           botReply(`**السؤال 1 من 5:**\n\n${personalityQuestions[0].text}`);
           setIsTyping(false);
@@ -431,7 +436,7 @@ export default function AIPage() {
       setCarFlowData({});
       setCarFlowImages([]);
       setCarFlowHint('');
-      botReply('❌ تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت.');
+      botReply(' تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت.');
       return;
     }
 
@@ -509,9 +514,9 @@ export default function AIPage() {
 
         let eventType = '';
         for (const line of lines) {
-          if (line.startsWith('event: ')) {
+          if (line.startsWith('event:')) {
             eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
+          } else if (line.startsWith('data:')) {
             const dataStr = line.slice(6);
             try {
               const data = JSON.parse(dataStr);
@@ -590,7 +595,7 @@ export default function AIPage() {
         if (authExpired) {
           setMessages(prev => [...prev, {
             id: botMsgId, type: 'bot',
-            content: '🔒 انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.',
+            content: ' انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.',
             timestamp: new Date(),
           }]);
         } else if (data.success && data.data) {
@@ -619,7 +624,7 @@ export default function AIPage() {
         setMessages(prev => [...prev, {
           id: botMsgId, type: 'bot',
           content: authExpired
-            ? '🔒 انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.'
+            ? ' انتهت جلستك. سجّل الدخول مرة أخرى من زر "دخول" أعلى الصفحة ثم أعد إرسال سؤالك.'
             : 'عذراً، حدث خطأ في الاتصال. حاول مرة أخرى.',
           timestamp: new Date(),
         }]);
@@ -635,6 +640,32 @@ export default function AIPage() {
   }, [isTyping, isAuthenticated, mpStep, personalityStep, personalityAnswers, sessionId, selectedModel, botReply, advanceMp, fetchPersonalityMatch, carFlowStep, carFlowData, carFlowImages]);
 
   // ── Image Upload for Car Flow ──
+  const handleDocUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>, kind: 'license' | 'inspection') => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      botReply(' صيغة الملف غير مدعومة — الرجاء اختيار صورة JPG أو PNG أو WEBP.');
+      return;
+    }
+    // Real ceiling, not the 8MB this used to claim. A base64 data URI inflates
+    // by ~33% before it even enters the multipart body, and the platform refuses
+    // any request above 4.5MB — so 8MB was never reachable here.
+    if (file.size > MAX_SINGLE_FILE_BYTES) {
+      botReply(
+        ` حجم الصورة ${formatMB(file.size)} ميجابايت — الحد الأقصى ${formatMB(MAX_SINGLE_FILE_BYTES)} ميجابايت. ` +
+        'اختر صورة أصغر أو قلّص دقتها.',
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (kind === 'license') setLicenseDoc(reader.result as string);
+      else setInspectionDoc(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }, [botReply]);
+
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -688,7 +719,7 @@ export default function AIPage() {
       );
 
       if (!matchedBrand || !matchedModel || !matchedCity) {
-        botReply('❌ ما قدرت ألاقي بعض البيانات. تأكد من صحة الماركة والموديل والمدينة.', {
+        botReply(' ما قدرت ألاقي بعض البيانات. تأكد من صحة الماركة والموديل والمدينة.', {
           suggestions: ['إنشاء إعلان من جديد'],
         });
         setIsCreatingCar(false);
@@ -705,7 +736,8 @@ export default function AIPage() {
       formData.append('transmission', carFlowData.transmission || 'AUTOMATIC');
       formData.append('color', carFlowData.color || 'أبيض');
       formData.append('doors', '4');
-      formData.append('drivetrain', carFlowData.drivetrain || 'FWD');
+      // No silent FWD default: unknown stays unknown (displays "غير محدد").
+      if (carFlowData.drivetrain) formData.append('drivetrain', carFlowData.drivetrain);
       formData.append('condition', carFlowData.condition || 'GOOD');
       formData.append('description', carFlowData.description || `${carFlowData.brand} ${carFlowData.model} ${carFlowData.year}`);
       formData.append('price', carFlowData.price || '0');
@@ -726,7 +758,75 @@ export default function AIPage() {
         formData.append('images', file);
       });
 
+      // Official documents are required server-side by POST /api/cars.
+      if (!licenseDoc || !inspectionDoc) {
+        botReply(
+          ' **قبل إنشاء الإعلان:**\n\n' +
+          'الإعلانات الجديدة تتطلب مستندين إلزاميين للتحقق من بيانات السيارة:\n' +
+          '• صورة ترخيص السيارة\n' +
+          '• صورة فحص السيارة\n\n' +
+          'هذه المستندات تُرفع من صفحة «إضافة إعلان» فقط. من فضلك أكمل إنشاء الإعلان من هناك.',
+          { suggestions: ['صفحة إضافة إعلان', 'إنشاء إعلان من جديد'] },
+        );
+        setIsCreatingCar(false);
+        setCarFlowStep(null);
+        return;
+      }
+
       const token = typeof window !== 'undefined' ? localStorage.getItem('jo-cars-auth-token') : null;
+
+      /**
+       * Documents go up in their own requests and only a signed reference comes
+       * back, exactly like the wizard. Sending them inside the publish body was
+       * the same 4.5MB ceiling problem: a base64 data URI inflates by a third
+       * before it is even encoded into the multipart, so a single phone photo of
+       * a license could exceed the limit on its own.
+       */
+      const base64ToFile = (base64: string, name: string): File => {
+        const [header, data] = base64.split(',');
+        const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const binary = atob(data);
+        const array = new Uint8Array(binary.length);
+        for (let j = 0; j < binary.length; j++) array[j] = binary.charCodeAt(j);
+        const ext = mime.split('/')[1] || 'jpg';
+        return new File([array], `${name}.${ext}`, { type: mime });
+      };
+
+      const stageDoc = async (base64: string, kind: string, name: string): Promise<string> => {
+        const fd = new FormData();
+        fd.append('kind', kind);
+        fd.append('file', base64ToFile(base64, name));
+        const res = await fetch('/api/upload/stage', {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: fd,
+        });
+        const ct = res.headers.get('content-type') || '';
+        if (res.status === 413 || /text\/html/i.test(ct)) {
+          throw new Error('حجم المستند أكبر من الحد المسموح — اختر صورة أصغر');
+        }
+        let json: any = null;
+        try { json = await res.json(); } catch { throw new Error(`تعذر رفع ${name} (خطأ ${res.status})`); }
+        if (!res.ok || !json?.success || !json?.data?.ref) {
+          throw new Error(json?.error || `تعذر رفع ${name}`);
+        }
+        return json.data.ref as string;
+      };
+
+      let licenseRef: string;
+      let inspectionRef: string;
+      try {
+        licenseRef = await stageDoc(licenseDoc, 'license', 'car-license');
+        inspectionRef = await stageDoc(inspectionDoc, 'inspection', 'car-inspection');
+      } catch (stageErr) {
+        botReply(` تعذر رفع المستند: ${stageErr instanceof Error ? stageErr.message : 'خطأ غير معروف'}\n\nيمكنك المحاولة من صفحة "إضافة إعلان" مباشرة.`, {
+          suggestions: ['صفحة إضافة إعلان', 'إعادة المحاولة'],
+        });
+        return;
+      }
+      formData.append('licenseDocRef', licenseRef);
+      formData.append('inspectionDocRef', inspectionRef);
+
       const res = await fetch('/api/cars', {
         method: 'POST',
         headers: {
@@ -738,19 +838,19 @@ export default function AIPage() {
       const result = await res.json();
       if (result.success && result.data?.car) {
         setCarFlowResult(result.data.car);
-        botReply(`✅ **تم إنشاء الإعلان بنجاح!**\n\n📋 الرمز المرجعي: **${result.data.car.refCode || 'N/A'}**\n🔗 الرابط: /cars/${result.data.car.slug}\n\n💡 الإعلان في انتظار المراجعة من الإدارة.`, {
+        botReply(` **تم إنشاء الإعلان بنجاح!**\n\n الرمز المرجعي: **${result.data.car.refCode || 'N/A'}**\n الرابط: /cars/${result.data.car.slug}\n\n الإعلان في انتظار المراجعة من الإدارة.`, {
           suggestions: ['عرض الإعلان', 'إنشاء إعلان آخر', 'العودة للرئيسية'],
         });
         // Auto-navigate after 2 seconds
         setTimeout(() => router.push(`/cars/${result.data.car.slug}`), 2000);
       } else {
         const errorMsg = result.error || result.message || 'حدث خطأ غير معروف';
-        botReply(`❌ فشل إنشاء الإعلان: ${errorMsg}\n\nيمكنك المحاولة من صفحة "إضافة إعلان" مباشرة.`, {
+        botReply(` فشل إنشاء الإعلان: ${errorMsg}\n\nيمكنك المحاولة من صفحة "إضافة إعلان" مباشرة.`, {
           suggestions: ['صفحة إضافة إعلان', 'إنشاء إعلان من جديد'],
         });
       }
     } catch (err) {
-      botReply('❌ حدث خطأ أثناء إنشاء الإعلان. حاول مرة أخرى أو أضف الإعلان يدوياً.', {
+      botReply(' حدث خطأ أثناء إنشاء الإعلان. حاول مرة أخرى أو أضف الإعلان يدوياً.', {
         suggestions: ['صفحة إضافة إعلان'],
       });
     } finally {
@@ -777,7 +877,7 @@ export default function AIPage() {
   const handleClearChat = useCallback(() => {
     setMessages([{
       id: 'welcome', type: 'bot',
-      content: 'مرحباً! 🤖 أنا المساعد الذكي JO Cars.\n\nأخبرني بميزانيتك واحتياجاتك عشان ألاقي لك السيارة المناسبة، أو اسأل عن أي شيء متعلق بالسيارات!',
+      content: 'مرحباً!  أنا المساعد الذكي JO Cars.\n\nأخبرني بميزانيتك واحتياجاتك عشان ألاقي لك السيارة المناسبة، أو اسأل عن أي شيء متعلق بالسيارات!',
       timestamp: new Date(),
     }]);
     setLastSuggestions([]);
@@ -859,13 +959,13 @@ export default function AIPage() {
 
           if (result.success) {
             const r = result.data;
-            let msg = `🔍 **تحليل صوت المحرك:**\n\n`;
-            msg += `⚙️ **الحالة:** ${r.condition}\n`;
-            msg += `📊 **الثقة:** ${Math.round(r.confidence * 100)}%\n\n`;
-            msg += `📋 **الأعطال المحتملة:**\n`;
+            let msg = ` **تحليل صوت المحرك:**\n\n`;
+            msg += ` **الحالة:** ${r.condition}\n`;
+            msg += ` **الثقة:** ${Math.round(r.confidence * 100)}%\n\n`;
+            msg += ` **الأعطال المحتملة:**\n`;
             r.possibleIssues?.forEach((issue: string) => { msg += `• ${issue}\n`; });
-            msg += `\n💡 **التوصية:** ${r.recommendation}\n`;
-            if (r.estimatedRepairCost) msg += `💰 **تكلفة الإصلاح التقديرية:** ${r.estimatedRepairCost}\n`;
+            msg += `\n **التوصية:** ${r.recommendation}\n`;
+            if (r.estimatedRepairCost) msg += ` **تكلفة الإصلاح التقديرية:** ${r.estimatedRepairCost}\n`;
 
             botReply(msg, { suggestions: ['تحليل صوت آخر', 'نصائح الصيانة', 'ورشة ميكانيكية'] });
           } else {
@@ -880,7 +980,7 @@ export default function AIPage() {
       mediaRecorder.start();
       setIsRecordingSound(true);
       setIsTyping(true);
-      botReply('🎤 جاري تسجيل صوت المحرك... اضغط على زر المايكروفون مرة ثانية للإيقاف.');
+      botReply(' جاري تسجيل صوت المحرك... اضغط على زر المايكروفون مرة ثانية للإيقاف.');
 
       setTimeout(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -1010,7 +1110,7 @@ export default function AIPage() {
                       <div key={d.label} className="p-1.5 rounded-lg bg-white/50 dark:bg-black/10">
                         <div className="text-[10px] text-gray-500 mb-0.5">{d.label}</div>
                         <div className={`text-xs font-bold ${d.value > 0.3 ? 'text-red-500' : d.value < -0.3 ? 'text-blue-500' : 'text-gray-500'}`}>
-                          {d.value > 0.3 ? '★★★' : d.value > 0 ? '★★' : d.value > -0.3 ? '★☆' : '☆'}
+                          {d.value > 0.3 ? '' : d.value > 0 ? '' : d.value > -0.3 ? '' : ''}
                         </div>
                       </div>
                     ))}
@@ -1133,7 +1233,7 @@ export default function AIPage() {
             <div className="mt-4">
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 mb-3">
                 <p className="text-sm text-amber-600 dark:text-amber-400 font-medium text-center">
-                  🔮 مطابقة الروح — سؤال {personalityStep + 1} من 5
+                   مطابقة الروح — سؤال {personalityStep + 1} من 5
                 </p>
                 <div className="flex justify-center gap-1.5 mt-2">
                   {personalityQuestions.map((_, i) => {
@@ -1161,7 +1261,7 @@ export default function AIPage() {
             <div className="mt-4">
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30 mb-3">
                 <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium text-center">
-                  🚗 إنشاء إعلان — {CAR_FLOW_STEP_LABELS[carFlowStep]}
+                   إنشاء إعلان — {CAR_FLOW_STEP_LABELS[carFlowStep]}
                 </p>
                 {carFlowHint && (
                   <p className="text-xs text-emerald-500 dark:text-emerald-400/70 text-center mt-1">{carFlowHint}</p>
@@ -1208,6 +1308,48 @@ export default function AIPage() {
                     )}
                   </div>
                 )}
+                <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 space-y-2">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" />
+                    مستندات السيارة (إلزامية للنشر)
+                  </p>
+                  <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
+                    تُستخدم للتحقق من بيانات السيارة، وتظهر في قسم «المستندات والتحقق» — لا ضمن معرض الصور.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {([
+                      { kind: 'license' as const, label: 'صورة ترخيص السيارة', value: licenseDoc },
+                      { kind: 'inspection' as const, label: 'صورة فحص السيارة', value: inspectionDoc },
+                    ]).map(({ kind, label, value }) => (
+                      <div key={kind} className="space-y-1">
+                        <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-300">{label} *</label>
+                        {value ? (
+                          <div className="relative">
+                            <img src={value} alt={label} className="w-full h-20 object-cover rounded-lg border border-amber-300 dark:border-amber-700" />
+                            <button
+                              type="button"
+                              onClick={() => kind === 'license' ? setLicenseDoc(null) : setInspectionDoc(null)}
+                              className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white text-[10px] rounded"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="flex flex-col items-center justify-center gap-1 h-20 rounded-lg border-2 border-dashed border-amber-300 dark:border-amber-800 cursor-pointer hover:border-amber-500 transition-colors">
+                            <Upload className="w-4 h-4 text-amber-500" />
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">اختر صورة</span>
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              className="hidden"
+                              onChange={(e) => handleDocUpload(e, kind)}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleCreateCarListing}
@@ -1269,7 +1411,7 @@ export default function AIPage() {
           {!isAuthenticated && (
             <Link href="/auth/login"
               className="mb-3 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 text-sm font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
-              🔒 سجّل الدخول لاستخدام المساعد الذكي — اضغط هنا
+               سجّل الدخول لاستخدام المساعد الذكي — اضغط هنا
             </Link>
           )}
           <form onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
@@ -1281,7 +1423,7 @@ export default function AIPage() {
                 onClick={toggleModelSelector}
                 className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm"
               >
-                <span>{selectedModelObj?.icon}</span>
+                <Sparkles className="w-4 h-4 text-blue-500" />
                 <span className="text-gray-600 dark:text-gray-400 text-xs font-medium">{selectedModelObj?.nameEn}</span>
                 <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${showModelSelector ? 'rotate-180' : ''}`} />
               </button>
@@ -1303,7 +1445,7 @@ export default function AIPage() {
                             : 'hover:bg-gray-50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
                         }`}
                       >
-                        <span className="text-xl flex-shrink-0">{model.icon}</span>
+                        <Sparkles className="w-5 h-5 text-blue-500 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold">{model.nameAr}</p>
                           <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">{model.description}</p>
@@ -1381,7 +1523,7 @@ export default function AIPage() {
                     onClick={() => setCarFlowImages(prev => prev.filter((_, idx) => idx !== i))}
                     className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-bold shadow"
                   >
-                    ✕
+                    
                   </button>
                 </div>
               ))}

@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { compressImagesClient } from '@/lib/image-compress-client';
+import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge } from '@/lib/upload-limits';
 
 const PART_TYPES = [
   { value: 'engine', label: 'محرك وفواصل' },
@@ -27,12 +29,12 @@ const PART_TYPES = [
 ];
 
 const CONDITIONS = [
-  { value: 'NEW', label: 'جديدة وكالة ✨' },
-  { value: 'USED', label: 'مستعملة أصلية ⚙️' },
-  { value: 'REFURBISHED', label: 'مُجددة ومفحوصة 🛠️' },
+  { value: 'NEW', label: 'جديدة وكالة ' },
+  { value: 'USED', label: 'مستعملة أصلية ' },
+  { value: 'REFURBISHED', label: 'مُجددة ومفحوصة ' },
 ];
 
-const ORIGINS = ['ياباني أصلي 🇯🇵', 'كوري أصلي 🇰🇷', 'ألماني 🇩🇪', 'أمريكي 🇺🇸', 'تجاري درجة أولى', 'تشليح / سكراب'];
+const ORIGINS = ['ياباني أصلي', 'كوري أصلي', 'ألماني', 'أمريكي', 'تجاري درجة أولى', 'تشليح / سكراب'];
 
 export default function AddPartPage() {
   const { user, isAuthenticated, _hydrated, token } = useAuth();
@@ -52,7 +54,7 @@ export default function AddPartPage() {
     brandId: '',
     partNumber: '',
     oemNumber: '',
-    originCountry: 'ياباني أصلي 🇯🇵',
+    originCountry: 'ياباني أصلي',
     compatibleModels: '',
     condition: 'USED',
     price: '',
@@ -104,21 +106,56 @@ export default function AddPartPage() {
       return;
     }
     setLoading(true);
+    let sendImages = images;
+    try {
+      sendImages = (await compressImagesClient(images)).files;
+    } catch { /* best-effort */ }
+    // The 9MB figure this used to advertise was fiction: the platform caps a
+    // route-handler body at 4.5MB (measured, see src/lib/upload-limits.ts), so
+    // ads between 4.5MB and 9MB passed this check and were then killed by the
+    // edge with an HTML 413 that surfaced as "تعذر إرسال الإعلان".
+    const totalBytes = sendImages.reduce((n, f) => n + (f.size || 0), 0);
+    if (totalBytes > MAX_PUBLISH_BODY_BYTES) {
+      setLoading(false);
+      toast.error(
+        `حجم الصور ${formatMB(totalBytes)} ميجابايت — الحد الأقصى ${formatMB(MAX_PUBLISH_BODY_BYTES)} ميجابايت. ` +
+        'احذف صورة أو اثنتين ثم حاول مجدداً.',
+        { duration: 8000 },
+      );
+      return;
+    }
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, String(v)));
-      images.forEach(img => fd.append('images', img));
+      sendImages.forEach(img => fd.append('images', img));
 
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch('/api/parts', { method: 'POST', headers, body: fd });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('تمت إضافة إعلان قطعة الغيار بنجاح');
+
+      // The edge answers an oversized body with HTML, not JSON.
+      if (isPlatformTooLarge(res.status, res.headers.get('content-type') || '')) {
+        toast.error(
+          `حجم الصور ${formatMB(totalBytes)} ميجابايت — الحد الأقصى ${formatMB(MAX_PUBLISH_BODY_BYTES)} ميجابايت. ` +
+          'احذف صورة أو اثنتين ثم حاول مجدداً.',
+          { duration: 8000 },
+        );
+        return;
+      }
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        toast.error(`تعذر إرسال الإعلان (خطأ ${res.status}) — حاول مرة أخرى`);
+        return;
+      }
+      if (res.ok && data.success) {
+        toast.success('تم إرسال الإعلان! سيظهر في السوق بعد مراجعة الإدارة');
         router.push('/parts');
       } else {
-        toast.error(data.error || 'فشل إرسال الإعلان');
+        toast.error(data.error || `فشل إرسال الإعلان (خطأ ${res.status})`);
       }
     } catch {
       toast.error('حدث خطأ غير متوقع');
@@ -271,7 +308,7 @@ export default function AddPartPage() {
                     onChange={e => setForm({ ...form, isNegotiable: e.target.checked })}
                     className="w-5 h-5 rounded-md accent-blue-500 cursor-pointer"
                   />
-                  <span className="text-xs font-bold text-slate-300">السعر قابل للتفاوض 💬</span>
+                  <span className="text-xs font-bold text-slate-300">السعر قابل للتفاوض </span>
                 </label>
               </div>
             </div>
@@ -426,7 +463,7 @@ export default function AddPartPage() {
               className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-400 hover:to-cyan-500 text-slate-950 font-black text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-blue-500/20"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              نشر إعلان قطعة الغيار 🚀
+              نشر إعلان قطعة الغيار 
             </button>
 
           </div>

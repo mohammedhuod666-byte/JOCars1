@@ -1,9 +1,38 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
-import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
+import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse, validationErrorResponse } from '@/lib/api';
 import { sanitizePlainText } from '@/lib/sanitize';
 import { sendPushToUser } from '@/lib/push';
+
+const carUpdateSchema = z.object({
+  description: z.string().max(5000, 'الوصف طويل جدا').optional(),
+  price: z.coerce.number().positive('السعر يجب أن يكون أكبر من 0').optional(),
+  brandId: z.string().min(1, 'الشركة غير صالحة').optional(),
+  modelId: z.string().min(1, 'الموديل غير صالح').optional(),
+  year: z.coerce.number().int('سنة الصنع يجب أن تكون رقما صحيحا').min(1990, 'سنة الصنع يجب أن تكون 1990 أو أحدث').max(2030, 'سنة الصنع غير صالحة').optional(),
+  kilometers: z.coerce.number().int('عدد الكيلومترات يجب أن يكون رقما صحيحا').min(0, 'عدد الكيلومترات يجب أن يكون 0 أو أكثر').optional(),
+  fuelType: z.enum(['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC', 'PLUGIN_HYBRID']).optional(),
+  transmission: z.enum(['MANUAL', 'AUTOMATIC', 'CVT', 'DCT', 'SEMI_AUTOMATIC']).optional(),
+  bodyType: z.enum(['SUV', 'SEDAN', 'HATCHBACK', 'COUPE', 'CONVERTIBLE', 'WAGON', 'PICKUP', 'VAN', 'MINIVAN', 'CROSSOVER', 'SPORTS', 'LUXURY']).optional(),
+  color: z.string().min(1).max(100).optional(),
+  engineCapacity: z.coerce.number().positive('سعة المحرك يجب أن تكون أكبر من 0').optional(),
+  cylinders: z.coerce.number().int().min(2).max(16).optional(),
+  cityId: z.string().min(1).optional(),
+  locationLat: z.coerce.number().min(-90).max(90).optional(),
+  locationLng: z.coerce.number().min(-180).max(180).optional(),
+  phone: z.string().min(1).max(30).optional(),
+  whatsapp: z.string().max(30).optional(),
+  slug: z.string().min(1).max(300).optional(),
+  soldAt: z.union([z.coerce.date(), z.null()]).optional(),
+  inspectionCenter: z.string().max(300).nullable().optional(),
+  inspectionDate: z.union([z.coerce.date(), z.null()]).optional(),
+  isWholesale: z.boolean().optional(),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SOLD']).optional(),
+  featured: z.boolean().optional(),
+  featuredUntil: z.union([z.coerce.date(), z.null()]).optional(),
+});
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: carId } = await params;
@@ -59,6 +88,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       isFavorited,
       totalImageCount,
       hasMoreImages,
+      // Document URLs are never part of a public payload — a license carries
+      // the owner's name/ID. Authorized viewers (owner/admin) fetch a
+      // short-lived signed URL from /api/cars/[id]/documents instead.
+      licenseDocUrl: null,
+      inspectionDocUrl: null,
+      // Only the boolean is public: it drives the "documents on file" chip.
+      hasLicenseDoc: !!car.licenseDocUrl,
+      hasInspectionDoc: !!car.inspectionDocUrl,
     });
   } catch (error) {
     console.error('Car fetch error:', error);
@@ -117,18 +154,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    const parsed = carUpdateSchema.safeParse(safeData);
+    if (!parsed.success) return validationErrorResponse(parsed.error);
+    const validatedData = parsed.data as Record<string, any>;
+
+    // Owner content edits re-queue the listing for admin review.
+    if (user.role !== 'ADMIN') {
+      validatedData.status = 'PENDING';
+    }
+
     const updated = await prisma.car.update({
       where: { id },
-      data: safeData,
+      data: validatedData,
       include: { brand: true, model: true, city: true, images: true },
     });
 
     // Price-drop alert: if the owner lowered the price, notify everyone
     // watching this car (favorites) — in-app notification + browser push.
     // Fire-and-forget, never blocks the response.
-    if (safeData.price !== undefined && Number(safeData.price) < car.price) {
-      const drop = car.price - Number(safeData.price);
-      const newPrice = Number(safeData.price);
+    if (validatedData.price !== undefined && Number(validatedData.price) < car.price) {
+      const drop = car.price - Number(validatedData.price);
+      const newPrice = Number(validatedData.price);
       const carLabel = `${updated.brand?.nameAr || ''} ${updated.model?.nameAr || ''} ${updated.year}`.trim();
       const link = `/cars/${updated.slug || id}`;
       prisma.favorite.findMany({ where: { carId: id }, select: { userId: true } }).then(async (favs) => {
@@ -137,7 +183,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         await prisma.notification.createMany({
           data: targets.map(uid => ({
             type: 'PRICE_DROP',
-            title: 'انخفاض سعر سيارة تتابعها 📉',
+            title: 'انخفاض سعر سيارة تتابعها ',
             message: `${carLabel} — نزل السعر ${drop.toLocaleString('ar-JO')} د.أ وأصبح ${newPrice.toLocaleString('ar-JO')} د.أ`,
             userId: uid,
             link,
@@ -145,7 +191,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         });
         // Browser push for the same watchers (only subscribed browsers get it)
         await Promise.all(targets.map(uid => sendPushToUser(uid, {
-          title: 'انخفاض سعر سيارة تتابعها 📉',
+          title: 'انخفاض سعر سيارة تتابعها ',
           body: `${carLabel} أصبحت ${newPrice.toLocaleString('ar-JO')} د.أ (نزول ${drop.toLocaleString('ar-JO')})`,
           url: link,
         }))).catch(() => {});
@@ -167,7 +213,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const car = await prisma.car.findUnique({ where: { id } });
     if (!car) return notFoundResponse('السيارة');
-    if (user.role !== 'ADMIN') return errorResponse('المدير فقط يمكنه حذف الإعلانات', 403);
+    // Owners can delete their own listings; admins can delete any.
+    if (car.userId !== user.id && user.role !== 'ADMIN') return errorResponse('لا تملك صلاحية حذف هذه السيارة', 403);
     if (car.deletedAt) return errorResponse('السيارة محذوفة بالفعل', 400);
 
     await prisma.car.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: user.role === 'ADMIN' ? 'ADMIN' : 'USER' } });

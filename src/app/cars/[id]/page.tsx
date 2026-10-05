@@ -13,7 +13,7 @@ import {
   Shield, CheckCircle, AlertTriangle, BarChart3, Bot, Sparkles, Eye,
   Clock, Building2, Palette, DoorOpen, Cpu, Bike, Loader2, GitCompare, ChevronDown,
   RotateCcw, Trash2, Crown, Send, Car as CarIcon, X, RefreshCw, CalendarCheck, ShieldCheck, Zap,
-  MessageSquare, Compass, Handshake, Pencil
+  MessageSquare, Compass, Handshake, Pencil, FileText, FileCheck2, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, getConditionLabel, formatDate } from '@/lib/utils';
 import { CarDriveLoader } from '@/components/cars/CarDriveLoader';
@@ -35,6 +35,7 @@ import toast from 'react-hot-toast';
 import { sanitizePlainText } from '@/lib/sanitize';
 import WhatsAppShareButton from '@/components/ui/WhatsAppShareButton';
 import JordanianInspectionReport from '@/components/cars/JordanianInspectionReport';
+import CarDocumentsSection from '@/components/cars/CarDocumentsSection';
 import { ValuationReport } from '@/components/cars/ValuationReport';
 import { HoldButton } from '@/components/ui/HoldButton';
 import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/car-features';
@@ -632,6 +633,24 @@ export default function CarDetailPage() {
 
             {/* Jordanian Inspection Report Component */}
             <JordanianInspectionReport score={resolveInspectionScore(car)} />
+
+{/* ── Official documents & verification ──
+                Documents are stored as authenticated Cloudinary assets and are
+                NOT part of the ad payload. This section shows visitors a
+                verification status; the images themselves are fetched on demand
+                and only for the car's owner or an admin, through
+                /api/cars/[id]/documents. */}
+            <CarDocumentsSection
+              carId={car.id}
+              hasLicenseDoc={!!(car as any).hasLicenseDoc}
+              hasInspectionDoc={!!(car as any).hasInspectionDoc}
+              canViewDocuments={isOwner || currentUser?.role === 'ADMIN'}
+              verificationStatus={
+                (car as any).hasLicenseDoc && (car as any).hasInspectionDoc
+                  ? (car.status === 'APPROVED' ? 'VERIFIED' : 'PENDING')
+                  : (car.status === 'REJECTED' ? 'REJECTED' : 'NONE')
+              }
+            />
 
             {/* Features */}
             {(() => {

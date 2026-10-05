@@ -40,6 +40,7 @@ model User {
   banUntil              DateTime?
   lastLoginAt           DateTime?
   lastLoginIp           String?
+  lastSeenAt            DateTime?
   failedLoginAttempts   Int       @default(0)
   lockedUntil           DateTime?
   badges                String    @default("[]")
@@ -53,6 +54,8 @@ model User {
   buyerConversations          Conversation[]        @relation("BuyerConversations")
   sellerConversations         Conversation[]        @relation("SellerConversations")
   reports                     Report[]
+  securitySignals             SecuritySignal[]
+  valuationRequests           ValuationRequest[]
   notifications               Notification[]
   subscription                Subscription?
   savedSearches               SavedSearch[]
@@ -304,6 +307,9 @@ model Car {
   doors             Int       @default(4)
   engineCapacity    Float?
   cylinders         Int?
+  horsepower        Int?
+  acceleration      Float?   // 0-100 km/h seconds
+  features          String   @default("[]") // JSON array of feature keys
   drivetrain        String
   condition         String
   bodyType          String?
@@ -339,6 +345,45 @@ model Car {
   conditionDetails  String?
   refCode           String?   @unique
   soldPrice         Float? // actual transacted price (for sold archive accuracy)
+  // ── Vehicle identity (بيانات السيارة) ───────────────────────────────
+  // firstRegistrationYear is separate from `year`: in Jordan a car can be
+  // newer than its registration, which materially changes the value.
+  firstRegistrationYear Int?
+  interiorColor        String? // لون داخلي
+  seats                Int?     // عدد المقاعد
+  keysCount            Int?     // عدد المفاتيح
+  // Ownership (معلومات الملكية). ownerCount/isWholesale already existed and
+  // are reused rather than duplicated.
+  ownershipSource   String?  // AGENCY | LOCAL | IMPORTED | USED_IMPORT | OTHER
+  isFirstOwner       Boolean? // أول مالك
+  // ── History & condition (تاريخ السيارة وحالتها) ─────────────────────
+  // All of these are SELLER DECLARATIONS, never a verified fact. They are
+  // plain strings (not enums) so the option list can grow without a migration,
+  // and nothing downstream may present them as certified.
+  accidentHistory   String?   // NONE | YES | UNKNOWN
+  accidentDetails   String?   // وصف الحادث (free text, seller-written)
+  accidentAreas     String?   // JSON array of affected areas
+  bodyPaintStatus   String?   // ORIGINAL | PARTIAL_PAINT | FULL_PAINT | UNKNOWN
+  chassisStatus     String?   // SOUND | DAMAGED | UNKNOWN
+  engineStatus      String?   // EXCELLENT | GOOD | NEEDS_INSPECTION | NEEDS_SERVICE | UNKNOWN
+  transmissionStatus String?  // same scale as engineStatus
+  // ── Service record (سجل الصيانة) ────────────────────────────────────
+  // hasServiceHistory (boolean) already existed; these carry the detail.
+  serviceRecordStatus String?   // EXISTS | NONE | UNKNOWN
+  lastServiceDate     DateTime?
+  lastServiceType     String?
+  serviceNotes        String?
+  serviceRecordDocUrl String?   // صورة/مستند سجل الصيانة (private, like other docs)
+  // ── Customs (بيانات الجمرك) ────────────────────────────────────────
+  // customsStatus used to live only inside the description text, which made
+  // it unfilterable. It is now a real column so search can use it.
+  customsStatus           String?
+  customsTransactionStatus String? // COMPLETE | PENDING | NOT_APPLICABLE | UNKNOWN
+  customsNotes            String?
+  // Extra inspection images (تقرير الفحص قد يتكوّن من أكثر من صفحة).
+  // JSON array of authenticated asset URLs, same privacy rules as
+  // inspectionDocUrl. Kept out of CarImage on purpose.
+  inspectionDocUrls      String?
   // Certified inspection badge (فحص معتمد): dealer declares center/date,
   // admin grants inspectionVerified after reviewing the report
   inspectionVerified Boolean   @default(false)
@@ -346,6 +391,13 @@ model Car {
   inspectionDate     DateTime?
   // Wholesale (بيع جملة: تاجر → تاجر بسعر الجملة)
   isWholesale       Boolean   @default(false)
+  // Official documents (مستندات وتحقق) — deliberately NOT CarImage rows so
+  // they can never leak into the marketing gallery/carousel/JSON-LD. Stored
+  // in their own Cloudinary folder (jo-cars/docs) and rendered in a separate
+  // "المستندات والتحقق" section on the ad page. Nullable so legacy ads keep
+  // rendering; every NEW ad must have both (enforced in POST /api/cars).
+  licenseDocUrl     String?
+  inspectionDocUrl  String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   expiresAt         DateTime?
@@ -364,6 +416,7 @@ model Car {
   messages        Message[]
   conversations   Conversation[]
   reports         Report[]
+  valuationRequests ValuationRequest[]
   carViews        CarView[]
   comparisonCars  ComparisonItem[]
   carLogs         CarLog[]
@@ -403,7 +456,12 @@ model Car {
   @@index([brandId, modelId])
   @@index([status, featured])
   @@index([status, createdAt])
+  @@index([status, deletedAt, createdAt])
   @@index([deletedAt])
+  // Search/filter coverage for the newly structured (non-free-text) fields.
+  @@index([customsStatus])
+  @@index([ownershipSource])
+  @@index([accidentHistory])
   @@map("cars")
 }
 
@@ -531,6 +589,8 @@ model Conversation {
   @@unique([carId, buyerId, sellerId])
   @@index([buyerId])
   @@index([sellerId])
+  @@index([buyerId, updatedAt])
+  @@index([sellerId, updatedAt])
   @@map("conversations")
 }
 
@@ -553,6 +613,7 @@ model Message {
   @@index([receiverId])
   @@index([carId])
   @@index([conversationId])
+  @@index([conversationId, createdAt])
   @@map("messages")
 }
 
@@ -614,6 +675,7 @@ model Auction {
   @@index([status])
   @@index([carId])
   @@index([sellerId])
+  @@index([status, endDate])
   @@map("auctions")
 }
 
@@ -734,6 +796,153 @@ model AuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ── AI Valuation Engine (deterministic pipeline, LLM explains only) ──
+// Raw → Normalized → Matched → Similarity → Outliers → Adjusted → Priced.
+
+model MarketListing {
+  id          String   @id @default(cuid())
+  source      String
+  externalId  String?
+  url         String?
+  brand       String
+  brandEn     String?
+  model       String
+  modelEn     String?
+  year        Int?
+  trim        String?
+  kilometers  Int?
+  price       Float
+  currency    String   @default("JOD")
+  priceJod    Float
+  fxRate      Float    @default(1)
+  city        String?
+  country     String   @default("JO")
+  fuelType    String?
+  transmission String?
+  condition   String?
+  specs       String   @default("[]")
+  listingDate DateTime?
+  scrapedAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  contentHash String?
+  status      String   @default("ACTIVE")
+  priceType   String   @default("unknown") // asking | sold | unknown
+
+  comparables ValuationComparable[]
+
+  @@unique([source, externalId])
+  @@index([brand, model, year])
+  @@index([source, scrapedAt])
+  @@index([status, scrapedAt])
+  @@map("market_listings")
+}
+
+model ValuationRequest {
+  id          String   @id @default(cuid())
+  carId       String?
+  car         Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  input       String
+  targetSnapshot String  @default("{}")
+  status      String   @default("PENDING")
+  error       String?
+  createdAt   DateTime @default(now())
+
+  comparables ValuationComparable[]
+  result      ValuationResult?
+
+  @@index([carId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("valuation_requests")
+}
+
+model ValuationComparable {
+  id             String   @id @default(cuid())
+  requestId      String
+  request        ValuationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  listingId      String?
+  listing        MarketListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  snapshot       String
+  tier           Int
+  similarity     Float
+  simBreakdown   String   @default("{}")
+  adjustedPrice  Float?
+  adjustments    String   @default("[]")
+  weight         Float    @default(1)
+  included       Boolean  @default(true)
+  excludeReason  String?
+  createdAt      DateTime @default(now())
+
+  @@index([requestId, included])
+  @@map("valuation_comparables")
+}
+
+model ValuationResult {
+  id               String   @id @default(cuid())
+  requestId        String   @unique
+  request          ValuationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  estimatedPrice   Float
+  minPrice         Float
+  maxPrice         Float
+  confidence       Int
+  confidenceLabel  String
+  confidenceReasons String  @default("[]")
+  comparablesUsed  Int
+  comparablesFound Int
+  sourcesUsed      Int
+  sources          String   @default("[]")
+  method           String   @default("weighted-median")
+  stats            String   @default("{}")
+  factors          String   @default("[]")
+  explanation      String?
+  pipeline         String   @default("[]")
+  modelVersion     String   @default("v1")
+  dataVersion      String
+  grade            String   @default("full") // approximate | limited | full
+  funnel           String   @default("[]") // per-stage audit: before/after/rejected/reasons
+  calculatedAt     DateTime @default(now())
+  targetPrice      Float?
+  targetDiffPct    Float?
+
+  @@index([calculatedAt])
+  @@map("valuation_results")
+}
+
+// Tunable valuation parameters (admin-editable, no redeploy).
+model ValuationConfig {
+  id             String   @id @default("default")
+  simWeights     String   @default("{}") // overrides SIM_WEIGHTS
+  minIncluded    Int      @default(5)
+  minRangeOnly   Int      @default(3)
+  dailyQuota     Int      @default(5)
+  staleDays      Int      @default(60)
+  updatedAt      DateTime @updatedAt
+
+  @@map("valuation_config")
+}
+
+// ── Sentinel (automatic protection monitor) ──
+// Every suspicious event is a weighted signal. The engine sums a user's
+// 24h weights and escalates: warn-flag → 24h temp ban → permanent ban.
+// ADMIN_PROBE always enforces immediately (7-day ban) by explicit order.
+model SecuritySignal {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String?
+  type      String   // SPAM_LISTING | SPAM_MESSAGE | BRUTE_FORCE | ABUSE_REPORTS | ADMIN_PROBE | HONEYPOT | RATE_ABUSE
+  weight    Int      @default(1)
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([ip, createdAt])
+  @@map("security_signals")
 }
 
 model Ticket {
@@ -1127,6 +1336,8 @@ model SiteSettings {
   homeShowBrands     Boolean  @default(true)
   homeShowStats      Boolean  @default(true)
   fuelTypes          String   @default("[]")
+  sentinelMode       String   @default("monitor") // monitor | enforce
+  sentinelStopped    Boolean  @default(false) // emergency kill-switch
   bodyTypes          String   @default("[]")
   updatedAt          DateTime @updatedAt
 
