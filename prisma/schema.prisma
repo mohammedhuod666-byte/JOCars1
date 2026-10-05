@@ -48,6 +48,8 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   cars                        Car[]
+  /// At most one, enforced by CarDraft.userId @unique.
+  carDraft                    CarDraft?
   favorites                   Favorite[]
   messagesSent                Message[]             @relation("SentMessages")
   messagesRecv                Message[]             @relation("ReceivedMessages")
@@ -539,6 +541,38 @@ model CarHistory {
   @@index([carId])
   @@index([eventType])
   @@map("car_history")
+}
+
+// One in-progress listing composition per seller.
+//
+// A dedicated table rather than a `DRAFT` status on Car, because a DRAFT car
+// would need to appear in every listing query, the moderation queue and the
+// dashboard while being excluded from all of them — the classic way drafts end
+// up publicly visible. Here the draft is a separate row that no existing query
+// can pick up by accident.
+//
+// `documentUrls` deliberately stores PRIVATE asset URLs, never a signed URL: a
+// signed URL expires in minutes, so a draft holding one would restore a preview
+// that no longer opens and fail at publish. The draft route re-signs on read.
+//
+// The JSON payload holds the wizard's form fields only. Images are never stored
+// — that would mean persisting base64 blobs for no benefit, since they are
+// re-attached from the seller's device on resume.
+model CarDraft {
+  id           String   @id @default(cuid())
+  /// One draft per seller, enforced by the unique index below.
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Which stage the seller had reached (1-5).
+  step         Int      @default(1)
+  /// The wizard's form state. Prisma Json: the field set changes with the wizard.
+  payload      Json
+  /// { license?, inspection?, serviceRecord?, inspectionExtra?: string[] }
+  documentUrls String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("car_drafts")
 }
 
 model CarImage {

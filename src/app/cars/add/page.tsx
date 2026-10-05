@@ -376,6 +376,20 @@ export default function AddCarPage() {
   // opaque request: documents upload individually first, and without this the
   // seller sees a frozen button for the whole transfer.
   const [stageLabel, setStageLabel] = useState('');
+  /**
+   * Private asset URLs of documents already uploaded in this session.
+   *
+   * Held in state (not just in the submit closure) so the server-side draft can
+   * persist them and a resumed draft can re-attach the seller's documents
+   * without asking again. These are the raw private URLs — the API re-signs on
+   * read, because a signed URL would expire inside the draft's lifetime.
+   */
+  const [stagedDocUrls, setStagedDocUrls] = useState<{
+    license: string | null;
+    inspection: string | null;
+    serviceRecord: string | null;
+    inspectionExtra: string[];
+  }>({ license: null, inspection: null, serviceRecord: null, inspectionExtra: [] });
   const [step, setStep] = useState(1);
   
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -424,34 +438,108 @@ export default function AddCarPage() {
   const [reviewScore, setReviewScore] = useState<CompletenessResult | null>(null);
 
   // ── Crash recovery ────────────────────────────────────────────────────────
-  // Restores text fields after an accidental tab close. Images/documents are
-  // NOT restored (base64 would exceed the storage quota) and the banner says so
-  // rather than silently losing the seller's files.
+  // Two layers, deliberately:
+  //
+  //   1. The SERVER draft (/api/cars/draft) is the real one. It follows the
+  //      seller across devices, which localStorage cannot, and it survives a
+  //      cleared browser — the common case for a seller who starts a listing on
+  //      a phone and finishes it days later on a laptop.
+  //   2. localStorage remains as a fallback, so a failed request or an offline
+  //      moment still leaves the form recoverable in that browser.
+  //
+  // Images are NEVER stored in either layer (base64 would exceed the storage
+  // quota and would be worthless in the database). Documents ARE recoverable
+  // server-side: the draft keeps the private asset URL and the route re-signs it
+  // on read, because a signed URL would expire and restore a dead preview.
+  /**
+   * Applies a restored draft to the wizard. Declared before the effect that
+   * calls it so there is no forward reference into the temporal dead zone.
+   */
+  const applyDraft = useCallback((draftForm: Record<string, unknown>, draftStep: number, savedAt: number, hadFiles: boolean) => {
+    setForm(f => ({ ...f, ...(draftForm as Partial<CarFormData>) }));
+    const cd = (draftForm as any)?.conditionDetails;
+    setConditionDetails(Array.isArray(cd) ? cd : []);
+    if (draftStep >= 1 && draftStep <= 5) setStep(draftStep);
+    setDraftRestored({ at: savedAt, hadFiles });
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
-    const draft = loadAddCarDraft(user.id);
-    if (!draft) return;
-    setForm(f => ({ ...f, ...(draft.form as Partial<CarFormData>) }));
-    setConditionDetails(
-      Array.isArray((draft.form as any)?.conditionDetails) ? (draft.form as any).conditionDetails : [],
-    );
-    if (draft.step >= 1 && draft.step <= 4) setStep(draft.step);
-    setDraftRestored({ at: draft.savedAt, hadFiles: draft.hadFiles });
+    let cancelled = false;
+
+    const restore = async () => {
+      try {
+        const res = await fetch('/api/cars/draft', { credentials: 'include' });
+        const json = await res.json().catch(() => ({}));
+        const serverDraft = json?.data?.draft;
+        const local = loadAddCarDraft(user!.id);
+
+        // Prefer whichever copy is newer, so a server write that failed while
+        // localStorage succeeded is not silently lost, and vice versa.
+        const useServer = !!serverDraft && (!local || serverDraft.savedAt > local.savedAt);
+        if (!useServer) {
+          if (local) applyDraft(local.form, local.step, local.savedAt, local.hadFiles);
+          return;
+        }
+        if (cancelled) return;
+
+        const hadFiles = Object.keys(serverDraft.form || {}).some((k) =>
+          ['licenseDocUrl', 'inspectionDocUrl', 'serviceRecordDocUrl'].includes(k),
+        );
+        applyDraft(serverDraft.form, serverDraft.step, serverDraft.savedAt, hadFiles);
+
+        // Live document links, re-signed server-side. Only wired up if the
+        // seller actually has documents on file.
+        const docs = json?.data?.documents;
+        if (docs?.license || docs?.inspection) {
+          setStagedDocUrls({
+            license: docs.license || null,
+            inspection: docs.inspection || null,
+            serviceRecord: docs.serviceRecord || null,
+            inspectionExtra: Array.isArray(docs.inspectionExtra) ? docs.inspectionExtra : [],
+          });
+        }
+        if (docs && docs.expired > 0) {
+          toast.error(
+            `تعذّر استرجاع ${docs.expired} من المستندات — انتهت صلاحيتها على خادم التخزين. أرفقها من جديد.`,
+            { duration: 9000 },
+          );
+        }
+      } catch {
+        // Network trouble must not block the form; the local fallback covers it.
+        const local = loadAddCarDraft(user!.id);
+        if (local && !cancelled) applyDraft(local.form, local.step, local.savedAt, local.hadFiles);
+      }
+    };
+
+    restore();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user?.id]);
 
-  // Debounced autosave.
+  // Debounced autosave to BOTH layers.
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
-    // Don't overwrite a fresh draft with the empty initial state on mount.
+    const hadFiles = images.length > 0 || !!coverImage || !!licenseDoc || !!inspectionDoc || !!serviceRecordDoc;
+    const payload = { step, form: { ...form, conditionDetails } as Record<string, unknown>, hadFiles };
     const t = setTimeout(() => {
-      saveAddCarDraft(user.id, {
-        step,
-        form: { ...form, conditionDetails },
-        hadFiles: images.length > 0 || !!coverImage || !!licenseDoc || !!inspectionDoc || !!serviceRecordDoc,
-      });
-    }, 800);
+      // Local first: it is synchronous and cannot fail after a navigation.
+      saveAddCarDraft(user.id, payload);
+      // Then the server, fire-and-forget. A failure here leaves the local copy.
+      fetch('/api/cars/draft', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: JSON.stringify({
+          step: payload.step,
+          form: payload.form,
+          // Private asset URLs, never signed ones — the route re-signs on read.
+          documentUrls: stagedDocUrls,
+        }),
+      }).catch(() => { /* local copy already saved */ });
+    }, 1200);
     return () => clearTimeout(t);
-  }, [form, step, conditionDetails, images.length, coverImage, licenseDoc, inspectionDoc, isAuthenticated, user?.id]);
+  }, [form, step, conditionDetails, images.length, coverImage, licenseDoc, inspectionDoc, stagedDocUrls, isAuthenticated, user?.id, token]);
 
   // Warn before losing a long, partially-typed form.
   useEffect(() => {
@@ -1038,7 +1126,14 @@ export default function AddCarPage() {
        * still stored privately (authenticated Cloudinary assets); they simply
        * travel on a route where each request fits.
        */
-      const stageDoc = async (file: File, kind: string, label: string): Promise<string> => {
+      /**
+       * Uploads one document and returns BOTH forms of the result:
+       *   ref — the signed reference the publish call sends (the only trusted input)
+       *   url — the private asset URL, kept only so a draft can restore the
+       *         document later. Never sent to the publish endpoint, because a
+       *         bare URL is exactly what the signature exists to prevent.
+       */
+      const stageDoc = async (file: File, kind: string, label: string): Promise<{ ref: string; url: string }> => {
         const fd = new FormData();
         fd.append('kind', kind);
         fd.append('file', file);
@@ -1059,13 +1154,17 @@ export default function AddCarPage() {
         } catch {
           throw new Error(`تعذر رفع ${label} (خطأ ${res.status}) — حاول مجدداً`);
         }
-        if (!res.ok || !json?.success || !json?.data?.ref) {
+        if (!res.ok || !json?.success || !json?.data?.ref || !json?.data?.url) {
           throw new Error(json?.error || `تعذر رفع ${label}`);
         }
-        return json.data.ref as string;
+        return { ref: json.data.ref as string, url: json.data.url as string };
       };
 
       const staged: { license?: string; inspection?: string; service?: string; extras: string[] } = { extras: [] };
+      // Private asset URLs collected alongside the references, so a draft saved
+      // before publish can restore these documents without a re-upload.
+      const stagedUrls: { license: string | null; inspection: string | null; serviceRecord: string | null; inspectionExtra: string[] } =
+        { license: null, inspection: null, serviceRecord: null, inspectionExtra: [] };
       // Ordered so the two MANDATORY documents upload first: if the seller is on
       // a slow connection, the failure surfaces on a document they cannot skip.
       const jobs: { label: string; file: File; kind: string; slot: 'license' | 'inspection' | 'service' }[] = [];
@@ -1077,14 +1176,21 @@ export default function AddCarPage() {
       for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         setStageLabel(`جارٍ رفع ${job.label} (${i + 1}/${jobs.length})…`);
-        const ref = await stageDoc(job.file, job.kind, job.label);
-        staged[job.slot] = ref;
+        const out = await stageDoc(job.file, job.kind, job.label);
+        staged[job.slot] = out.ref;
+        if (job.slot === 'license') stagedUrls.license = out.url;
+        if (job.slot === 'inspection') stagedUrls.inspection = out.url;
+        if (job.slot === 'service') stagedUrls.serviceRecord = out.url;
+        // Persist immediately rather than at the end: a failure on the LAST
+        // document would otherwise throw away the uploads that already succeeded.
+        setStagedDocUrls((prev) => ({ ...prev, ...stagedUrls }));
       }
       for (let i = 0; i < extraInspectionDocs.length; i++) {
         setStageLabel(`جارٍ رفع صفحة الفحص ${i + 2}…`);
-        staged.extras.push(
-          await stageDoc(extraInspectionDocs[i], 'inspectionExtra', `صفحة الفحص ${i + 2}`),
-        );
+        const out = await stageDoc(extraInspectionDocs[i], 'inspectionExtra', `صفحة الفحص ${i + 2}`);
+        staged.extras.push(out.ref);
+        stagedUrls.inspectionExtra.push(out.url);
+        setStagedDocUrls((prev) => ({ ...prev, inspectionExtra: [...prev.inspectionExtra, out.url] }));
       }
       setStageLabel('');
 
@@ -1149,9 +1255,11 @@ export default function AddCarPage() {
       }
 
       if (data.success) {
-        // Published: the recovery copy is now stale and would restore a listing
-        // that already exists, so drop it.
+        // Published: the recovery copies are now stale and would restore a
+        // listing that already exists, so drop BOTH layers.
         if (user?.id) clearAddCarDraft(user.id);
+        setStagedDocUrls({ license: null, inspection: null, serviceRecord: null, inspectionExtra: [] });
+        fetch('/api/cars/draft', { method: 'DELETE', credentials: 'include' }).catch(() => {});
         toast.success('تمت إضافة السيارة بنجاح! الإعلان قيد التفعيل والمراجعة.');
         router.push(`/cars/${data.data.slug || data.data.id}`);
       } else {
