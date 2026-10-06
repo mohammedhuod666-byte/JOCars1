@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 
-/**
- * Lightweight health check endpoint used by the client-side offline detection.
- * Returns a tiny JSON response so the browser can verify connectivity.
- */
 export async function GET() {
-  return NextResponse.json({ ok: true, t: Date.now() });
+  try {
+    // Simple DB ping
+    await prisma.$queryRaw`SELECT 1`;
+    return NextResponse.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 503 }
+    );
+  }
 }

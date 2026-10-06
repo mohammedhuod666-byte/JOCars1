@@ -53,7 +53,15 @@ const handle = app.getRequestHandler();
 
 // Schema changes are applied by the deployment migration step, never by a
 // running web server. This keeps application startup read-only and predictable.
-const prisma = new PrismaClient();
+//
+// schema.prisma uses engineType="client" (WASM) with a driver adapter, so a
+// bare `new PrismaClient()` is invalid and cannot connect. server.js must construct
+// the SAME HTTP adapter the src/lib/prisma path uses, otherwise every Prisma call
+// from server-side code fails at runtime. The reference at the top of this file is
+// kept for the existing require; here we just build the adapted client.
+const { PrismaNeonHTTP } = require('@prisma/adapter-neon');
+const neonAdapter = new PrismaNeonHTTP(process.env.DATABASE_URL, { arrayMode: true });
+const prisma = new PrismaClient({ adapter: neonAdapter });
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
