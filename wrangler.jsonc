@@ -1,0 +1,91 @@
+{
+  // Cloudflare Workers deployment for JO Cars (Next.js via OpenNext).
+  //
+  // Account: b1f057b456a47aa84e94ad33eeeedc05
+  //
+  // WHY MOVE: Vercel serverless functions cap a request body at 4.5MB. That was
+  // the root cause of a chain of upload failures — a 20-photo gallery and any
+  // multi-page PDF both exceeded it. Workers allows a 100MB body, so the
+  // ceiling disappears instead of being worked around.
+  //
+  // THE THREE REAL CONSTRAINTS, and how each is handled:
+  //
+  //   1. NO NATIVE BINARIES. sharp (a compiled addon) cannot run. It is on the
+  //      publish path for image validation and WebP conversion, so those moved
+  //      to Cloudinary's own transformations — Cloudinary already runs at scale
+  //      and does it faster than a Worker could. Magic-byte checks stay in pure
+  //      JavaScript, so the "renamed executable" defence is unchanged.
+  //
+  //   2. NO WRITABLE FILESYSTEM. The local-disk fallbacks (public/uploads,
+  //      storage/car-docs) cannot exist. They only run when Cloudinary is
+  //      unconfigured, and Cloudinary IS configured, so those branches are
+  //      unreachable in production — they are now guarded rather than silently
+  //      writing into a read-only filesystem.
+  //
+  //   3. SUBREQUEST BUDGET. A 20-photo publish makes ~22 outbound requests
+  //      (20 Cloudinary uploads + 2 document uploads). The Workers free plan
+  //      allows 50 per invocation, Workers Paid 1000. Fine either way, but it
+  //      is the ceiling that would bite first as the photo limit grows, so the
+  //      upload pool in lib/cloudinary.ts is bounded rather than unbounded.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jo-cars-marketplace",
+  "main": ".open-next/worker.js",
+  // Workers Static Assets. Without this block every request under /_next/static
+  // falls through to the Next.js catch-all, which answers 404 as HTML — so the
+  // page renders but with no CSS, no JS and no fonts. That was theobserved failure
+  //（測定済み: GET /_next/static/chunks/*.css → 404 text/html, while the files
+  // exist in .open-next/assets/_next/static）。 "directory" is the directory OpenNext
+  // writes, "binding" is the name the Worker reads via env.ASSETS.
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "compatibility_date": "2026-10-05",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  // Prisma's WASM Query Compiler must reach the Worker as a module, not as bytes.
+  //
+  // Measured on the real runtime: Workers refuses to compile WebAssembly from
+  // bytes at request time — `new WebAssembly.Module(bytes)`,
+  // `WebAssembly.compile(bytes)` and `WebAssembly.instantiate(bytes)` all answer
+  // "Wasm code generation disallowed by embedder". A statically imported module
+  // does work, because wrangler uploads it as CompiledWasm and the runtime
+  // compiles it at deploy time.
+  //
+  // The glob is deliberately narrow: it matches only the file that
+  // scripts/inject-prisma-wasm-worker.cjs places next to the entry module, and
+  // `fallthrough` keeps the default handling for any other .wasm that might appear
+  // later, so a stray WebAssembly asset cannot silently change build behaviour.
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["./prisma-query-compiler.wasm"],
+      "fallthrough": true
+    }
+  ],
+  // Cron syntax is UTC on Workers; Vercel's was UTC too, so the schedules below
+  // are the same instants the app has been running.
+  "triggers": {
+    "crons": [
+      "0 1 * * *",
+      // Cloudflare rejects day-of-week in the 5th field with
+      //   invalid cron string: 0 4 * * 0   (code 10100)
+      // Workers cron is UTC and offers a narrower grammar than Vercel's, so the
+      // weekly Sunday job is expressed as a 7-day step instead:
+      //   Vercel  "0 4 * * 0"  = Sunday 04:00 UTC
+      //   Workers "0 4 * * *"  = every day 04:00 UTC
+      // That would run the weekly job 7x too often, so the schedule is pinned to
+      // Sunday by the handler itself: see `isWeeklyJob` in src/lib/cron-guard.ts,
+      // which the three cron routes call to no-op on the wrong weekday.
+      "0 4 * * *",
+      "0 6 * * *"
+    ]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://jo-cars-marketplace.vercel.app"
+  }
+}

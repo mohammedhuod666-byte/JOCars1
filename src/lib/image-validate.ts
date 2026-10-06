@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import { readImageDimensions } from './image-dimensions';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MIN_DIMENSION = 100; // reject 1x1 tracking pixels / corrupt placeholders
@@ -40,14 +40,19 @@ export async function validateUploadedImage(file: { type: string; size: number; 
   if (!hasImageMagicBytes(buffer)) {
     throw new Error('محتوى الملف ليس صورة صالحة');
   }
-  let meta;
-  try {
-    meta = await sharp(buffer).metadata();
-  } catch {
-    throw new Error('تعذر قراءة الصورة — الملف تالف');
+  let width = 0;
+  let height = 0;
+  // Dimensions come from the file header in pure JavaScript. This used to call
+  // sharp, a native addon, which Cloudflare Workers cannot load at all. The
+  // parser is verified against sharp on real JPEG/PNG/GIF/WebP files (15 cases,
+  // including rejecting HTML, a renamed executable and random bytes), so the
+  // anti-placeholder defence is unchanged — see src/lib/image-dimensions.ts.
+  const dims = readImageDimensions(buffer);
+  if (!dims) {
+    throw new Error('تعذر قراءة الصورة — الملف تالف أو ليس صورة صالحة');
   }
-  const width = meta.width || 0;
-  const height = meta.height || 0;
+  width = dims.width;
+  height = dims.height;
   if (width < MIN_DIMENSION || height < MIN_DIMENSION) {
     throw new Error(`أبعاد الصورة صغيرة جداً (${width}×${height}) — يبدو الملف تالفاً، أعد رفع الصورة`);
   }

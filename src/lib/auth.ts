@@ -7,6 +7,22 @@ import prisma from './prisma';
 const TOKEN_EXPIRY = process.env.JWT_EXPIRY || '7d';
 const ROTATION_THRESHOLD = 6 * 60 * 60 * 1000; // 6 hours
 
+/**
+ * Target cost for NEW password hashes and for lazy upgrades of existing ones.
+ *
+ * This is intentionally at the original cost 12: Workers Paid is the chosen
+ * plan, and it provides the CPU budget bcrypt needs. Local benchmarking showed every
+ * bcrypt cost above ~8ms CPU blows past the Workers Free plan's 10ms/request CPU
+ * budget — the reason cost 12 was failing on Free. With Paid that no longer
+ * applies, so there is no credential-safety reason to weaken existing hashes.
+ *
+ * Existing cost-12 hashes are left untouched; lazy rehash only fires when a stored
+ * hash is stronger than cost 12 (currently none), and new hashes are generated at
+ * this target. So in practice nothing is rewritten until an account is created or
+ * reset through the normal flows.
+ */
+export const TARGET_BCRYPT_COST = 12;
+
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -32,7 +48,23 @@ export interface JWTPayload {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
+  return bcrypt.hash(password, TARGET_BCRYPT_COST);
+}
+
+/**
+ * Reads the bcrypt cost embedded in an existing hash without hashing anything.
+ * Format: `$2[ab]$<cost>$<salt><hash>`. Returns null for anything that is not a
+ * bcrypt hash, so a non-bcrypt value never triggers a silent rehash.
+ *
+ * Used to decide whether a *verified* login should be upgraded: rehashing only
+ * happens after `bcrypt.compare` has succeeded, so an invalid guess can never
+ * cause a write, and a legacy hash in an unexpected format is left untouched.
+ */
+export function detectBcryptCost(hash: string): number | null {
+  const m = /^\$2[aby]\$(\d{2})\$/.exec(hash);
+  if (!m) return null;
+  const n = Number.parseInt(m[1], 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {

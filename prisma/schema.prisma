@@ -1,5 +1,25 @@
 generator client {
   provider = "prisma-client-js"
+
+  // The Rust-free Query Compiler (WASM) instead of the compiled query engine.
+  //
+  // This is not only a Cloudflare concession, it is the reason this generator can
+  // run at all on this machine: Prisma emits `query_engine-<platform>.dll.node`
+  // and the rename that creates it is refused here (OneDrive will not rename a
+  // file to a `.node` extension — `EPERM ... rename '...node.tmp13352' ->
+  // '...dll.node'`). A WASM compiler produces no native binary, so generation
+  // succeeds AND the resulting bundle carries nothing a Worker cannot load.
+  //
+  // It is also the correct choice for the driver-adapter path: the adapter in
+  // `src/lib/prisma.ts` talks to Neon directly, and the engine is never invoked.
+  // Note this is NOT the same as `prisma generate --no-engine`, which Prisma 6
+  // rejects outright when an adapter is present ("Please run `prisma generate`
+  // without `--no-engine`").
+  engineType = "client"
+
+  // No `previewFeatures = ["driverAdapters"]`: Prisma 6 deprecated the flag and
+  // warns "the functionality can be used without specifying it as a preview
+  // feature".
 }
 
 datasource db {

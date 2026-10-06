@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { successResponse, errorResponse } from '@/lib/api';
 import { isCronAuthorized } from '@/lib/cron-auth';
+import { isWeeklyJob, describeSchedule } from '@/lib/cron-guard';
 import { sendWhatsAppToAdmins, isWhatsAppConfigured } from '@/lib/whatsapp';
 
 /**
@@ -17,6 +18,22 @@ export async function POST(request: NextRequest) {
 
   if (!isCronAuthorized(request)) {
     return errorResponse('غير مصرح', 403);
+  }
+
+  // Workers cron cannot express "every Sunday": it rejects a day-of-week field
+  // outright (API code 10100, "invalid cron string: 0 4 * * 0"), so the schedule
+  // fires daily at 04:00 UTC and this guard makes it weekly. See lib/cron-guard.ts.
+  //
+  // The check runs AFTER authorization deliberately: it must not become an
+  // unauthenticated oracle for the current date. It also happens before any query so
+  // a skipped day costs one date comparison and no database work at all.
+  if (!isWeeklyJob()) {
+    return successResponse({
+      skipped: true,
+      reason: 'weekly job: not Sunday (UTC)',
+      now: describeSchedule(),
+      ran: false,
+    });
   }
 
   try {

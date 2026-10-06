@@ -18,6 +18,25 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
   },
+  /**
+   * Files that must ship with the server bundle even though the dependency
+   * tracer does not see them.
+   *
+   * `schema.prisma` is the generated client's runtime model description. The client
+   * references it through `path.join(__dirname, "schema.prisma")` as a bundling hint
+   * for the file tracer, which is not something a tracer can follow on its own.
+   *
+   * The Query Compiler's `query_compiler_bg.wasm` is deliberately NOT listed: it is
+   * inlined into the client as base64 by `scripts/patch-prisma-wasm-inline.cjs`,
+   * because Workers have no filesystem to read it from. Listing it here would only
+   * upload 1.86 MB that nothing loads.
+   *
+   * This is purely a bundling concern. The Prisma version, schema, and client
+   * construction are untouched.
+   */
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./node_modules/.prisma/client/schema.prisma'],
+  },
   // Keep this list explicit; a wildcard permits arbitrary development origins.
   allowedDevOrigins: ['localhost:3000', '127.0.0.1:3000'],
   compress: true,

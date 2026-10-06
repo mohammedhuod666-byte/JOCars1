@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { verifyPassword, signToken, setAuthCookie } from '@/lib/auth';
+import { verifyPassword, signToken, setAuthCookie, detectBcryptCost, hashPassword, TARGET_BCRYPT_COST } from '@/lib/auth';
 import { loginSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
 import { checkRateLimitAsync, RATE_LIMITS, resetRateLimit } from '@/lib/rate-limit';
@@ -84,6 +84,25 @@ export async function POST(request: NextRequest) {
     }
 
     resetRateLimit(rateLimitKey);
+
+    // Lazy, on-login migration of legacy bcrypt costs. Only reached after
+    // `verifyPassword` succeeded, so an invalid guess can never trigger a write. If
+    // the rehash/update fails, the login still succeeds: the user is authenticated,
+    // the old hash remains fully valid, and the next login simply retries the
+    // upgrade. Never blocks access, never stores plaintext, never logs the hash.
+    const currentCost = detectBcryptCost(user.password);
+    if (currentCost !== null && currentCost > TARGET_BCRYPT_COST) {
+      try {
+        const upgraded = await hashPassword(password);
+        await prisma.user.update({ where: { id: user.id }, data: { password: upgraded } });
+      } catch (rehashError) {
+        console.error(JSON.stringify({
+          level: 'ERROR', action: 'PASSWORD_REHASH_FAILED', userId: user.id,
+          message: 'lazy bcrypt upgrade after successful login failed; old hash retained',
+        }));
+      }
+    }
+
     await prisma.user.update({
       where: { id: user.id },
       data: {
