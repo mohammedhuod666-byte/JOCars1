@@ -64,6 +64,13 @@ export const ENGINE_BYPASSED =
 function buildClient() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
+    // During build (next build), DATABASE_URL may not be available.
+    // Throw a clear error only when actually used at runtime.
+    if (process.env.NEXT_PHASE === 'phase-production-build' || 
+        (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL)) {
+      console.warn('[Prisma] DATABASE_URL not available during build - deferring client creation');
+      return null;
+    }
     throw new Error(
       'DATABASE_URL is required: this Prisma client uses the WASM Query Compiler, ' +
         'which reaches Postgres only through the Neon driver adapter.',
@@ -84,13 +91,56 @@ function buildClient() {
   });
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+let prismaInstance: PrismaClient | null = null;
 
-export const prisma: PrismaClient = globalForPrisma.prisma ?? buildClient();
+function getPrismaClient(): PrismaClient {
+  if (!prismaInstance) {
+    const client = buildClient();
+    if (!client) {
+      // During build - return a proxy that throws helpful errors when accessed
+      return new Proxy({} as PrismaClient, {
+        get(_target: any, prop: string | symbol) {
+          if (prop === 'then' || prop === 'catch' || prop === 'finally') {
+            return undefined;
+          }
+          return () => {
+            throw new Error(
+              `Prisma client accessed during build (${String(prop)}). DATABASE_URL is not available during build. ` +
+              'Ensure DATABASE_URL is set in production environment variables.'
+            );
+          };
+        },
+      }) as PrismaClient;
+    }
+    prismaInstance = client;
+  }
+  return prismaInstance;
+}
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+/**
+ * Lazy Prisma client getter.
+ * Initializes the client on first access, which allows build-time to succeed
+ * without DATABASE_URL (client is only created at runtime).
+ */
+export function getPrisma(): PrismaClient {
+  return getPrismaClient();
+}
 
-export default prisma;
+// For backward compatibility - export a proxy that calls getPrisma() on each access
+const prismaProxy = new Proxy({} as PrismaClient, {
+  get(_target: any, prop: string | symbol) {
+    const client = getPrismaClient();
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  },
+});
+
+export const prisma = prismaProxy as PrismaClient;
+
+export default prismaProxy;
 
 const NodeCache = require('../lib/cache');
 
