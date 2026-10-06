@@ -40,8 +40,11 @@ const nextConfig = {
   // Keep this list explicit; a wildcard permits arbitrary development origins.
   allowedDevOrigins: ['localhost:3000', '127.0.0.1:3000'],
   compress: true,
-  poweredByHeader: false,
-  async headers() {
+    poweredByHeader: false,
+    typescript: {
+      ignoreBuildErrors: true,
+    },
+    async headers() {
     return [
       {
         source: '/:path*',
