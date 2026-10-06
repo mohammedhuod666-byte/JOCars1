@@ -11,4 +11,26 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["**/*"]
+  # Exclude large directories that bloat the function bundle
+  excluded_files = [
+    "scratch/**",
+    "scripts/**",
+    "docs/**",
+    "SETUP_COMPLETE.md",
+    "render.yaml",
+    ".netlify/**",
+    ".open-next/**",
+    ".wrangler/**",
+    "*.md",
+    "*.txt",
+    "*.py",
+    "*.ps1",
+    "*.cjs",
+    "*.log",
+    "*.json",
+    "!package.json",
+    "!package-lock.json",
+    "!next.config.js",
+    "!tailwind.config.ts",
+    "!tsconfig.json"
+  ]
