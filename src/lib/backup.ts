@@ -253,7 +253,8 @@ export async function runBackup(opts: { type: 'AUTO' | 'MANUAL'; createdBy?: str
           `📧 الإيميل: ${emailSent ? 'تم الإرسال ✅' : 'تعذّر (' + (emailError || 'غير معدّ') + ')'}`
         );
         summary.whatsappSent = true;
-        await prisma.backup.updateMany({ where: { name }, data: { whatsappSent: true } }).catch(() => {});
+        // HTTP adapter لا يدعم updateMany — UPDATE شرطي واحد (name فريد).
+        await prisma.$executeRaw`UPDATE "backups" SET "whatsappSent" = true WHERE "name" = ${name}`.catch(() => {});
       }
     } catch { /* notify best-effort */ }
 

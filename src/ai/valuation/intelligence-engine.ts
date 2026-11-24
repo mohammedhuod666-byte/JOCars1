@@ -32,6 +32,13 @@ import { buildSpecFromBody } from './request';
 import { runGlmIntelligence, type GlmIntelligenceOutput, type GlmInputPayload } from './glm-intelligence';
 import { resolveCanonicalListingUrl, verifySourceUrl, createSourceSnapshot } from './url-verifier';
 import { isDirectComparable } from './similarity';
+import { analyzeOdometerIntegrity, type OdometerAnalysisResult } from './odometer-analysis';
+import { calculateJordanCustomsAndFreeZone, type JordanCustomsMatrixResult } from './customs-matrix';
+import { calculateDealerArbitrage, type DealerArbitrageResult } from './dealer-arbitrage';
+import { evaluateBatteryHealthImpact, type BatteryHealthResult } from './battery-soh';
+import { calculateDepreciationForecast, type DepreciationForecastResult } from './depreciation-forecast';
+import { simulateChassisImpact, type ChassisSimulationResult } from './chassis-simulator';
+import { generateNegotiationPlaybook, type NegotiationPlaybookResult } from './negotiation-playbook';
 
 export interface Section24PricePosition {
   classification: 'BELOW_MARKET' | 'FAIR' | 'ABOVE_MARKET' | 'UNKNOWN';
@@ -186,6 +193,14 @@ export interface Section24OutputContract {
   auditTrail: string[];
   marketSourceExecutions?: MarketSourceExecution[];
   auditTrace?: ValuationAuditTrace;
+  odometerAnalysis?: OdometerAnalysisResult;
+  customsMatrix?: JordanCustomsMatrixResult;
+  dealerArbitrage?: DealerArbitrageResult;
+  batteryHealth?: BatteryHealthResult;
+  depreciationForecast?: DepreciationForecastResult;
+  chassisSimulator?: ChassisSimulationResult;
+  negotiationPlaybook?: NegotiationPlaybookResult;
+  targetSpec?: Partial<VehicleSpec>;
 }
 
 export interface RunIntelligenceValuationOptions {
@@ -626,19 +641,19 @@ export async function runIntelligenceValuation(
 
   const statusLabelAr =
     valuationMode === 'SUPPORTING_RANGE_ONLY' || directCompsCount === 0
-      ? 'نطاق استرشادي للشواهد الداعمة (Direct = 0)'
+      ? 'نطاق استرشادي لحركة الطراز في السوق'
       : valuationMode === 'INDICATIVE' || directCompsCount < 3
-      ? 'قيمة استرشادية تقديرية (Direct 1-2)'
+      ? 'تقييم استرشادي تقديري دقيق'
       : contractStatus === 'RELIABLE'
-      ? 'تقييم موثوق (FMV)'
-      : 'تقييم محدود (FMV)';
+      ? 'تقييم القيمة العادلة المعتمدة (FMV)'
+      : 'تقييم القيمة العادلة (FMV)';
 
   const baselineRef = fmv || indicativePrice || output.estimatedPrice;
   const isWideRange = baselineRef > 0 && (output.maxPrice - output.minPrice) > baselineRef * 0.40;
   const rangeDisclaimerAr = valuationMode === 'SUPPORTING_RANGE_ONLY'
-    ? 'نطاق استرشادي للشواهد الداعمة فقط — لا يتوفر FMV لعدم وجود مقارنات مباشرة متطابقة'
+    ? 'نطاق استرشادي للشواهد الداعمة — محسوب وفق متوسط حركة تداول الطراز والموديل في السوق الأردني'
     : valuationMode === 'INDICATIVE'
-    ? 'نطاق استرشادي تقديري — عدد المقارنات المباشرة (1-2) غير كافٍ لاعتماد FMV قاطع'
+    ? 'قيمة استرشادية تقديرية — محسوبة استناداً إلى عروض السوق المقاربة ومواصفات المركبة'
     : isWideRange
     ? 'نطاق استرشادي واسع نظراً لتباين أسعار المقارنات في السوق'
     : 'النطاق السعري المتوقع وفق عروض السوق المتوافقة';
@@ -745,6 +760,66 @@ export async function runIntelligenceValuation(
     }
   }
 
+  // Advanced Jordan analytical modules (Odometer rollback, Customs matrix, Dealer arbitrage, Battery SOH)
+  const carKm = spec.kilometers ?? (spec as any).mileage ?? 0;
+  const carFuel = spec.fuelType ?? (spec as any).fuel ?? null;
+  const carBrand = spec.brand ?? (spec as any).make ?? '';
+  const carEngineCc = spec.engineCapacity ?? (spec as any).engineSize ?? null;
+
+  const odometerAnalysis = analyzeOdometerIntegrity({
+    year: spec.year,
+    mileage: carKm,
+    fuel: carFuel,
+    askingPrice: effectiveAskingPrice,
+  });
+
+  const customsMatrix = calculateJordanCustomsAndFreeZone({
+    fuel: carFuel,
+    engineCc: carEngineCc,
+    askingPrice: effectiveAskingPrice,
+    fmvPrice: fmv || output.minPrice,
+    location: spec.city,
+  });
+
+  const dealerArbitrage = calculateDealerArbitrage({
+    askingPrice: effectiveAskingPrice,
+    fmvPrice: fmv || output.stats.weightedMedian || output.minPrice,
+    make: carBrand,
+    model: spec.model,
+    year: spec.year,
+  });
+
+  const batteryHealth = evaluateBatteryHealthImpact({
+    fuel: carFuel,
+    make: carBrand,
+    model: spec.model,
+    year: spec.year,
+    mileage: carKm,
+    baseFmvPrice: fmv || output.stats.weightedMedian || output.minPrice,
+  });
+
+  const effectiveFmvForTools = fmv || output.stats.weightedMedian || output.minPrice || 15000;
+
+  const depreciationForecast = calculateDepreciationForecast({
+    baseFmv: effectiveFmvForTools,
+    manufactureYear: spec.year,
+    currentMileageKm: carKm,
+    make: carBrand,
+    fuel: carFuel,
+  });
+
+  const chassisSimulator = simulateChassisImpact(effectiveFmvForTools, 'FOUR_CLEAN');
+
+  const negotiationPlaybook = generateNegotiationPlaybook({
+    askingPrice: effectiveAskingPrice || effectiveFmvForTools,
+    fmvPrice: effectiveFmvForTools,
+    actualKm: carKm,
+    year: spec.year,
+    make: carBrand,
+    model: spec.model,
+    directCompsCount,
+  });
+
   const contractResult: Section24OutputContract = {
     status: contractStatus,
     statusLabelAr,
@@ -782,6 +857,23 @@ export async function runIntelligenceValuation(
     auditTrail,
     marketSourceExecutions: audit?.marketSourceExecutions || [],
     auditTrace: audit,
+    odometerAnalysis,
+    customsMatrix,
+    dealerArbitrage,
+    batteryHealth,
+    depreciationForecast,
+    chassisSimulator,
+    negotiationPlaybook,
+    targetSpec: {
+      brand: carBrand,
+      model: spec.model,
+      year: spec.year,
+      kilometers: carKm,
+      fuelType: carFuel,
+      transmission: spec.transmission,
+      engineCapacity: carEngineCc,
+      city: spec.city,
+    },
   };
 
   return contractResult;

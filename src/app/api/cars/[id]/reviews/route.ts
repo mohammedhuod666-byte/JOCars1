@@ -116,8 +116,12 @@ export async function POST(
 
     let createdId: string;
     try {
-      const result = await prisma.$transaction(async (tx) => {
-        const review = await tx.carReview.create({
+      // HTTP adapter لا يدعم المعاملات — ننفّذ بالتتابع: إنشاء التقييم، ثم
+      // إعادة حساب ملخّص السيارة؛ وعند أي فشل بعد الإنشاء نحذف التقييم
+      // تعويضًا (كان roll-back المعاملة يلغيه) فتبقى الأرقام متّسقة.
+      let reviewId: string | null = null;
+      try {
+        const review = await prisma.carReview.create({
           data: {
             carId: realCarId,
             userId: user.id,
@@ -132,9 +136,10 @@ export async function POST(
             dealerExperience: cap(dealerExperience),
           },
         });
+        reviewId = review.id;
 
         // Recompute aggregated Car.rating + Car.reviewCount
-        const all = await tx.carReview.findMany({
+        const all = await prisma.carReview.findMany({
           where: { carId: realCarId, isHidden: false },
           select: { rating: true },
         });
@@ -142,16 +147,20 @@ export async function POST(
           ? all.reduce((sum, r) => sum + r.rating, 0) / all.length
           : 0;
 
-        await tx.car.update({
+        await prisma.car.update({
           where: { id: realCarId },
           data: {
             rating: Math.round(avg * 10) / 10,
             reviewCount: all.length,
           },
         });
-        return review;
-      });
-      createdId = result.id;
+      } catch (innerErr: any) {
+        if (reviewId) {
+          await prisma.carReview.delete({ where: { id: reviewId } }).catch(() => {});
+        }
+        throw innerErr;
+      }
+      createdId = reviewId!;
     } catch (err: any) {
       if (err?.code === 'P2002') {
         return errorResponse('لديك تقييم منشور على هذه السيارة بالفعل', 409);

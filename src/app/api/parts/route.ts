@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ success: false, error: 'يرجى تسجيل الدخول أولاً لنشر إعلان قطع غيار' }, { status: 401 });
   if (user.canPost === false) return NextResponse.json({ error: 'تم إيقاف النشر لحسابك' }, { status: 403 });
 
   try {
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
 
     const slug = `part-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    const part = await prisma.usedPart.create({
+    const bare = await prisma.usedPart.create({
       data: {
         title: sanitizePlainText(data.title as string),
         slug,
@@ -178,6 +178,10 @@ export async function POST(request: NextRequest) {
         images: JSON.stringify(urls),
         coverImage: urls[0] || null,
       },
+    });
+
+    const part = await prisma.usedPart.findUnique({
+      where: { id: bare.id },
       include: {
         user: { select: { id: true, name: true, dealerName: true } },
         brand: { select: { id: true, nameAr: true, nameEn: true } },

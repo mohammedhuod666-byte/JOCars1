@@ -9,9 +9,7 @@
  * Make sure DATABASE_URL is set to the target database. The script
  * UPSERTS on `slug` so it's safe to run multiple times.
  */
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../src/lib/prisma';
 
 function generateRefCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -26,18 +24,20 @@ function generateSlug(brand: string, model: string, year: number, ts: number): s
 
 async function getOrCreateModel(brandId: string, brandSlug: string, nameAr: string, nameEn: string) {
   const slug = `${brandSlug}-${nameEn.toLowerCase().replace(/\s+/g, '-')}`;
-  return prisma.carModel.upsert({
+  const existing = await prisma.carModel.findUnique({
     where: { slug_brandId: { slug, brandId } },
-    update: {},
-    create: { nameAr, nameEn, slug, brandId },
+  });
+  if (existing) return existing;
+  return prisma.carModel.create({
+    data: { nameAr, nameEn, slug, brandId },
   });
 }
 
 async function getOrCreateUser(name: string, email: string, role: 'USER' | 'DEALER' = 'USER') {
-  return prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: {
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return existing;
+  return prisma.user.create({
+    data: {
       name,
       email,
       // bcrypt hash of "Demo@123456" — login is not required for this seed
@@ -310,11 +310,15 @@ async function main() {
           { key: 'tires', label: 'الإطارات', icon: 'tires', rating: 3 + Math.random() * 2 },
           { key: 'paint', label: 'البودي والدهان', icon: 'paint', rating: 3 + Math.random() * 2 },
         ]),
-        images: {
-          create: [
-            { url: data.coverImage, isCover: true, order: 0 },
-          ],
-        },
+      },
+    });
+
+    await prisma.carImage.create({
+      data: {
+        carId: car.id,
+        url: data.coverImage,
+        isCover: true,
+        order: 0,
       },
     });
 

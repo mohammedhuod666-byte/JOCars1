@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
     const dealerId = car.userId;
 
     try {
-      const booking = await prisma.carBooking.create({
+      // HTTP adapter: write without include, then read relations separately.
+      const createdBooking = await prisma.carBooking.create({
         data: {
           carId,
           dealerId,
@@ -96,12 +97,16 @@ export async function POST(request: NextRequest) {
           buyerCity: buyerCity || null,
           buyerContactPref: buyerContactPref || null,
         },
+      });
+      const booking = await prisma.carBooking.findUnique({
+        where: { id: createdBooking.id },
         include: {
           car: { select: { id: true, slug: true, price: true } },
           buyer: { select: { id: true, name: true, image: true } },
           dealer: { select: { id: true, name: true, phone: true, whatsapp: true } },
         },
       });
+      if (!booking) return errorResponse('فشل إنشاء الحجز', 500);
 
       // Drop a Notification on the dealer's dashboard so it shows up in their
       // bell immediately (no socket push needed — list refetch pulls it).

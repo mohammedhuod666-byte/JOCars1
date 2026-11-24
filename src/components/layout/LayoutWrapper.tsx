@@ -14,18 +14,24 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
 
   if (isFullscreen) {
     return (
-      <>
-        <main className="min-h-screen">
-          {children}
-        </main>
-      </>
+      <main className="min-h-screen">
+        {children}
+      </main>
     );
   }
 
   return (
     <>
       <Header />
-      <main className="pt-16 min-h-screen pb-24 lg:pb-0">
+      {/* 
+        Header has:
+        - Top Ticker bar: ~28px
+        - Navigation bar: 56px (mobile) / 68px (desktop)
+        Total header height: ~84px mobile, ~96px desktop.
+        pt-[5.25rem] (84px) on mobile and pt-[6rem] (96px) on sm/lg ensures NO page content ever slips under the fixed header!
+        pb-28 on mobile ensures page content and action bars never get overlapped by the floating MobileBottomNav.
+      */}
+      <main className="pt-[5.25rem] sm:pt-[6rem] min-h-screen pb-28 lg:pb-0">
         {children}
       </main>
       <Footer />

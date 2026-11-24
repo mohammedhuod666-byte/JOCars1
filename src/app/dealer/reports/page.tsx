@@ -50,8 +50,7 @@ export default function DealerReportsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
       <style>{`@media print { header, footer, nav, .no-print { display: none !important; } body { background: white !important; } .print-card { box-shadow: none !important; border: 1px solid #ddd !important; } }`}</style>
-      <div className="no-print"><Header /></div>
-      <main className="container-custom max-w-5xl mx-auto px-4 py-8 flex-1">
+      <div className="container-custom max-w-5xl mx-auto px-4 py-8 flex-1">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center no-print">
@@ -119,11 +118,10 @@ export default function DealerReportsPage() {
                 </table>
               </div>
             </div>
-            <p className="text-[11px] text-gray-400 mt-3">تقرير generated من منصة JO Cars — {today}</p>
+            <p className="text-[11px] text-gray-400 mt-3">تقرير صادر من منصة JO Cars — {today}</p>
           </>
         )}
-      </main>
-      <div className="no-print"><Footer /></div>
+      </div>
     </div>
   );
 }

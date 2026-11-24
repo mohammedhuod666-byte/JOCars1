@@ -10,7 +10,7 @@ import { PriceRanges } from '@/components/home/PriceRanges';
 
 export default function HomePage() {
   return (
-    <main className="bg-slate-950 text-slate-100 min-h-screen">
+    <main className="bg-[#080a0f] text-slate-100 min-h-screen selection:bg-amber-400 selection:text-slate-950">
       <HeroSection />
       <StoriesStrip />
       <ServicesGrid />

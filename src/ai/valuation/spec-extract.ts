@@ -185,3 +185,111 @@ export function extractSpecsFromTitle(title: string): ExtractedSpecs {
   }
   return out;
 }
+
+/**
+ * Arabic NLP Vehicle Trim & Options Extractor:
+ * Intelligently extracts high-value Jordanian market options from unstructured Arabic descriptions and titles.
+ */
+export interface ArabicVehicleOptions {
+  sunroofType: 'PANORAMIC' | 'REGULAR' | 'NONE';
+  interiorType: 'LEATHER' | 'FABRIC' | 'UNKNOWN';
+  interiorColor: string | null;
+  hasRadarOrAdas: boolean;
+  has360Camera: boolean;
+  hasHeadsUpDisplay: boolean;
+  hasPremiumSound: boolean;
+  hasKeylessEntry: boolean;
+  trimLevelAr: 'فل كامل' | 'نص فل' | 'ستاندرد' | null;
+  rawMatchedTokens: string[];
+}
+
+export function extractArabicVehicleOptions(text: string): ArabicVehicleOptions {
+  if (!text) {
+    return {
+      sunroofType: 'NONE',
+      interiorType: 'UNKNOWN',
+      interiorColor: null,
+      hasRadarOrAdas: false,
+      has360Camera: false,
+      hasHeadsUpDisplay: false,
+      hasPremiumSound: false,
+      hasKeylessEntry: false,
+      trimLevelAr: null,
+      rawMatchedTokens: [],
+    };
+  }
+
+  const s = text.toLowerCase();
+  const tokens: string[] = [];
+
+  // 1. Sunroof / Panoramic
+  let sunroofType: ArabicVehicleOptions['sunroofType'] = 'NONE';
+  if (/بانوراما|بانورامي|فتحة\s*بانوراما/i.test(s)) {
+    sunroofType = 'PANORAMIC';
+    tokens.push('بانوراما');
+  } else if (/فتحة\s*سقف|فتحة\s*كركوبة|\bفتحة\b/i.test(s)) {
+    sunroofType = 'REGULAR';
+    tokens.push('فتحة سقف');
+  }
+
+  // 2. Leather Interior & Color
+  let interiorType: ArabicVehicleOptions['interiorType'] = 'UNKNOWN';
+  let interiorColor: string | null = null;
+  if (/كراسي\s*جلد|فرش\s*جلد|مقاعد\s*جلد|جلد\s*طبيعي|\bجلد\b/i.test(s)) {
+    interiorType = 'LEATHER';
+    tokens.push('مقاعد جلد');
+    if (/جملي|تان/i.test(s)) interiorColor = 'جملي';
+    else if (/بيج|أوف\s*وايت/i.test(s)) interiorColor = 'بيج';
+    else if (/أسود|اسود/i.test(s)) interiorColor = 'أسود';
+    else if (/أحمر|احمر|مارون/i.test(s)) interiorColor = 'أحمر';
+  } else if (/فرش\s*مخمل|قماش/i.test(s)) {
+    interiorType = 'FABRIC';
+    tokens.push('فرش قماش/مخمل');
+  }
+
+  // 3. ADAS / Radar / Lane Assist
+  const hasRadarOrAdas = /رادار|مانع\s*تصادم|تحديد\s*مسار|قياد[ةه]\s*ذاتي[ةه]|اوتو\s*بارك|تنبيه\s*تصادم|نقط[ةه]\s*عمياء/i.test(s);
+  if (hasRadarOrAdas) tokens.push('رادار / أنظمة مساعدة القيادة');
+
+  // 4. 360 Camera
+  const has360Camera = /360|كاميرات\s*محيطي[ةه]|4\s*كاميرات|كاميرا\s*محيطي[ةه]/i.test(s);
+  if (has360Camera) tokens.push('كاميرات 360');
+
+  // 5. HUD (Heads-Up Display)
+  const hasHeadsUpDisplay = /بروجكتر|head[\s-]*up[\s-]*display|شاش[ةه]\s*على\s*الزجاج|\bhud\b/i.test(s);
+  if (hasHeadsUpDisplay) tokens.push('بروجكتر (HUD)');
+
+  // 6. Premium Sound System
+  const hasPremiumSound = /هارمن|harman|بوز|bose|بورمستر|burmester|بانغ|bang\s*&\s*olufsen/i.test(s);
+  if (hasPremiumSound) tokens.push('نظام صوتي فائق');
+
+  // 7. Keyless entry / Push-to-start
+  const hasKeylessEntry = /بصم[ةه]\s*تشغيل|بصم[ةه]\s*ابواب|بصم[ةه]|دخول\s*ذكي|keyless/i.test(s);
+  if (hasKeylessEntry) tokens.push('بصمة / دخول ذكي');
+
+  // 8. Trim Level
+  let trimLevelAr: ArabicVehicleOptions['trimLevelAr'] = null;
+  if (/فل\s*كامل|أعلى\s*صنف|اعلى\s*صنف|فل\s*اوبشن|full\s*options/i.test(s)) {
+    trimLevelAr = 'فل كامل';
+    tokens.push('فل كامل');
+  } else if (/نص\s*فل|نصف\s*فل|وسط/i.test(s)) {
+    trimLevelAr = 'نص فل';
+    tokens.push('نص فل');
+  } else if (/ستاندرد|استاندرد|بيسك|basic/i.test(s)) {
+    trimLevelAr = 'ستاندرد';
+    tokens.push('ستاندرد');
+  }
+
+  return {
+    sunroofType,
+    interiorType,
+    interiorColor,
+    hasRadarOrAdas,
+    has360Camera,
+    hasHeadsUpDisplay,
+    hasPremiumSound,
+    hasKeylessEntry,
+    trimLevelAr,
+    rawMatchedTokens: tokens,
+  };
+}

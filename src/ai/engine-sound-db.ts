@@ -62,7 +62,7 @@ export const ENGINE_SOUND_PATTERNS: EngineSoundPattern[] = [
     possibleCauses: [
       'نقص في زيت المحرك',
       'بستم متآكل',
-      'ك Хоش متآكل',
+      'كوشنيت متآكل',
       'صندوق التوقيت يحتاج ضبط',
     ],
     urgency: 'medium',
@@ -372,7 +372,7 @@ export function generateDiagnosis(
       confidence,
       report: ` **الصوت المسجل لا يبدو كصوت محرك سيارة.**
 
-يبدو أن الصوت更像是 صوت ${analysis.zeroCrossingRate > 0.1 ? 'إنسان أو حوار' : 'ضوضاء عامة'}.
+يبدو أن الصوت أقرب إلى صوت ${analysis.zeroCrossingRate > 0.1 ? 'إنسان أو حوار' : 'ضوضاء عامة'}.
 
 **نصيحة:** حاول تسجيل صوت المحرك مباشرة من خلال فتح غطاء المحرك while the engine is running. تأكد من أن التسجيل يكون في مكان هادئ.`,
       recommendations: [

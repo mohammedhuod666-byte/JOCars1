@@ -27,6 +27,7 @@ interface ForumPost {
   likedByMe?: boolean;
   isAnswer: boolean;
   isHidden: boolean;
+  isPinned?: boolean;
   createdAt: string;
   user: {
     id: string;
@@ -90,31 +91,76 @@ export default function TopicDetailPage() {
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadTopic = () => {
+  const loadTopic = (silent = false) => {
     const slug = params.slug as string;
     const viewed = JSON.parse(localStorage.getItem('viewedTopics') || '[]');
     const alreadyViewed = viewed.includes(slug);
-    if (!alreadyViewed) {
+    if (!alreadyViewed && !silent) {
       viewed.push(slug);
       localStorage.setItem('viewedTopics', JSON.stringify(viewed));
     }
-    fetch(`/api/forum/topics/${slug}${alreadyViewed ? '' : '?trackView=true'}`)
+
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`/api/forum/topics/${slug}${alreadyViewed || silent ? '' : '?trackView=true'}`, { headers })
       .then((r) => r.json())
       .then((data) => {
         if (data.success && data.data) {
-          setTopic(data.data);
+          setTopic((prev) => {
+            if (!prev) return data.data;
+            const prevPostIds = prev.posts.map((p) => p.id).join(',');
+            const nextPostIds = data.data.posts.map((p: any) => p.id).join(',');
+            const prevLikes = prev.posts.map((p) => p.likeCount).join(',');
+            const nextLikes = data.data.posts.map((p: any) => p.likeCount).join(',');
+            const prevPinned = prev.posts.map((p) => p.isPinned ? '1' : '0').join(',');
+            const nextPinned = data.data.posts.map((p: any) => p.isPinned ? '1' : '0').join(',');
+            if (
+              prevPostIds !== nextPostIds ||
+              prevLikes !== nextLikes ||
+              prevPinned !== nextPinned ||
+              prev.likeCount !== data.data.likeCount ||
+              prev.isSolved !== data.data.isSolved ||
+              prev.isLocked !== data.data.isLocked ||
+              prev.isPinned !== data.data.isPinned
+            ) {
+              return data.data;
+            }
+            return prev;
+          });
           document.title = `${data.data.title} | منتديات كارس جو`;
-        } else {
+        } else if (!silent) {
           toast.error('الموضوع غير موجود');
         }
-        setLoading(false);
+        if (!silent) setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (!silent) setLoading(false);
+      });
   };
 
   useEffect(() => {
     loadTopic();
-  }, [params.slug]);
+
+    // Auto-sync polling every 3 seconds so replies from other people appear live without refreshing!
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadTopic(true);
+      }
+    }, 3000);
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        loadTopic(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [params.slug, token]);
 
   // Image Upload Handler
   const uploadImageFile = async (file: File): Promise<string | null> => {
@@ -154,8 +200,21 @@ export default function TopicDetailPage() {
 
   // Submit Reply with Quotes & Images
   const submitReply = async () => {
-    if (!replyText.trim() && replyImageFiles.length === 0) return;
+    const currentToken = token || useAuth.getState().token;
+    if (!isAuthenticated || !currentToken) {
+      toast.error('يرجى تسجيل الدخول أولاً لتتمكن من إضافة ردك');
+      router.push(`/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+
+    if (!replyText.trim() && replyImageFiles.length === 0) {
+      toast.error('يرجى كتابة نص الرد أو إرفاق صورة');
+      return;
+    }
+
+    if (sending) return;
     setSending(true);
+
     try {
       const uploadedUrls: string[] = [];
       for (const file of replyImageFiles) {
@@ -165,12 +224,13 @@ export default function TopicDetailPage() {
 
       const res = await fetch('/api/forum/posts', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${currentToken}`,
         },
         body: JSON.stringify({
-          content: replyText,
+          content: replyText.trim(),
           topicId: topic!.id,
           images: uploadedUrls,
           replyToId: quoteTarget?.id || null,
@@ -179,20 +239,39 @@ export default function TopicDetailPage() {
         }),
       });
 
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        const newPost = data.data;
         setReplyText('');
         setQuoteTarget(null);
         setReplyImageFiles([]);
         setReplyImagePreviews([]);
         toast.success('تمت إضافة ردك بنجاح');
-        loadTopic();
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
+
+        // Optimistic update: show reply immediately to the sender with 0ms delay!
+        if (newPost) {
+          setTopic((prev) => {
+            if (!prev) return prev;
+            const exists = prev.posts.some((p) => p.id === newPost.id);
+            if (exists) return prev;
+            return {
+              ...prev,
+              posts: [...prev.posts, newPost],
+            };
+          });
+        }
+
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        loadTopic(true);
+      } else if (res.status === 401) {
+        useAuth.getState().logout();
+        toast.error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+        router.push(`/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`);
       } else {
-        toast.error(data.error || 'فشل إرسال الرد');
+        toast.error(data?.error || 'فشل إرسال الرد، يرجى المحاولة ثانية');
       }
     } catch {
-      toast.error('حدث خطأ أثناء إرسال الرد');
+      toast.error('حدث خطأ أثناء إرسال الرد، يرجى التحقق من اتصالك');
     } finally {
       setSending(false);
     }
@@ -266,7 +345,12 @@ export default function TopicDetailPage() {
 
   // Post Actions (Likes, Solution mark, Hide, Delete)
   const likePost = async (postId: string) => {
-    if (!user) { toast.error('سجل الدخول أولاً'); return; }
+    const currentToken = token || useAuth.getState().token;
+    if (!user || !currentToken) {
+      toast.error('سجل الدخول أولاً لتتمكن من التفاعل');
+      router.push(`/auth/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
     // Optimistic toggle: exactly one like per user, second tap removes it
     setTopic(prev => prev ? {
       ...prev,
@@ -279,10 +363,16 @@ export default function TopicDetailPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Authorization': `Bearer ${currentToken}`,
         },
         body: JSON.stringify({ action: 'like' }),
       });
+      if (res.status === 401) {
+        useAuth.getState().logout();
+        toast.error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+        loadTopic();
+        return;
+      }
       const d = await res.json().catch(() => null);
       if (res.ok && d?.success) {
         // Reconcile with server truth (heals counts inflated by the old bug)
@@ -313,6 +403,30 @@ export default function TopicDetailPage() {
         loadTopic();
       }
     } catch {}
+  };
+
+  const togglePinPost = async (postId: string) => {
+    const currentToken = token || useAuth.getState().token;
+    if (!currentToken) return;
+    try {
+      const res = await fetch(`/api/forum/posts/${postId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({ action: 'togglePin' }),
+      });
+      const d = await res.json().catch(() => null);
+      if (res.ok && d?.success) {
+        toast.success(d.data.isPinned ? 'تم تثبيت الرد في بداية الموضوع 📌' : 'تم إلغاء تثبيت الرد');
+        loadTopic(true);
+      } else {
+        toast.error(d?.error || 'فشل تحديث التثبيت');
+      }
+    } catch {
+      toast.error('تعذر الاتصال بالخادم');
+    }
   };
 
   const deletePost = async (postId: string) => {
@@ -384,10 +498,10 @@ export default function TopicDetailPage() {
   const topicImages = parseImagesArray(topic.images);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#080a0f] text-slate-100 pb-36">
       
       {/* Top Breadcrumb */}
-      <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-30">
+      <div className="bg-[#0e111a]/90 backdrop-blur-md border-b border-white/[0.08]">
         <div className="container-custom max-w-5xl py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-400 font-medium truncate max-w-md">
             <Link href="/forum" className="hover:text-emerald-400 transition-colors">المنتدى</Link>
@@ -568,7 +682,9 @@ export default function TopicDetailPage() {
               <p className="text-slate-500 text-xs">شارِك بردك أو خبرتك لمساعدة صاحب الموضوع!</p>
             </div>
           ) : (
-            topic.posts.map((post, idx) => {
+            [...topic.posts]
+              .sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0))
+              .map((post, idx) => {
               const postImages = parseImagesArray(post.images);
 
               if (post.isHidden && !isAdmin) {
@@ -587,14 +703,24 @@ export default function TopicDetailPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: idx * 0.04 }}
                   className={`p-6 rounded-3xl border transition-all space-y-4 shadow-md ${
-                    post.isAnswer
-                      ? 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-500/50 shadow-emerald-500/10'
-                      : post.isHidden
-                        ? 'bg-slate-950/80 border-rose-500/40 opacity-70'
-                        : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700'
+                    post.isPinned
+                      ? 'bg-slate-900/90 border-amber-500/50 ring-1 ring-amber-500/20 shadow-amber-500/10'
+                      : post.isAnswer
+                        ? 'bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-500/50 shadow-emerald-500/10'
+                        : post.isHidden
+                          ? 'bg-slate-950/80 border-rose-500/40 opacity-70'
+                          : 'bg-slate-900/80 border-slate-800/90 hover:border-slate-700'
                   }`}
                 >
                   
+                  {/* Pinned Badge */}
+                  {post.isPinned && (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500 text-slate-950 text-xs font-black shadow-md">
+                      <Pin className="w-3.5 h-3.5 fill-slate-950" />
+                      <span>رد مثبت بواسطة الإدارة في بداية الموضوع</span>
+                    </div>
+                  )}
+
                   {/* Answer / Solved Badge */}
                   {post.isAnswer && (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500 text-slate-950 text-xs font-black shadow-md">
@@ -649,6 +775,22 @@ export default function TopicDetailPage() {
                         <Quote className="w-3.5 h-3.5 text-emerald-400" />
                         <span>رد اقتباسي</span>
                       </button>
+
+                      {/* Admin Pin Button */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => togglePinPost(post.id)}
+                          title={post.isPinned ? 'إلغاء تثبيت الرد' : 'تثبيت الرد في البداية'}
+                          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+                            post.isPinned
+                              ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                              : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-amber-400 hover:border-amber-500/40'
+                          }`}
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${post.isPinned ? 'fill-amber-400 text-amber-400' : 'text-amber-400'}`} />
+                          <span>{post.isPinned ? 'مثبت' : 'تثبيت'}</span>
+                        </button>
+                      )}
 
                       {/* Like Button — one like per user, tap again to remove */}
                       <button
@@ -739,11 +881,38 @@ export default function TopicDetailPage() {
 
         {/* Reply Form Box */}
         {!topic.isLocked ? (
-          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl mt-8" ref={bottomRef}>
+          !isAuthenticated ? (
+            <div className="p-6 md:p-8 rounded-3xl bg-[#121622] border border-white/[0.08] text-center space-y-4 shadow-xl mt-8" ref={bottomRef}>
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+                <Send className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-white text-base">انضم للنقاش وأضف ردك</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  سجل دخولك لتتمكن من الرد على الأعضاء، الاقتباس، ومشاركة الصور والتجارب.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <Link
+                  href={`/auth/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '')}`}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 hover:scale-105 active:scale-95 transition-all"
+                >
+                  تسجيل الدخول
+                </Link>
+                <Link
+                  href="/auth/register"
+                  className="px-6 py-2.5 rounded-xl bg-[#181d2a] hover:bg-[#1f2536] text-white border border-white/[0.08] text-xs font-bold transition-all"
+                >
+                  حساب جديد
+                </Link>
+              </div>
+            </div>
+          ) : (
+          <div className="p-4 sm:p-6 rounded-3xl bg-[#121622] border border-white/[0.08] space-y-4 shadow-xl mt-8 mb-28 lg:mb-8" ref={bottomRef}>
             
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-white text-base flex items-center gap-2">
-                <Send className="w-4 h-4 text-emerald-400" />
+                <Send className="w-4 h-4 text-amber-400" />
                 أضف مشاركتك أو ردك على الاستفسار
               </h3>
             </div>
@@ -836,6 +1005,7 @@ export default function TopicDetailPage() {
             </div>
 
           </div>
+          )
         ) : (
           <div className="p-8 text-center rounded-3xl bg-slate-900/40 border border-slate-800 text-slate-400 text-sm flex items-center justify-center gap-2">
             <Lock className="w-5 h-5 text-rose-400" />

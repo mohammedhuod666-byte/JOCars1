@@ -11,7 +11,7 @@ import {
   Search, User, Heart, MessageCircle, Plus, Moon, Sun,
   ChevronDown, LogOut, ShieldCheck, Bot, Wrench, DollarSign, Tag,
   BadgePercent, Newspaper, Car, Store, Bell, GitCompare, Ticket,
-  Calculator, Cpu, Zap,
+  Calculator, Cpu, Zap, Sparkles, Compass, Flame, ArrowUpRight
 } from 'lucide-react';
 
 export function Header() {
@@ -35,7 +35,7 @@ export function Header() {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 10);
+    const handleScroll = () => setScrolled(window.scrollY > 15);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -58,24 +58,6 @@ export function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (moreOpen && moreMenuRef.current && moreBtnRef.current) {
-      const rect = moreBtnRef.current.getBoundingClientRect();
-      const el = moreMenuRef.current;
-      el.style.left = `${Math.min(rect.left, window.innerWidth - 264)}px`;
-      el.style.top = `${rect.bottom + 6}px`;
-    }
-  }, [moreOpen]);
-
-  useEffect(() => {
-    if (userMenuOpen && userMenuRef.current && userBtnRef.current) {
-      const rect = userBtnRef.current.getBoundingClientRect();
-      const el = userMenuRef.current;
-      el.style.left = `${Math.max(8, rect.right - 256)}px`;
-      el.style.top = `${rect.bottom + 6}px`;
-    }
-  }, [userMenuOpen, isAuthenticated]);
-
   const openUserMenu = useCallback(() => {
     window.dispatchEvent(new CustomEvent('toggleUserMenu'));
   }, []);
@@ -90,28 +72,60 @@ export function Header() {
   const primaryLinks = [
     { href: '/cars', label: 'السيارات', icon: Car },
     { href: '/parts', label: 'قطع الغيار', icon: Cpu },
-    { href: '/workshops', label: 'الورش', icon: Wrench },
+    { href: '/workshops', label: 'الورش والصيانة', icon: Wrench },
     { href: '/forum', label: 'المنتدى', icon: MessageCircle },
   ];
 
-  const secondaryLinks = [
-    { href: '/jordan-traffic-violations', label: 'ترخيص ومخالفات السير', icon: ShieldCheck },
-    { href: '/free-zone-calculator', label: 'شحن وتخليص المنطقة الحرة', icon: Calculator },
-    { href: '/ai/inspection-analyzer', label: 'محلل فحص الشواصي بالـ AI', icon: Cpu },
-    { href: '/ev-charging-jordan', label: 'محطات الشحن الكهربائي', icon: Zap },
-    { href: '/swap-calculator', label: 'حاسبة البدل والمقاصة', icon: GitCompare },
-    { href: '/customs-calculator', label: 'حاسبة الجمارك', icon: Calculator },
-    { href: '/finance-calculator', label: 'تمويل البنوك', icon: DollarSign },
-    { href: '/dealers', label: 'الوكلاء والمعارض', icon: Store },
-    { href: '/ai', label: 'المساعد الذكي', icon: Bot },
-    { href: '/car-finder', label: 'مستشار السيارات', icon: Car },
-    { href: '/resale-value', label: 'قيمة إعادة البيع', icon: DollarSign },
-    { href: '/maintenance', label: 'الصيانة والورش', icon: Wrench },
-    { href: '/my-garage', label: 'مرآبي الشخصي', icon: Wrench },
-    { href: '/wanted', label: 'سيارات مطلوبة', icon: Tag },
-    { href: '/plates', label: 'لوحات ميزة', icon: BadgePercent },
-    { href: '/news', label: 'أخبار السيارات', icon: Newspaper },
-    ...(isAuthenticated ? [{ href: '/tickets', label: 'الدعم والتذاكر', icon: Ticket }] : []),
+  // 4 Categorized Columns for the Modern Mega Menu
+  const megaMenuCategories = [
+    {
+      title: 'سوق وتجارة السيارات',
+      badge: 'حراج ومزادات',
+      badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+      items: [
+        { href: '/cars', label: 'سوق الحراج والإعلانات', desc: 'سيارات معروضة للبيع من الوكلاء والأفراد', icon: Car },
+        { href: '/wanted', label: 'سيارات مطلوبة للشراء', desc: 'طلبات مباشرة من مشترين جادين', icon: Tag },
+        { href: '/wholesale', label: 'سوق الجملة والمصدوم', desc: 'عروض التجار وسيارت بأسعار الجملة', icon: Store },
+        { href: '/reels', label: 'فيديوهات ريلز السيارات', desc: 'جولات فحص مصورة بالفيديو للسيارات', icon: Flame },
+        { href: '/plates', label: 'لوحات أرقام مميزة', desc: 'لوحات خصوصية مميزة للبيع والمزايدة', icon: BadgePercent },
+      ],
+    },
+    {
+      title: 'الفحص والذكاء الاصطناعي',
+      badge: 'تقنية AI',
+      badgeColor: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+      items: [
+        { href: '/ai/inspection-analyzer', label: 'محلل فحص الشواصي بالـ AI', desc: 'تحليل دقيق لكروت الفحص وكشف القص والغرق', icon: Cpu },
+        { href: '/ai', label: 'المساعد الذكي JO Cars AI', desc: 'استشر الذكاء الاصطناعي في الأسعار والأعطال', icon: Bot },
+        { href: '/car-finder', label: 'مستشار اختيار السيارات', desc: 'حدد ميزانيتك واحتياجاتك ونرشح لك الأنسب', icon: Compass },
+        { href: '/ev-charging-jordan', label: 'محطات الشحن الكهربائي', desc: 'خريطة تفاعلية لمحطات شحن السيارات بالمملكة', icon: Zap },
+      ],
+    },
+    {
+      title: 'الورش والخدمات والجمارك',
+      badge: 'خدمات فورية',
+      badgeColor: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+      items: [
+        { href: '/workshops', label: 'دليل الورش ومراكز الصيانة', desc: 'حجز مواعيد لدى أفضل ورش الهايبرد والميكانيك', icon: Wrench },
+        { href: '/customs-calculator', label: 'حاسبة الجمارك الأردنية', desc: 'احتساب دقيق لجمارك الهايبرد والكهرباء والبنزين', icon: Calculator },
+        { href: '/jordan-traffic-violations', label: 'ترخيص ومخالفات السير', desc: 'رسوم الترخيص والاستعلام عن المخالفات', icon: ShieldCheck },
+        { href: '/free-zone-calculator', label: 'تخليص وشحن المنطقة الحرة', desc: 'حاسبة تخليص مركبات حرة الزرقاء وعمان', icon: Calculator },
+        { href: '/dealers', label: 'معارض ووكلاء الأردن', desc: 'دليل شامل لوكلاء وتجار السيارات المعتمدين', icon: Store },
+      ],
+    },
+    {
+      title: 'المالية وتكلفة التملك',
+      badge: 'أدوات مالية',
+      badgeColor: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
+      items: [
+        { href: '/finance-calculator', label: 'حاسبة تمويل البنوك', desc: 'احسب القسط الشهري والتمويل مع البنوك المحلية', icon: DollarSign },
+        { href: '/swap-calculator', label: 'حاسبة البدل والمقاصة', desc: 'احسب فرق القيمة العادلة عند تبديل سيارتك', icon: GitCompare },
+        { href: '/ownership-cost', label: 'حاسبة التكلفة الكاملة', desc: 'حساب مصاريف الوقود والصيانة واستهلاك القيمة', icon: DollarSign },
+        { href: '/resale-value', label: 'مؤشر قيمة إعادة البيع', desc: 'توقعات أسعار السيارات وسرعة إعادة بيعها', icon: Sparkles },
+        { href: '/news', label: 'أخبار وسوق السيارات', desc: 'أحدث أخبار جمارك وأسعار السيارات بالأردن', icon: Newspaper },
+        ...(isAuthenticated ? [{ href: '/tickets', label: 'الدعم الفني والتذاكر', desc: 'مساعدة فورية ومتابعة طلباتك مع الإدارة', icon: Ticket }] : []),
+      ],
+    },
   ];
 
   const desktopUserMenuItems = [
@@ -119,7 +133,7 @@ export function Header() {
     { href: '/favorites', label: 'المفضلة', icon: Heart },
     { href: '/messages', label: 'الرسائل', icon: MessageCircle, badge: unreadCount },
     { href: '/my-cars', label: 'إعلاناتي', icon: Car },
-    { href: '/my-garage', label: 'مرآبي', icon: Wrench },
+    { href: '/my-garage', label: 'مرآبي وسجل الصيانة', icon: Wrench },
     { href: '/my-wants', label: 'طلباتي', icon: Tag },
     { href: '/price-alerts', label: 'تنبيهات الأسعار', icon: Bell },
   ];
@@ -130,27 +144,61 @@ export function Header() {
         className={cn(
           'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
           scrolled
-            ? 'bg-surface-950/82 backdrop-blur-xl border-b border-surface-700/50 shadow-lg shadow-black/15'
-            : 'bg-surface-950/50 backdrop-blur-md'
+            ? 'bg-[#090b10]/95 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_10px_35px_-10px_rgba(0,0,0,0.7)]'
+            : 'bg-[#090b10]/85 backdrop-blur-xl border-b border-white/[0.04]'
         )}
       >
+        {/* Top Ticker Bar at the very top of the website */}
+        <div className="w-full bg-[#05070a]/95 border-b border-white/[0.06] py-1.5 overflow-hidden text-xs text-slate-400 select-none" dir="ltr">
+          <div className="animate-marquee-smooth flex items-center">
+            {/* Set 1 */}
+            <div className="flex items-center shrink-0">
+              {[
+                'تويوتا', 'مرسيدس بنز', 'بي إم دبليو', 'هيونداي', 'كيا', 'نيسان', 'لكزس', 'فورد',
+                'عمان', 'إربد', 'الزرقاء', 'العقبة', 'فحص 4 جيد معتمد', 'جمرك خالص', 'بطاريات هايبرد مكفولة'
+              ].map((t, i) => (
+                <span key={`a-${i}`} className="inline-flex items-center mx-3 sm:mx-4 text-[11px] sm:text-xs font-semibold text-slate-300 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 ml-2.5 shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+                  {t}
+                </span>
+              ))}
+            </div>
+            {/* Set 2 (Identical duplicate for seamless 50% loop) */}
+            <div className="flex items-center shrink-0">
+              {[
+                'تويوتا', 'مرسيدس بنز', 'بي إم دبليو', 'هيونداي', 'كيا', 'نيسان', 'لكزس', 'فورد',
+                'عمان', 'إربد', 'الزرقاء', 'العقبة', 'فحص 4 جيد معتمد', 'جمرك خالص', 'بطاريات هايبرد مكفولة'
+              ].map((t, i) => (
+                <span key={`b-${i}`} className="inline-flex items-center mx-3 sm:mx-4 text-[11px] sm:text-xs font-semibold text-slate-300 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 ml-2.5 shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="container-custom">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14 sm:h-16 md:h-[4.25rem]">
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-              <div className="relative transition-transform duration-300 group-hover:scale-105">
-                <img src="/shield-logo-sm.png" alt="JO Cars" className="h-10 w-10 rounded-lg object-cover" />
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full bg-gradient-to-r from-transparent via-gold-100/40 to-transparent opacity-60 blur-[2px]" />
+            <Link href="/" className="flex items-center gap-2 sm:gap-3 shrink-0 group py-1">
+              <div className="relative flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#1c2234] to-[#0f131d] border border-amber-400/30 shadow-[0_0_15px_rgba(245,158,11,0.18)] group-hover:border-amber-400/70 group-hover:shadow-[0_0_22px_rgba(245,158,11,0.35)] transition-all duration-300">
+                <img
+                  src="/shield-logo-sm.png"
+                  alt="JO Cars"
+                  className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg object-contain transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-amber-400 opacity-60 blur-[1px]" />
               </div>
-              <span className="text-lg font-black text-surface-100 hidden sm:block tracking-tight" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
-                <span className="text-gold-100">JO</span>
-                <span className="text-surface-100">Cars</span>
-                <span className="text-gold-100">.</span>
-              </span>
+              <div className="flex items-center text-base sm:text-lg font-black tracking-tight shrink-0" style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}>
+                <span className="text-white">JO</span>
+                <span className="text-slate-300">Cars</span>
+                <span className="text-amber-400 text-xl leading-none">.</span>
+              </div>
             </Link>
 
-            {/* Desktop Nav */}
-            <nav className="hidden lg:flex items-center gap-0.5">
+            {/* Desktop Navigation Links */}
+            <nav className="hidden lg:flex items-center gap-1 bg-[#121622]/60 border border-white/[0.06] rounded-2xl p-1 backdrop-blur-md">
               {primaryLinks.map((link) => {
                 const Icon = link.icon;
                 const active = pathname === link.href || pathname.startsWith(link.href + '/');
@@ -159,244 +207,316 @@ export function Header() {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      'relative flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+                      'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 z-10',
                       active
-                        ? 'text-accent-300 bg-accent-500/15'
-                        : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800'
+                        ? 'text-amber-300 font-bold'
+                        : 'text-slate-300 hover:text-white'
                     )}
                   >
-                    <Icon className="w-4 h-4" />
-                    {link.label}
+                    {active && (
+                      <span className="absolute inset-0 rounded-xl bg-[#1e2538] border border-amber-400/30 shadow-[0_0_15px_rgba(245,158,11,0.15)] -z-10" />
+                    )}
+                    <Icon className={cn('w-4 h-4 transition-colors', active ? 'text-amber-400' : 'text-slate-400')} />
+                    <span>{link.label}</span>
                   </Link>
                 );
               })}
 
+              {/* More Mega Menu Trigger */}
               <button
                 ref={moreBtnRef}
                 onClick={() => setMoreOpen(!moreOpen)}
                 className={cn(
-                  'flex items-center gap-1 px-3.5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+                  'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer',
                   moreOpen
-                    ? 'text-surface-200 bg-surface-800'
-                    : 'text-surface-400 hover:text-surface-200 hover:bg-surface-800'
+                    ? 'text-amber-300 bg-[#1e2538] border border-amber-400/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                    : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
                 )}
+                aria-expanded={moreOpen}
               >
-                المزيد
-                <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-200', moreOpen && 'rotate-180')} />
+                <span>المزيد</span>
+                <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-300', moreOpen && 'rotate-180 text-amber-400')} />
               </button>
             </nav>
 
-            {/* Search */}
-            <div className="hidden md:flex items-center flex-1 max-w-xs mx-6">
+            {/* Quick Search */}
+            <div className="hidden md:flex items-center flex-1 max-w-xs mx-4">
               <form onSubmit={handleSearch} className="relative w-full group">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ابحث عن سيارة..."
-                  className="input-field w-full h-10 pl-10 pr-4 text-sm"
+                  className="w-full h-10 pr-10 pl-9 rounded-full bg-[#121622]/90 border border-white/[0.08] text-sm text-slate-100 placeholder:text-slate-400 shadow-inner hover:border-white/[0.15] focus:border-amber-400/60 focus:ring-2 focus:ring-amber-400/20 focus:outline-none transition-all duration-200"
                 />
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-500 group-focus-within:text-accent-400 transition-colors" />
+                <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-amber-400 transition-colors" />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
               </form>
             </div>
 
-            {/* Right actions */}
-            <div className="flex items-center gap-1">
+            {/* Right Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Compare Button */}
               {compareCars.length > 0 && (
                 <Link
                   href="/cars/compare"
-                  className="relative p-2 rounded-lg text-surface-500 hover:text-accent-400 hover:bg-surface-800 transition-all duration-200"
-                  title="مقارنة"
+                  className="relative p-2.5 rounded-xl border border-white/[0.06] bg-[#121622]/80 text-slate-300 hover:text-amber-400 hover:border-amber-400/40 transition-all duration-200"
+                  title="مقارنة السيارات"
                 >
-                  <GitCompare className="w-5 h-5" />
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-gold-100 text-gold-900 text-[9px] font-bold flex items-center justify-center px-1">
+                  <GitCompare className="w-4 h-4" />
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 text-[10px] font-black flex items-center justify-center px-1 shadow-md shadow-amber-500/30">
                     {compareCars.length}
                   </span>
                 </Link>
               )}
 
+              {/* Theme Toggle */}
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="hidden md:flex p-2 rounded-lg text-surface-500 hover:text-surface-300 hover:bg-surface-800 transition-all duration-200"
+                className="hidden sm:flex p-2.5 rounded-xl border border-white/[0.06] bg-[#121622]/80 text-slate-400 hover:text-slate-100 hover:border-white/[0.15] transition-all duration-200"
                 aria-label="تبديل المظهر"
               >
-                {mounted ? (theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />) : <div className="w-5 h-5" />}
+                {mounted ? (theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />) : <div className="w-4 h-4" />}
               </button>
 
+              {/* User Account / Auth */}
               {isAuthenticated ? (
                 <>
                   <button
                     ref={userBtnRef}
                     onClick={() => {
-                      // Sync role/permissions from server every time the menu opens,
-                      // so freshly-granted roles (e.g. ADMIN) appear without a reload
                       if (!userMenuOpen) refreshProfile();
                       setUserMenuOpen(!userMenuOpen);
                     }}
-                    className="hidden md:flex items-center gap-1.5 p-1.5 pr-2.5 rounded-lg hover:bg-surface-800 transition-all duration-200"
+                    className="flex items-center gap-2 p-1.5 pl-2.5 rounded-xl border border-white/[0.08] bg-[#121622]/80 hover:bg-[#1a2030] hover:border-amber-400/40 transition-all duration-200 cursor-pointer"
                   >
-                    <div className="w-8 h-8 rounded-full bg-accent-600 flex items-center justify-center text-white text-xs font-bold ring-2 ring-gold-100/20">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 overflow-hidden">
                       {user?.image ? (
-                        <img src={user.image} alt="" className="w-8 h-8 rounded-full object-cover" />
+                        <img src={user.image} alt="" className="w-8 h-8 rounded-lg object-cover" />
                       ) : (
                         user?.name?.charAt(0) || 'U'
                       )}
                     </div>
-                    <ChevronDown className={cn('w-4 h-4 text-surface-500 transition-transform duration-200', userMenuOpen && 'rotate-180')} />
-                  </button>
-
-                  <button
-                    onClick={openUserMenu}
-                    className="md:hidden p-1 rounded-lg hover:bg-surface-800 transition-all duration-200"
-                    aria-label="حسابي"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-accent-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-gold-100/30">
-                      {user?.image ? (
-                        <img src={user.image} alt="" className="w-9 h-9 rounded-full object-cover" />
-                      ) : (
-                        user?.name?.charAt(0) || 'U'
-                      )}
-                    </div>
+                    <span className="hidden sm:inline text-xs font-bold text-slate-200 max-w-[90px] truncate">
+                      {user?.name?.split(' ')[0]}
+                    </span>
+                    <ChevronDown className={cn('w-3.5 h-3.5 text-slate-400 transition-transform duration-200', userMenuOpen && 'rotate-180')} />
                   </button>
                 </>
               ) : (
                 <div className="hidden sm:flex items-center gap-1.5">
-                  <Link href="/auth/login" className="px-3.5 py-1.5 rounded-lg text-sm font-semibold text-surface-400 hover:text-surface-200 hover:bg-surface-800 transition-all duration-200">
-                    دخول
+                  <Link
+                    href="/auth/login"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-white/[0.06] transition-all duration-200"
+                  >
+                    تسجيل الدخول
                   </Link>
-                  <Link href="/auth/register" className="btn-primary text-sm px-3.5 py-1.5">
-                    حساب جديد
+                  <Link
+                    href="/auth/register"
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-200 bg-[#161c28] border border-white/[0.08] hover:border-white/[0.2] hover:text-white transition-all duration-200"
+                  >
+                    إنشاء حساب
                   </Link>
                 </div>
               )}
 
-              {/* Sell button — gold */}
+              {/* Sell Car CTA Button — Luxury Amber / Gold */}
               <Link
                 href="/cars/add"
-                className="flex items-center gap-1.5 rounded-lg bg-gold-100 text-gold-900 font-bold text-sm px-4 py-2 shadow-gold hover:shadow-gold-lg active:scale-[0.97] transition-all duration-200"
+                className="group relative flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 font-black text-xs sm:text-sm px-2.5 sm:px-4 py-1.5 sm:py-2.5 shadow-[0_0_20px_rgba(245,158,11,0.25)] hover:shadow-[0_0_28px_rgba(245,158,11,0.45)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 shrink-0"
               >
-                <Plus className="w-4 h-4" strokeWidth={2.5} />
-                <span className="hidden sm:inline">بيع سيارتك</span>
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:rotate-90" strokeWidth={3} />
+                <span className="hidden sm:inline">أضف إعلانك</span><span className="sm:hidden">إعلان</span>
               </Link>
             </div>
           </div>
         </div>
       </header>
 
-      {/* "More" dropdown — Shows 4 items initially, scrolls gradually */}
+      {/* Modern Mega Menu Panel ("المزيد") */}
       {moreOpen && (
         <div
           ref={moreMenuRef}
-          className="fixed z-[70] w-64 rounded-2xl border border-surface-700/80 bg-surface-800/95 backdrop-blur-xl shadow-soft-2xl overflow-hidden flex flex-col"
+          className="fixed top-[4.75rem] left-1/2 -translate-x-1/2 z-[70] w-[95vw] max-w-5xl rounded-3xl border border-white/[0.1] bg-[#0c0f17]/95 backdrop-blur-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85),0_0_40px_rgba(245,158,11,0.06)] p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200"
         >
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gold-100 opacity-90" />
-          
-          {/* Scrollable Container — shows 8 items, less hidden */}
-          <div className="p-1.5 max-h-[360px] overflow-y-auto scroll-smooth divide-y divide-surface-700/30">
-            {secondaryLinks.map((link) => {
-              const Icon = link.icon;
-              const active = pathname === link.href || pathname.startsWith(link.href + '/');
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMoreOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200',
-                    active
-                      ? 'text-accent-300 bg-accent-500/20 font-bold'
-                      : 'text-surface-300 hover:text-white hover:bg-surface-700/60'
-                  )}
-                >
-                  <Icon className="w-4 h-4 text-accent-400 shrink-0" />
-                  <span className="truncate">{link.label}</span>
-                </Link>
-              );
-            })}
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
+          <div className="absolute top-0 left-1/4 w-96 h-32 bg-sky-500/10 rounded-full blur-[90px] pointer-events-none" />
+
+          {/* Header of the Mega Menu */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-white/[0.08] gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <h3 className="text-base font-black text-white">دليل خدمات ومنصة JO Cars الشاملة</h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">تصفح كافة الأدوات، الحاسبات، الخدمات، ومجتمع السيارات في المملكة</p>
+            </div>
+            <Link
+              href="/cars"
+              onClick={() => setMoreOpen(false)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors w-fit"
+            >
+              <span>تصفح كافة السيارات المعروضة</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
-          {/* Gradual Scroll Indicator Footer */}
-          <div className="px-3 py-1.5 bg-surface-900/90 border-t border-surface-700/60 text-[10px] font-bold text-surface-400 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-gold-100">
-              <ChevronDown className="w-3.5 h-3.5 animate-bounce" /> مرر لأسفل لرؤية باقي الصفحات
-            </span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-700 text-surface-300">
-              {secondaryLinks.length} صفحة
-            </span>
+          {/* 4 Categorized Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {megaMenuCategories.map((cat, idx) => (
+              <div key={idx} className="space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                  <h4 className="text-xs font-black text-slate-200 tracking-wider uppercase">{cat.title}</h4>
+                  <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', cat.badgeColor)}>
+                    {cat.badge}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  {cat.items.map((item) => {
+                    const Icon = item.icon;
+                    const active = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMoreOpen(false)}
+                        className={cn(
+                          'group flex items-start gap-3 p-2.5 rounded-xl transition-all duration-200 border border-transparent',
+                          active
+                            ? 'bg-amber-400/10 border-amber-400/20 text-amber-300'
+                            : 'hover:bg-white/[0.04] hover:border-white/[0.06] text-slate-300 hover:text-white'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors mt-0.5',
+                          active
+                            ? 'bg-amber-400/20 text-amber-400'
+                            : 'bg-white/[0.04] text-slate-400 group-hover:text-amber-400 group-hover:bg-amber-400/10'
+                        )}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-100 group-hover:text-amber-300 transition-colors truncate">
+                            {item.label}
+                          </p>
+                          <p className="text-[11px] text-slate-400 leading-snug line-clamp-1 mt-0.5">
+                            {item.desc}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick Footer Banner */}
+          <div className="mt-6 pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-white/[0.02] -mx-6 -mb-6 p-4 rounded-b-3xl">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-slate-300">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                فحص موثوق 100%
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-300">
+                <Bot className="w-4 h-4 text-cyan-400" />
+                مدعوم بالذكاء الاصطناعي
+              </span>
+            </div>
+            <button
+              onClick={() => setMoreOpen(false)}
+              className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+            >
+              إغلاق القائمة (Esc)
+            </button>
           </div>
         </div>
       )}
 
-      {/* User dropdown */}
+      {/* User Dropdown */}
       {userMenuOpen && isAuthenticated && (
         <div
           ref={userMenuRef}
-          className="fixed z-[70] w-64 rounded-xl border border-surface-700/60 bg-surface-800 shadow-soft-xl overflow-hidden"
+          className="fixed top-[4.75rem] left-4 sm:left-12 z-[70] w-72 rounded-2xl border border-white/[0.1] bg-[#0c0f17]/95 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-2 animate-in fade-in zoom-in-95 duration-150 overflow-hidden"
         >
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gold-100 opacity-80" />
-            <div className="p-4 border-b border-surface-700/50 bg-accent-500/5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-accent-600 flex items-center justify-center text-white text-sm font-bold ring-2 ring-gold-100/20">
-                  {user?.image ? (
-                    <img src={user.image} alt="" className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    user?.name?.charAt(0) || 'U'
+          <div className="p-3 border-b border-white/[0.08] mb-2 bg-gradient-to-r from-amber-500/10 to-transparent rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-sm shadow-md shadow-amber-500/20 overflow-hidden">
+                {user?.image ? (
+                  <img src={user.image} alt="" className="w-10 h-10 rounded-xl object-cover" />
+                ) : (
+                  user?.name?.charAt(0) || 'U'
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-white text-sm truncate">{user?.name}</p>
+                  {user?.role === 'ADMIN' && (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      مدير
+                    </span>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-surface-200 text-sm truncate flex items-center gap-1.5">
-                    {user?.name}
-                    {user?.role === 'ADMIN' && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400">مدير</span>
-                    )}
-                  </p>
-                  <p className="text-xs text-surface-500 truncate">{user?.email}</p>
-                </div>
+                <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email}</p>
               </div>
             </div>
-            <div className="p-1.5 max-h-[300px] overflow-y-auto">
-              {desktopUserMenuItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium text-surface-400 hover:bg-surface-700/50 transition-all duration-200"
-                  >
-                    <span className="flex items-center gap-3">
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </span>
-                    {item.badge ? (
-                      <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-accent-500 text-white text-[10px] font-bold flex items-center justify-center">
-                        {item.badge}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-              {user?.role === 'ADMIN' && (
-                <Link
-                  href="/admin"
-                  onClick={() => setUserMenuOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-surface-400 hover:bg-surface-700/50 transition-all duration-200"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  لوحة التحكم
-                </Link>
-              )}
-            </div>
-            <div className="p-1.5 border-t border-surface-700/50">
-              <button
-                onClick={() => { logout(); setUserMenuOpen(false); }}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-error-400 hover:bg-error-500/10 w-full transition-all duration-200"
-              >
-                <LogOut className="w-4 h-4" />
-                تسجيل خروج
-              </button>
-            </div>
           </div>
+
+          <div className="space-y-0.5">
+            {desktopUserMenuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Icon className="w-4 h-4 text-slate-400" />
+                    {item.label}
+                  </span>
+                  {item.badge ? (
+                    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold flex items-center justify-center">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+
+            {user?.role === 'ADMIN' && (
+              <Link
+                href="/admin"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-amber-300 hover:bg-amber-400/10 transition-all duration-150 border-t border-white/[0.06] mt-1 pt-2"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                لوحة تحكم الإدارة العامة
+              </Link>
+            )}
+          </div>
+
+          <div className="border-t border-white/[0.08] mt-2 pt-1.5">
+            <button
+              onClick={() => { logout(); setUserMenuOpen(false); }}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 w-full transition-all duration-150 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              تسجيل الخروج
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

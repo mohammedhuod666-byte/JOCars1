@@ -5,7 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const post = await prisma.forumPost.findUnique({ where: { id }, include: { topic: { select: { id: true } } } });
   if (!post) return Response.json({ error: 'الرد غير موجود' }, { status: 404 });

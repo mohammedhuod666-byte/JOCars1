@@ -29,10 +29,11 @@ export async function PUT(request: NextRequest) {
   if (!user || user.role !== 'ADMIN') return unauthorizedResponse();
 
   try {
-    await prisma.notification.updateMany({
-      where: { userId: user.id, read: false },
-      data: { read: true },
-    });
+    // HTTP adapter لا يدعم updateMany — UPDATE شرطي واحد ذري (نفس WHERE).
+    await prisma.$executeRaw`
+      UPDATE "notifications" SET "read" = true
+      WHERE "userId" = ${user.id} AND "read" = false
+    `;
 
     return successResponse({ updated: true, message: 'تم تحديد الكل كمقروء' });
   } catch (error) {

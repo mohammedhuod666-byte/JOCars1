@@ -764,8 +764,9 @@ ${conversationContext}
       ...conversation.slice(-4).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
-    // ── Check cache before calling NVIDIA API ──
-    const cachedResponse = getCachedResponse(normalizedQuery, intent);
+    // ── Check cache before calling NVIDIA API (only for static FAQs, not dynamic queries) ──
+    const isDynamicQuery = query.length > 5 || /[؟\?]/.test(query);
+    const cachedResponse = isDynamicQuery ? null : getCachedResponse(normalizedQuery, intent);
     let aiResponse = '';
 
     if (cachedResponse) {

@@ -94,16 +94,18 @@ export function normalizeTrim(raw: unknown): string | null {
 }
 
 import type { NormalizedListing } from './types';
-import { extractSpecsFromTitle, sanitizeTrim, drivetrainFromTrim } from './spec-extract';
+import { extractSpecsFromTitle, sanitizeTrim, drivetrainFromTrim, extractArabicVehicleOptions } from './spec-extract';
 
 /** Enrich a listing with title-parsed specs ONLY where structured data is absent. */
 export function enrichFromTitle(l: NormalizedListing, title: string): NormalizedListing {
   const x = extractSpecsFromTitle(title);
+  const opts = extractArabicVehicleOptions(title);
   const prov: Record<string, 'FEED' | 'DERIVED'> = { ...(l.specProvenance || {}) };
   // Phase 5: trim must never hold drivetrain tokens; if it does, the value
   // belongs to drivetrain (and trim stays UNKNOWN instead of polluting matches).
   const xTrim = sanitizeTrim(x.trim);
   if (!l.trim && xTrim) { l.trim = xTrim; prov.trim = 'DERIVED'; }
+  else if (!l.trim && opts.trimLevelAr) { l.trim = opts.trimLevelAr; prov.trim = 'DERIVED'; }
   if (!l.drivetrain && x.trim) {
     const xDrive = drivetrainFromTrim(x.trim);
     if (xDrive) { l.drivetrain = xDrive; prov.drivetrain = 'DERIVED'; }
@@ -120,6 +122,12 @@ export function enrichFromTitle(l: NormalizedListing, title: string): Normalized
     l.conditionCertainty = x.conditionCertainty;
     prov.condition = 'DERIVED';
   }
+  if (opts.rawMatchedTokens.length > 0) {
+    const existing = new Set(l.specs || []);
+    for (const tok of opts.rawMatchedTokens) existing.add(tok);
+    l.specs = Array.from(existing);
+  }
+  (l as any).arabicOptions = opts;
   l.specProvenance = prov;
   return l;
 }

@@ -81,7 +81,7 @@ async function analyzeSoundWithLLM(params: AnalyzeParams): Promise<LLMSoundResul
   "estimatedRepairCost": <رقم بالدينار الأردني - تكلفة الإصلاح التقديرية>,
   "diagnosis": "<تشخيص عربي شامل لحالة المحرك>",
   "recommendations": "<توصيات عربية للصيانة والفحص>",
-  "comparisonResult": "<مقارنة بصوت المحرك لنفس الطراز وال年限>",
+  "comparisonResult": "<مقارنة بصوت المحرك لنفس الطراز وسنة الصنع>",
   "referenceMatch": "<مرجع المقارنة>"
 }`;
 

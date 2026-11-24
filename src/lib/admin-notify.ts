@@ -7,15 +7,18 @@ export async function notifyAdmins(type: string, title: string, message: string,
       select: { id: true },
     });
 
-    await prisma.notification.createMany({
-      data: admins.map(admin => ({
-        type,
-        title,
-        message,
-        userId: admin.id,
-        link: link || null,
-      })),
-    });
+    // HTTP adapter لا يدعم createMany — صفًا صفًا (العدد صغير: أدمن واحد أو اثنان).
+    for (const admin of admins) {
+      await prisma.notification.create({
+        data: {
+          type,
+          title,
+          message,
+          userId: admin.id,
+          link: link || null,
+        },
+      });
+    }
   } catch (err) {
     console.error('Admin notification error:', err);
   }

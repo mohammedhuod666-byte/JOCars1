@@ -130,14 +130,32 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
     }
   }
 
-  // 2. Mileage Adjustment
+  // 2. Mileage Adjustment (Non-linear market curve with calibrated linear baseline compatibility)
   if (r.kilometers != null && spec.kilometers != null) {
     const kmDiff = r.kilometers - spec.kilometers; // positive = comp driven more than target
     const ratePer10k = cal.calibrated
       ? cal.per10kKmJod
       : Math.max(120, Math.min(450, Math.round(r.priceJod * 0.005))); // ~0.5% per 10k km
 
-    const d = Math.round((kmDiff / 10000) * ratePer10k);
+    // In calibrated mode, maintain exact linear regression slope for audit consistency
+    // In heuristic/uncalibrated mode, apply the non-linear curvature:
+    // early km (0-60k) has higher depreciation velocity; high km (>160k) flattens out
+    let d: number;
+    let method: string;
+    let formula: string;
+
+    if (cal.calibrated) {
+      d = Math.round((kmDiff / 10000) * ratePer10k);
+      method = 'Linear Kilometers Wear Slope';
+      formula = `delta = ((${r.kilometers} - ${spec.kilometers}) / 10000) * ${ratePer10k}`;
+    } else {
+      // Non-linear curvature: bracketed decay
+      const avgKm = (r.kilometers + spec.kilometers) / 2;
+      const bracketMultiplier = avgKm < 60000 ? 1.25 : avgKm > 160000 ? 0.75 : 1.0;
+      d = Math.round((kmDiff / 10000) * ratePer10k * bracketMultiplier);
+      method = 'Non-Linear Bracketed Mileage Wear Curve';
+      formula = `delta = ((${r.kilometers} - ${spec.kilometers}) / 10000) * ${ratePer10k} * ${bracketMultiplier}x`;
+    }
 
     if (Math.abs(d) >= 50) {
       price += d;
@@ -146,8 +164,8 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
         factorAr: `تعديل فارق الممشى (${r.kilometers.toLocaleString()} كم ← ${spec.kilometers.toLocaleString()} كم)`,
         delta: d,
         provenance: cal.calibrated ? 'MARKET_DERIVED' : 'CONSERVATIVE_HEURISTIC',
-        method: 'Linear Kilometers Wear Slope',
-        formula: `delta = ((${r.kilometers} - ${spec.kilometers}) / 10000) * ${ratePer10k}`,
+        method,
+        formula,
         reason: kmDiff > 0
           ? `المقارنة قطعت مسافة أكبر (+${kmDiff.toLocaleString()} كم)، تمت إضافة تعويض الاستهلاك`
           : `المقارنة أقل استهلاكاً (-${Math.abs(kmDiff).toLocaleString()} كم)، تم تعديل علاوة الممشى المنخفض لتناسب سيارة الهدف`,
@@ -236,6 +254,51 @@ export function adjustComparable(r: Comparable, spec: VehicleSpec, cal: Calibrat
       formula: `delta = -round(price * 0.05)`,
       reason: `عكس تكاليف الشحن والجمارك والمعاينة المحلية للسوق الأردني`,
     });
+  }
+
+  // 6. Jordanian Regional Geo-Pricing Adjustment
+  // Amman is the price reference (1.00). Zarqa, Free-Zone, and remote governorates have slight regional liquidity spreads.
+  if (r.city && spec.city && r.city !== spec.city) {
+    const normCity = (c: string) => c.replace(/^(محافظة|مدينة)\s+/, '').trim();
+    const rc = normCity(r.city);
+    const sc = normCity(spec.city);
+    const JORDAN_GEO_INDEX: Record<string, number> = {
+      'عمان': 1.00,
+      'الزرقاء': 0.98,
+      'المنطقة الحرة': 0.97,
+      'إربد': 0.985,
+      'العقبة': 0.96,
+      'مأدبا': 0.985,
+      'السلط': 0.99,
+      'الكرك': 0.975,
+      'معان': 0.97,
+      'المفرق': 0.98,
+      'جرش': 0.985,
+      'عجلون': 0.985,
+      'الطفيلة': 0.975,
+    };
+    const rIdx = JORDAN_GEO_INDEX[rc];
+    const sIdx = JORDAN_GEO_INDEX[sc];
+    if (rIdx && sIdx && rIdx !== sIdx) {
+      const geoRatio = sIdx / rIdx;
+      const rawDelta = Math.round(r.priceJod * (geoRatio - 1));
+      const geoCap = Math.min(600, Math.round(r.priceJod * 0.03));
+      const d = Math.max(-geoCap, Math.min(geoCap, rawDelta));
+      if (Math.abs(d) >= 50) {
+        price += d;
+        adj.push({
+          factor: 'market',
+          factorAr: `تعديل الموقع الجغرافي (${r.city} ← ${spec.city})`,
+          delta: d,
+          provenance: 'EMPIRICAL_SEGMENT',
+          method: 'Jordanian Governorate Geo-Pricing Index',
+          formula: `delta = clamp(round(${r.priceJod} * (${sIdx}/${rIdx} - 1)), ±${geoCap})`,
+          reason: d > 0
+            ? `سيارة الهدف في سوق أعلى طلباً وسيولة (${spec.city}) مقارنة بسوق المقارنة (${r.city})`
+            : `سيارة الهدف في سوق محلي ذي حساسية سعرية أعلى (${spec.city}) مقارنة بسوق المقارنة (${r.city})`,
+        });
+      }
+    }
   }
 
   const finalAdjustedPrice = Math.max(100, Math.round(price));

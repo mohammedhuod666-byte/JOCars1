@@ -48,8 +48,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const isStaff = user.role === 'ADMIN';
 
-    const message = await prisma.ticketMessage.create({
+    // PrismaNeonHTTP: a write + include runs INSERT and SELECT in one implicit
+    // transaction, which the HTTP adapter rejects. Write first (select only),
+    // then read the relation separately (reads with include are fine).
+    const created = await prisma.ticketMessage.create({
       data: { content, ticketId: id, userId: user.id, isStaff },
+      select: { id: true },
+    });
+    const message = await prisma.ticketMessage.findUnique({
+      where: { id: created.id },
       include: { user: { select: { id: true, name: true, role: true, image: true } } },
     });
 
@@ -98,9 +105,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (Object.keys(updateData).length === 0) return errorResponse('لا توجد تغييرات');
 
-    const updated = await prisma.ticket.update({
+    // Same HTTP-adapter rule: update without include, then read with include.
+    await prisma.ticket.update({
       where: { id },
       data: updateData,
+    });
+    const updated = await prisma.ticket.findUnique({
+      where: { id },
       include: {
         user: { select: { id: true, name: true, email: true } },
         assignee: { select: { id: true, name: true } },

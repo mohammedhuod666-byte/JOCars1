@@ -730,14 +730,16 @@ export default function MessagesContent() {
                                     <img
                                       src={imageUrl}
                                       alt="مرفق صورة"
-                                      className="max-w-[260px] sm:max-w-[320px] max-h-[300px] rounded-2xl cursor-pointer hover:opacity-90 transition-all shadow-md border border-gray-200 dark:border-gray-700 object-cover"
+                                      className={`max-w-[260px] sm:max-w-[320px] max-h-[300px] rounded-2xl cursor-pointer hover:opacity-90 transition-all shadow-md border border-gray-200 dark:border-gray-700 object-cover ${
+                                        isMine ? 'rounded-bl-none' : 'rounded-br-none'
+                                      }`}
                                       onClick={() => setViewerImage(imageUrl)}
                                     />
                                     {text && (
                                       <div className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium leading-relaxed shadow-sm ${
                                         isMine
-                                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none'
-                                          : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700/60 rounded-bl-none'
+                                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-bl-none'
+                                          : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700/60 rounded-br-none'
                                       }`}>
                                         <p>{text}</p>
                                       </div>
@@ -746,8 +748,8 @@ export default function MessagesContent() {
                                 ) : (
                                   <div className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-medium leading-relaxed shadow-sm ${
                                     isMine
-                                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-none'
-                                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700/60 rounded-bl-none'
+                                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-bl-none shadow-emerald-900/10'
+                                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700/60 rounded-br-none'
                                   }`}>
                                     <p>{text}</p>
                                   </div>

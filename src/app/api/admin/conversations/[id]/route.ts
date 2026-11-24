@@ -48,7 +48,8 @@ export async function POST(
     const conversation = await prisma.conversation.findUnique({ where: { id } });
     if (!conversation) return notFoundResponse('المحادثة');
 
-    const message = await prisma.message.create({
+    // HTTP adapter: write without include, then read relations separately.
+    const createdMsg = await prisma.message.create({
       data: {
         content: body.content,
         senderId: user.id,
@@ -56,8 +57,12 @@ export async function POST(
         carId: conversation.carId,
         conversationId: conversation.id,
       },
+    });
+    const message = await prisma.message.findUnique({
+      where: { id: createdMsg.id },
       include: { sender: { select: { id: true, name: true, image: true, role: true } } },
     });
+    if (!message) return errorResponse('فشل إضافة الرد', 500);
 
     await prisma.conversation.update({
       where: { id },

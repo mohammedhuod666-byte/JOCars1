@@ -93,6 +93,20 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const carId = request.nextUrl.searchParams.get('carId');
   if (!carId) return errorResponse('carId مطلوب', 400);
+  
+  // Check if user is authenticated — valuation is strictly members-only
+  const user = await authenticateRequest(request).catch(() => null);
+  if (!user) {
+    return successResponse({
+      status: 'REQUIRES_AUTH',
+      requiresAuth: true,
+      message: 'ميزة تقرير التقييم العادل وتحليل السوق بالذكاء الاصطناعي مخصصة للأعضاء المسجلين فقط.',
+      section24: null,
+      latest: null,
+      history: [],
+    });
+  }
+  
   try {
     const [s24, history] = await Promise.all([
       runIntelligenceValuation({ carId }),
@@ -105,6 +119,8 @@ export async function GET(request: NextRequest) {
         section24: s24,
         latest: null,
         history,
+        requiresAuth: true,
+        message: s24.warnings[0] || 'البيانات غير كافية لإنتاج تقييم عادل',
       });
     }
 
@@ -134,6 +150,7 @@ export async function GET(request: NextRequest) {
       section24: s24,
       latest,
       history,
+      requiresAuth: !s24.fairMarketValue,
     });
   } catch (err: any) {
     return errorResponse(err?.message || 'فشل التحميل', 500);

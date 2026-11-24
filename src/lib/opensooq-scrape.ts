@@ -53,7 +53,7 @@ export interface OpenSooqResult {
   /** Why no stats were computed, when stats is null. */
   note?: string;
   /** The page returned by OpenSooq (always the latest ~14 featured). */
-  source: 'السوق المفتوح (مباشر)';
+  source: 'سوق السيارات المحلي (مباشر)';
   error?: string;
 }
 
@@ -302,7 +302,7 @@ function toListing(item: Record<string, unknown>): OpenSooqListing {
     .replace(/jo\.opensooq\.com\/(?:en|ar)?\/?post\//, 'jo.opensooq.com/ar/search/');
 
   return {
-    site: 'السوق المفتوح',
+    site: 'سوق السيارات المحلي',
     url: listingUrl,
     price,
     year: parseYear(cps, title),
@@ -397,7 +397,7 @@ export async function fetchOpenSooqListings(brand: string, model: string, year?:
     // We have at least 3 same-brand listings (may be different model)
     // — keep them as a softer market reference but flag the caveat.
     statsSource = brandMatched;
-    note = `إعلانات السوق المفتوح لنفس العلامة (${brandMatched.length} إعلان) — لم يكف عدد إعلانات نفس الموديل للوصول إلى 3.`;
+    note = `إعلانات السوق المحلي لنفس العلامة (${brandMatched.length} إعلان) — لم يكف عدد إعلانات نفس الموديل للوصول إلى 3.`;
   }
 
   const prices = statsSource.map((l) => l.price);
@@ -410,7 +410,7 @@ export async function fetchOpenSooqListings(brand: string, model: string, year?:
   } : null;
 
   // Listings returned for UI: prefer same-brand, fallback to all sane so the
-  // user still gets real OpenSooq URLs to browse even if no exact matches exist.
+  // user still gets real URLs to browse even if no exact matches exist.
   const uiListings = brandMatched.length > 0 ? brandMatched : sane;
 
   const result: OpenSooqResult = {
@@ -421,7 +421,7 @@ export async function fetchOpenSooqListings(brand: string, model: string, year?:
     brandMatchedListings: brandMatched,
     totalFetched: sane.length,
     note,
-    source: 'السوق المفتوح (مباشر)',
+    source: 'سوق السيارات المحلي (مباشر)',
   };
 
   cache.set(cacheKey, { ts: Date.now(), data: result });

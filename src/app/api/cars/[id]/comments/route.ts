@@ -33,10 +33,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return errorResponse('تم حظرك من التعليق', 403);
     }
 
-    const comment = await prisma.carComment.create({
+    // HTTP adapter: write without include, then read relations separately.
+    const createdComment = await prisma.carComment.create({
       data: { content: content.trim(), carId: id, userId: user.id },
+    });
+    const comment = await prisma.carComment.findUnique({
+      where: { id: createdComment.id },
       include: { user: { select: { id: true, name: true, image: true, role: true, phoneVerified: true } } },
     });
+    if (!comment) return errorResponse('فشل إضافة التعليق', 500);
     await createAuditLog({
       action: 'ADD_COMMENT', actorId: user.id,
       entityType: 'CAR_COMMENT', entityId: comment.id,

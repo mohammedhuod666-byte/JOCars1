@@ -439,7 +439,7 @@ ${avgPrice > 0 ? `- متوسط السوق: **${avgPrice.toLocaleString()} د.أ*
 - عدد الإعلانات المشابهة: **${listingCount}** إعلان
 - تقييم السعر: **${priceVerdictEmoji} ${priceVerdict}**
 - الفرق عن المتوسط: **${priceDiffPercent > 0 ? '+' : ''}${priceDiffPercent}%**
-${marketStats ? `- مصدر البيانات: السوق المفتوح (OpenSooq) + الموقع` : '- مصدر البيانات: الموقع فقط (بيانات محدودة)'}` : '- لا توجد بيانات كافية لتحليل السعر'}
+${marketStats ? `- مصدر البيانات: سوق السيارات الأردني المحلي + منصة كارس جو` : '- مصدر البيانات: منصة كارس جو فقط (بيانات الإعلانات المسجلة)'}` : '- لا توجد بيانات كافية لتحليل السعر'}
 
 ${similarCars.length > 0 ? `\n🔄 **سيارات مشابهة في الموقع:**\n${similarCars.map((s, i) => `${i + 1}. ${s.brand?.nameAr || ''} ${s.model?.nameAr || ''} ${s.year} — ${s.price?.toLocaleString() || 'غير محدد'} د.أ | ${s.city?.nameAr || ''}`).join('\n')}` : ''}
 
@@ -557,7 +557,7 @@ ${conversationContext}
 10. **شرح الموقع** — إذا سأل المستخدم عن أي ميزة أو صفحة، أجب بشكل شامل مع روابط مباشرة.
 11. **أمثلة عملية** — عند شرح أي ميزة، أعطِ مثالاً عملياً كيف يستخدمها.
 12. **البحث باللغة الطبيعية** — إذا فهمت البحث من كلام المستخدم الطبيعي، استخدم النتائج المفلترة واعرضها بوضوح.
-13. **البحث في السوق المفتوح** — **أنت تقدر تبحث في السوق المفتوح** — البيانات تأتي تلقائياً. لا تقل "لا أستطيع البحث" أو "لا أملك إمكانية البحث الخارجي". إذا لم تتوفر البيانات بسبب التكنولوجيا، قل: "بيانات السوق المفتوح غير متوفرة حالياً".
+13. **البحث في سوق السيارات الأردني** — **أنت تبحث في سوق السيارات الأردني العام والمنصات المحلية** — البيانات تأتي تلقائياً. لا تقل "لا أستطيع البحث" أو "لا أملك إمكانية البحث الخارجي". إذا لم تتوفر البيانات، قل: "بيانات سوق السيارات المحلي غير متوفرة حالياً".
 16. **تستطيع البحث مواقع اردنية واعلانات لسيارات في الفيس بوك او اي موقع يعرض سيارات من اجل ان يكون لديك اعلان كثيرة من سيارات وتقدر تفيد المستخدم قدر الامكان ابحث قارن عبر الانترنت بين السيارات من اجل ان تكون  لديك معلومات وسيارات كثيرة ليحصل المستخدم اكبر قدر ممكن من الاسفادة**
 17. **إذا ما لقيت سيارة نفس موديل ونوع سياة يلي طلبها مستخدم لكن ما قدرت توجد بنفس عدد كيلومترات ومواصفات عامة لسيارة تقدر تعطي مستخدم متوسط سعر سيارة العام في السوق بغضي النظر عن كم ماشيه كيلوميترات والمواصفات العامة الاخرى**
 14. **اسم المستخدم — مطلوب في كل رد** — **إلزامي**: إذا كان اسم المستخدم معروضاً في معلومات المستخدم، **يجب** استخدام اسمه في كل رد. مثال: "أهلاً [الاسم]!" أو "حسناً [الاسم]، إليك الإجابة...". لا تكرر الاسم أكثر من مرة واحدة في كل رد.
@@ -623,20 +623,30 @@ export async function POST(request: NextRequest) {
       const answer = query.trim();
       const step = activeCarFlow.step;
 
-      // Allow cancel at any step
-      if (/^(إلغاء|الغاء|cancel|وقف|stop)$/i.test(answer)) {
+      // Allow cancel at any step, OR if user changes topic / asks an informative question
+      const isCancellation = /^(إلغاء|الغاء|cancel|وقف|stop|خروج)$/i.test(answer);
+      const isQuestionOrTopicChange =
+        /[؟\?]/.test(answer) ||
+        /^(شو|ايش|مين|كيف|ليش|لماذا|هل|وين|أين|كم سعر|احكيلي|نصيحة|افضل|أفضل|سؤال|مرحبا|السلام|مساء|صباح)/i.test(answer) ||
+        answer.length > 40;
+
+      if (isCancellation) {
         carFlowStore.delete(sid);
-        const cancelMsg = '❌ تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت.';
+        const cancelMsg = '❌ تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت، كيف أقدر أساعدك اليوم؟';
         conversation.push({ role: 'assistant', content: cancelMsg });
         conversationStore.set(sid, conversation);
         return Response.json({
           success: true,
-          data: { message: cancelMsg, cars: [], intent: 'car_listing', suggestions: ['إنشاء إعلان جديد', 'البحث عن سيارة'], sessionId: sid },
+          data: { message: cancelMsg, cars: [], intent: 'general', suggestions: ['أفضل سيارات هايبرد', 'أسعار السوق', 'إنشاء إعلان جديد'], sessionId: sid },
         });
       }
 
-      // Handle each step
-      if (step === 'brand') {
+      if (isQuestionOrTopicChange) {
+        // User changed topic or asked a question — exit car flow so LLM answers natively!
+        carFlowStore.delete(sid);
+      } else {
+        // Handle each step
+        if (step === 'brand') {
         activeCarFlow.data.brand = answer;
         const next = getCarFlowNextStep(step);
         if (next) { activeCarFlow.step = next; }
@@ -808,6 +818,7 @@ export async function POST(request: NextRequest) {
         return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
       }
     }
+  }
 
     // ── REF CODE LOOKUP: fast path (non-streaming) ──
     if (intent === 'ref_code' && refCode) {
@@ -1038,8 +1049,9 @@ export async function POST(request: NextRequest) {
       ...conversation.slice(-4).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
     ];
 
-    // ── Check cache first ──
-    const cachedResponse = getCachedResponse(normalizedQuery, intent);
+    // ── Check cache first (only for static FAQs, never dynamic queries) ──
+    const isDynamicQuery = query.length > 5 || /[؟\?]/.test(query);
+    const cachedResponse = isDynamicQuery ? null : getCachedResponse(normalizedQuery, intent);
 
     // ── Create SSE stream ──
     const encoder = new TextEncoder();

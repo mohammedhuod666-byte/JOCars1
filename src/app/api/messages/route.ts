@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
       msgData.conversationId = conversationId;
     }
 
-    const message = await prisma.message.create({
+    // Neon HTTP: create bare record first, then fetch with relations
+    const bareMsg = await prisma.message.create({
       data: msgData as {
         content: string;
         senderId: string;
@@ -76,23 +77,35 @@ export async function POST(request: NextRequest) {
         carId?: string;
         conversationId?: string;
       },
+    });
+
+    const message = await prisma.message.findUnique({
+      where: { id: bareMsg.id },
       include: {
         sender: { select: { id: true, name: true, image: true } },
         car: { select: { id: true, slug: true } },
       },
     });
 
+    if (!message) {
+      return errorResponse('تعذر إرسال الرسالة', 500);
+    }
+
     // Touch conversation
     if (conversationId) {
       await prisma.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
-      });
+      }).catch(() => {});
 
       // Realtime fan-out (Ably, server-side): every participant — including
       // the sender's other devices — receives exactly one copy of the
       // persisted message. Best-effort: never blocks/fails the send itself.
-      publishConversationEvent(conversationId, 'message-received', message);
+      try {
+        publishConversationEvent(conversationId, 'message-received', message);
+      } catch (evtErr) {
+        console.warn('Realtime event publish failed (non-blocking):', evtErr);
+      }
     }
 
     // Notification — detect image messages (IMG: prefix) or legacy emoji prefix
@@ -108,34 +121,41 @@ export async function POST(request: NextRequest) {
         userId: validation.data.receiverId,
         link: `/messages?conversationId=${conversationId || ''}`,
       },
-    });
+    }).catch(() => {});
 
-    const receiver = await prisma.user.findUnique({
-      where: { id: validation.data.receiverId },
-      select: { whatsapp: true, whatsappNotifications: true, name: true },
-    });
+    try {
+      const receiver = await prisma.user.findUnique({
+        where: { id: validation.data.receiverId },
+        select: { whatsapp: true, whatsappNotifications: true, name: true },
+      });
 
-    if (receiver?.whatsapp && receiver?.whatsappNotifications) {
-      const car = message.carId ? await prisma.car.findUnique({
-        where: { id: message.carId! },
-        select: { price: true, brand: { select: { nameAr: true } }, model: { select: { nameAr: true } }, year: true },
-      }) : null;
+      if (receiver?.whatsapp && receiver?.whatsappNotifications) {
+        const car = message.carId ? await prisma.car.findUnique({
+          where: { id: message.carId! },
+          select: { price: true, brand: { select: { nameAr: true } }, model: { select: { nameAr: true } }, year: true },
+        }) : null;
 
-      const carTitle = car ? `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}` : '';
+        const carTitle = car ? `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}` : '';
 
-      sendWhatsApp(receiver.whatsapp, buildCarMessage('new_message', {
-        senderName: user.name,
-        carTitle,
-        carPrice: car?.price,
-        messagePreview: msgPreview,
-        carUrl: message.car?.slug,
-      }));
+        sendWhatsApp(receiver.whatsapp, buildCarMessage('new_message', {
+          senderName: user.name,
+          carTitle,
+          carPrice: car?.price,
+          messagePreview: msgPreview,
+          carUrl: message.car?.slug,
+        }));
+      }
+    } catch (waErr) {
+      console.warn('WhatsApp alert failed (non-blocking):', waErr);
     }
 
-    notifyAdmins('NEW_MESSAGE', 'رسالة جديدة', `رسالة جديدة من ${user.name}: ${msgPreview.slice(0, 80)}`, getAdminNotifyLink('NEW_MESSAGE'));
+    try {
+      notifyAdmins('NEW_MESSAGE', 'رسالة جديدة', `رسالة جديدة من ${user.name}: ${msgPreview.slice(0, 80)}`, getAdminNotifyLink('NEW_MESSAGE'));
+    } catch {}
 
     return successResponse(message, 201);
   } catch (error) {
+    console.error('Message create error:', error);
     return errorResponse('فشل إرسال الرسالة', 500);
   }
 }
@@ -156,10 +176,11 @@ export async function PUT(request: NextRequest) {
     if (access === 'NOT_FOUND') return errorResponse('المحادثة غير موجودة', 404);
     if (access === 'FORBIDDEN') return errorResponse('لا تملك صلاحية الوصول إلى هذه المحادثة', 403);
 
-    await prisma.message.updateMany({
-      where: { conversationId, receiverId: user.id, read: false },
-      data: { read: true },
-    });
+    // HTTP adapter لا يدعم updateMany — UPDATE شرطي واحد ذري (نفس WHERE).
+    await prisma.$executeRaw`
+      UPDATE "messages" SET "read" = true
+      WHERE "conversationId" = ${conversationId} AND "receiverId" = ${user.id} AND "read" = false
+    `;
 
     return successResponse({ updated: true });
   } catch (error) {

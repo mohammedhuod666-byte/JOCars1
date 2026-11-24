@@ -1,6 +1,6 @@
 import prisma from '@/lib/prisma';
 import { sanitizeFeatures } from '@/lib/car-features';
-import { normalizeTargetCondition, sanitizeTrim, drivetrainFromTrim } from './spec-extract';
+import { normalizeTargetCondition, sanitizeTrim, drivetrainFromTrim, extractArabicVehicleOptions } from './spec-extract';
 import type { VehicleSpec } from './types';
 
 export interface BuiltSpec {
@@ -20,13 +20,20 @@ export async function buildSpecFromBody(body: any): Promise<BuiltSpec> {
     // Phase 4: target condition -> normalized conditionScore/provenance.
     // Unknown/absent stays UNKNOWN (null score) — never assumes EXCELLENT.
     const cond = normalizeTargetCondition(car.condition);
+    // Deep inspection of the car listing's text description & trim
+    const descText = `${car.description || ''} ${car.trim || ''}`.trim();
+    const arabicOpts = extractArabicVehicleOptions(descText);
+    const existingSpecs = sanitizeFeatures((car as any).features);
+    const allSpecs = Array.from(new Set([...existingSpecs, ...arabicOpts.rawMatchedTokens]));
+    const effectiveTrim = sanitizeTrim(car.trim) || arabicOpts.trimLevelAr || null;
+
     return {
       carId: car.id,
       targetPrice: typeof body.targetPrice === 'number' ? body.targetPrice : car.price,
       spec: {
         brand: car.brand?.nameAr || '', brandEn: car.brand?.nameEn || null,
         model: car.model?.nameAr || '', modelEn: car.model?.nameEn || null,
-        year: car.year, trim: sanitizeTrim(car.trim), kilometers: car.kilometers,
+        year: car.year, trim: effectiveTrim, kilometers: car.kilometers,
         fuelType: car.fuelType || null, transmission: car.transmission || null,
         drivetrain: (car as any).drivetrain || drivetrainFromTrim(car.trim),
         condition: car.condition || null, city: car.city?.nameAr || null,
@@ -40,7 +47,7 @@ export async function buildSpecFromBody(body: any): Promise<BuiltSpec> {
         bodyType: (car as any).bodyType || null,
         vin: (car as any).vin || null,
         askingPrice: car.price,
-        specs: sanitizeFeatures((car as any).features),
+        specs: allSpecs,
         description: car.description || null,
       },
     };

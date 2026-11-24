@@ -73,85 +73,73 @@ export async function PUT(
       services, brands, prices,
     } = body;
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const updatedWorkshop = await tx.workshop.update({
-        where: { id },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(description !== undefined && { description }),
-          ...(phone !== undefined && { phone }),
-          ...(whatsapp !== undefined && { whatsapp }),
-          ...(email !== undefined && { email }),
-          ...(website !== undefined && { website }),
-          ...(emergencyPhone !== undefined && { emergencyPhone }),
-          ...(address !== undefined && { address }),
-          ...(lat !== undefined && { lat }),
-          ...(lng !== undefined && { lng }),
-          ...(cityId !== undefined && { cityId }),
-          ...(provinceId !== undefined && { provinceId }),
-          ...(logo !== undefined && { logo }),
-          ...(coverImage !== undefined && { coverImage }),
-          ...(gallery !== undefined && { gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : gallery }),
-          ...(workingHours !== undefined && { workingHours }),
-          ...(workingDays !== undefined && { workingDays }),
-          ...(yearsOfExperience !== undefined && { yearsOfExperience: Number(yearsOfExperience) }),
-          ...(employeeCount !== undefined && { employeeCount: Number(employeeCount) }),
-          ...(priceRange !== undefined && { priceRange }),
-          ...(isMobileService !== undefined && { isMobileService: Boolean(isMobileService) }),
-          ...(hasTowingService !== undefined && { hasTowingService: Boolean(hasTowingService) }),
-          ...(hasWarranty !== undefined && { hasWarranty: Boolean(hasWarranty) }),
-          ...(warrantyPeriod !== undefined && { warrantyPeriod }),
-          ...(hasWaitingArea !== undefined && { hasWaitingArea: Boolean(hasWaitingArea) }),
-          ...(offersSpareParts !== undefined && { offersSpareParts: Boolean(offersSpareParts) }),
-          ...(paymentMethods !== undefined && { paymentMethods }),
-          ...(specialties !== undefined && { specialties: Array.isArray(specialties) ? JSON.stringify(specialties) : specialties }),
-          ...(discountOffer !== undefined && { discountOffer }),
-        },
-      });
+    // HTTP adapter لا يدعم المعاملات ولا createMany — ننفّذ بالتتابع:
+    // تعديل الحقول ثم استبدال كل مجموعة (deleteMany ثم إنشاء صفًا صفًا) ثم
+    // إعادة الجلب. لو فشلت أي خطوة لا يوجد roll-back لحقول الورشة، لكن
+    // إعادة المحاولة تلتئم كاملة لأن الاستبدال idempotent (حذف + إنشاء).
+    const updatedWorkshop = await prisma.workshop.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
+        ...(phone !== undefined && { phone }),
+        ...(whatsapp !== undefined && { whatsapp }),
+        ...(email !== undefined && { email }),
+        ...(website !== undefined && { website }),
+        ...(emergencyPhone !== undefined && { emergencyPhone }),
+        ...(address !== undefined && { address }),
+        ...(lat !== undefined && { lat }),
+        ...(lng !== undefined && { lng }),
+        ...(cityId !== undefined && { cityId }),
+        ...(provinceId !== undefined && { provinceId }),
+        ...(logo !== undefined && { logo }),
+        ...(coverImage !== undefined && { coverImage }),
+        ...(gallery !== undefined && { gallery: Array.isArray(gallery) ? JSON.stringify(gallery) : gallery }),
+        ...(workingHours !== undefined && { workingHours }),
+        ...(workingDays !== undefined && { workingDays }),
+        ...(yearsOfExperience !== undefined && { yearsOfExperience: Number(yearsOfExperience) }),
+        ...(employeeCount !== undefined && { employeeCount: Number(employeeCount) }),
+        ...(priceRange !== undefined && { priceRange }),
+        ...(isMobileService !== undefined && { isMobileService: Boolean(isMobileService) }),
+        ...(hasTowingService !== undefined && { hasTowingService: Boolean(hasTowingService) }),
+        ...(hasWarranty !== undefined && { hasWarranty: Boolean(hasWarranty) }),
+        ...(warrantyPeriod !== undefined && { warrantyPeriod }),
+        ...(hasWaitingArea !== undefined && { hasWaitingArea: Boolean(hasWaitingArea) }),
+        ...(offersSpareParts !== undefined && { offersSpareParts: Boolean(offersSpareParts) }),
+        ...(paymentMethods !== undefined && { paymentMethods }),
+        ...(specialties !== undefined && { specialties: Array.isArray(specialties) ? JSON.stringify(specialties) : specialties }),
+        ...(discountOffer !== undefined && { discountOffer }),
+      },
+    });
 
-      if (services && Array.isArray(services)) {
-        await tx.workshopService.deleteMany({ where: { workshopId: id } });
-        if (services.length > 0) {
-          await tx.workshopService.createMany({
-            data: services.map((s: { name: string; category?: string }) => ({
-              workshopId: id,
-              name: s.name,
-              category: s.category || null,
-            })),
-          });
-        }
+    if (services && Array.isArray(services)) {
+      await prisma.workshopService.deleteMany({ where: { workshopId: id } });
+      for (const s of services) {
+        await prisma.workshopService.create({
+          data: { workshopId: id, name: s.name, category: s.category || null },
+        });
       }
+    }
 
-      if (brands && Array.isArray(brands)) {
-        await tx.workshopBrand.deleteMany({ where: { workshopId: id } });
-        if (brands.length > 0) {
-          await tx.workshopBrand.createMany({
-            data: brands.map((b: { brand: string }) => ({
-              workshopId: id,
-              brand: b.brand,
-            })),
-          });
-        }
+    if (brands && Array.isArray(brands)) {
+      await prisma.workshopBrand.deleteMany({ where: { workshopId: id } });
+      for (const b of brands) {
+        await prisma.workshopBrand.create({ data: { workshopId: id, brand: b.brand } });
       }
+    }
 
-      if (prices && Array.isArray(prices)) {
-        await tx.workshopPrice.deleteMany({ where: { workshopId: id } });
-        if (prices.length > 0) {
-          await tx.workshopPrice.createMany({
-            data: prices.map((p: { serviceName: string; minPrice: number; maxPrice: number }) => ({
-              workshopId: id,
-              serviceName: p.serviceName,
-              minPrice: p.minPrice,
-              maxPrice: p.maxPrice,
-            })),
-          });
-        }
+    if (prices && Array.isArray(prices)) {
+      await prisma.workshopPrice.deleteMany({ where: { workshopId: id } });
+      for (const p of prices) {
+        await prisma.workshopPrice.create({
+          data: { workshopId: id, serviceName: p.serviceName, minPrice: p.minPrice, maxPrice: p.maxPrice },
+        });
       }
+    }
 
-      return tx.workshop.findUnique({
-        where: { id },
-        include: { services: true, brands: true, prices: true },
-      });
+    const updated = await prisma.workshop.findUnique({
+      where: { id },
+      include: { services: true, brands: true, prices: true },
     });
 
     return successResponse(updated);

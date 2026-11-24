@@ -55,6 +55,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { carId, sellerId, content, bookingId } = body;
 
+    const fullConversationInclude = {
+      car: { select: { id: true, slug: true, price: true, images: { take: 1, orderBy: { order: 'asc' as const } } } },
+      buyer: { select: { id: true, name: true, image: true } },
+      seller: { select: { id: true, name: true, image: true } },
+    };
+
     // Booking-linked path — when `bookingId` is supplied we resolve
     // carId/buyerId/sellerId from the booking record (authoritative), and
     // reuse the conversation that the dealer's accept-flow already created
@@ -73,15 +79,13 @@ export async function POST(request: NextRequest) {
       }
       const peerId = booking.buyerId === user.id ? booking.dealerId : booking.buyerId;
 
-      let conversation = await prisma.conversation.findUnique({
-        where: { carId_buyerId_sellerId: {
-          carId: booking.carId, buyerId: booking.buyerId, sellerId: booking.dealerId,
-        } },
-        include: {
-          car: { select: { id: true, slug: true, price: true, images: { take: 1, orderBy: { order: 'asc' } } } },
-          buyer: { select: { id: true, name: true, image: true } },
-          seller: { select: { id: true, name: true, image: true } },
+      let conversation = await prisma.conversation.findFirst({
+        where: {
+          carId: booking.carId,
+          buyerId: booking.buyerId,
+          sellerId: booking.dealerId,
         },
+        include: fullConversationInclude,
       });
 
       // Stitch an existing unlinked conversation back to the booking (idempotent).
@@ -93,21 +97,27 @@ export async function POST(request: NextRequest) {
       }
 
       if (!conversation) {
-        conversation = await prisma.conversation.create({
+        // Neon HTTP: create bare record first, then fetch with relations
+        const bare = await prisma.conversation.create({
           data: {
-            carId: booking.carId, buyerId: booking.buyerId, sellerId: booking.dealerId,
+            carId: booking.carId,
+            buyerId: booking.buyerId,
+            sellerId: booking.dealerId,
             bookingId: booking.id,
           },
-          include: {
-            car: { select: { id: true, slug: true, price: true, images: { take: 1, orderBy: { order: 'asc' } } } },
-            buyer: { select: { id: true, name: true, image: true } },
-            seller: { select: { id: true, name: true, image: true } },
-          },
+        });
+        conversation = await prisma.conversation.findUnique({
+          where: { id: bare.id },
+          include: fullConversationInclude,
         });
       }
 
+      if (!conversation) {
+        return errorResponse('تعذر تجهيز المحادثة', 500);
+      }
+
       if (content && content.trim()) {
-        const message = await prisma.message.create({
+        const bareMsg = await prisma.message.create({
           data: {
             content: content.trim(),
             senderId: user.id,
@@ -115,6 +125,10 @@ export async function POST(request: NextRequest) {
             carId: conversation.carId,
             conversationId: conversation.id,
           },
+        });
+
+        const message = await prisma.message.findUnique({
+          where: { id: bareMsg.id },
           include: { sender: { select: { id: true, name: true, image: true } } },
         });
 
@@ -123,7 +137,7 @@ export async function POST(request: NextRequest) {
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: { updatedAt: new Date() },
-        });
+        }).catch(() => {});
 
         await prisma.notification.create({
           data: {
@@ -169,14 +183,35 @@ export async function POST(request: NextRequest) {
         });
 
         if (!conversation) {
-          conversation = await prisma.conversation.create({
-            data: { carId: null, buyerId: user.id, sellerId },
-            include: dmInclude,
-          });
+          try {
+            const bare = await prisma.conversation.create({
+              data: { carId: null, buyerId: user.id, sellerId },
+            });
+            conversation = await prisma.conversation.findUnique({
+              where: { id: bare.id },
+              include: dmInclude,
+            });
+          } catch {
+            // Concurrent race condition fallback
+            conversation = await prisma.conversation.findFirst({
+              where: {
+                carId: null,
+                OR: [
+                  { buyerId: user.id, sellerId },
+                  { buyerId: sellerId, sellerId: user.id },
+                ],
+              },
+              include: dmInclude,
+            });
+          }
+        }
+
+        if (!conversation) {
+          return errorResponse('تعذر تجهيز المحادثة', 500);
         }
 
         if (content && content.trim()) {
-          const message = await prisma.message.create({
+          const bareMsg = await prisma.message.create({
             data: {
               content: content.trim(),
               senderId: user.id,
@@ -184,6 +219,10 @@ export async function POST(request: NextRequest) {
               carId: null,
               conversationId: conversation.id,
             },
+          });
+
+          const message = await prisma.message.findUnique({
+            where: { id: bareMsg.id },
             include: {
               sender: { select: { id: true, name: true, image: true } },
             },
@@ -194,7 +233,7 @@ export async function POST(request: NextRequest) {
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: { updatedAt: new Date() },
-          });
+          }).catch(() => {});
 
           await prisma.notification.create({
             data: {
@@ -204,7 +243,7 @@ export async function POST(request: NextRequest) {
               userId: sellerId,
               link: `/messages?conversationId=${conversation.id}`,
             },
-          });
+          }).catch(() => {});
 
           return successResponse({ conversation, message }, 201);
         }
@@ -218,28 +257,47 @@ export async function POST(request: NextRequest) {
       return errorResponse('لا يمكنك مراسلة نفسك');
     }
 
-    let conversation = await prisma.conversation.findUnique({
-      where: { carId_buyerId_sellerId: { carId, buyerId: user.id, sellerId } },
-      include: {
-        car: { select: { id: true, slug: true, price: true, images: { take: 1, orderBy: { order: 'asc' } } } },
-        buyer: { select: { id: true, name: true, image: true } },
-        seller: { select: { id: true, name: true, image: true } },
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        carId,
+        OR: [
+          { buyerId: user.id, sellerId },
+          { buyerId: sellerId, sellerId: user.id },
+        ],
       },
+      include: fullConversationInclude,
     });
 
     if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: { carId, buyerId: user.id, sellerId },
-        include: {
-          car: { select: { id: true, slug: true, price: true, images: { take: 1, orderBy: { order: 'asc' } } } },
-          buyer: { select: { id: true, name: true, image: true } },
-          seller: { select: { id: true, name: true, image: true } },
-        },
-      });
+      try {
+        const bare = await prisma.conversation.create({
+          data: { carId, buyerId: user.id, sellerId },
+        });
+        conversation = await prisma.conversation.findUnique({
+          where: { id: bare.id },
+          include: fullConversationInclude,
+        });
+      } catch {
+        // Fallback for concurrent creation race condition
+        conversation = await prisma.conversation.findFirst({
+          where: {
+            carId,
+            OR: [
+              { buyerId: user.id, sellerId },
+              { buyerId: sellerId, sellerId: user.id },
+            ],
+          },
+          include: fullConversationInclude,
+        });
+      }
+    }
+
+    if (!conversation) {
+      return errorResponse('تعذر تجهيز المحادثة', 500);
     }
 
     if (content && content.trim()) {
-      const message = await prisma.message.create({
+      const bareMsg = await prisma.message.create({
         data: {
           content: content.trim(),
           senderId: user.id,
@@ -247,6 +305,10 @@ export async function POST(request: NextRequest) {
           carId,
           conversationId: conversation.id,
         },
+      });
+
+      const message = await prisma.message.findUnique({
+        where: { id: bareMsg.id },
         include: {
           sender: { select: { id: true, name: true, image: true } },
         },
@@ -257,7 +319,7 @@ export async function POST(request: NextRequest) {
       await prisma.conversation.update({
         where: { id: conversation.id },
         data: { updatedAt: new Date() },
-      });
+      }).catch(() => {});
 
       await prisma.notification.create({
         data: {
@@ -267,27 +329,31 @@ export async function POST(request: NextRequest) {
           userId: sellerId,
           link: `/messages?conversationId=${conversation.id}`,
         },
-      });
+      }).catch(() => {});
 
-      const seller = await prisma.user.findUnique({
-        where: { id: sellerId },
-        select: { whatsapp: true, whatsappNotifications: true },
-      });
-
-      if (seller?.whatsapp && seller?.whatsappNotifications) {
-        const car = await prisma.car.findUnique({
-          where: { id: carId },
-          select: { price: true, brand: { select: { nameAr: true } }, model: { select: { nameAr: true } }, year: true },
+      try {
+        const seller = await prisma.user.findUnique({
+          where: { id: sellerId },
+          select: { whatsapp: true, whatsappNotifications: true },
         });
 
-        const carTitle = car ? `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}` : '';
+        if (seller?.whatsapp && seller?.whatsappNotifications) {
+          const car = await prisma.car.findUnique({
+            where: { id: carId },
+            select: { price: true, brand: { select: { nameAr: true } }, model: { select: { nameAr: true } }, year: true },
+          });
 
-        sendWhatsApp(seller.whatsapp, buildCarMessage('new_conversation', {
-          senderName: user.name,
-          carTitle,
-          carPrice: car?.price,
-          messagePreview: content?.slice(0, 100),
-        }));
+          const carTitle = car ? `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}` : '';
+
+          sendWhatsApp(seller.whatsapp, buildCarMessage('new_conversation', {
+            senderName: user.name,
+            carTitle,
+            carPrice: car?.price,
+            messagePreview: content?.slice(0, 100),
+          }));
+        }
+      } catch (waErr) {
+        console.warn('WhatsApp alert failed (non-blocking):', waErr);
       }
 
       return successResponse({ conversation, message }, 201);
@@ -295,6 +361,7 @@ export async function POST(request: NextRequest) {
 
     return successResponse({ conversation, message: null });
   } catch (error) {
+    console.error('Conversation create/fetch error:', error);
     return errorResponse('فشل إنشاء المحادثة', 500);
   }
 }

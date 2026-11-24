@@ -11,7 +11,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       user: { select: { id: true, name: true, image: true, dealerName: true, rating: true, ratingCount: true, phoneVerified: true } },
       category: { select: { id: true, nameAr: true, nameEn: true, slug: true, icon: true, color: true } },
       posts: {
-        orderBy: { createdAt: 'asc' },
+        orderBy: [
+          { isPinned: 'desc' },
+          { createdAt: 'asc' },
+        ],
         include: {
           user: { select: { id: true, name: true, image: true, dealerName: true, rating: true, ratingCount: true, role: true, badges: true, phoneVerified: true } },
         },
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const topic = await prisma.forumTopic.findFirst({ where: { OR: [{ id }, { slug: id }] } });
   if (!topic) return Response.json({ error: 'الموضوع غير موجود' }, { status: 404 });
@@ -92,7 +95,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const topic = await prisma.forumTopic.findUnique({ where: { id } });
   if (!topic) return Response.json({ error: 'غير موجود' }, { status: 404 });

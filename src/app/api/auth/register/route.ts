@@ -56,29 +56,27 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await hashPassword(password);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name, email, password: hashedPassword, phone,
-          role: finalRole, dealerName, lastLoginAt: new Date(), lastLoginIp: ip,
-          // حفظ حقول ملف التاجر فورًا كي يُعرَض الاسم في صفحة الإدارة
-          // (dealerVerified يبقى false — يحتاج اعتمادًا اختياريًا).
-          ...(isTrader ? {
-            dealerDescription, dealerAddress, dealerLogo,
-            dealerCommercialReg: commercialReg,
-          } : {}),
-        },
-        select: {
-          id: true, name: true, email: true, role: true, image: true,
-          phone: true, whatsapp: true, whatsappNotifications: true,
-          dealerName: true, dealerVerified: true,
-        },
-      });
-
-      // لم نعد ننشئ صف TraderVerification PENDING هنا — راجع التعليق أعلاه.
-
-      return user;
+    // HTTP adapter لا يدعم المعاملات ($transaction يرمي خطأ في وضع HTTP) —
+    // العملية هنا إنشاء صف واحد فقط، لذا ننشئه مباشرةً بدون تغليف.
+    const result = await prisma.user.create({
+      data: {
+        name, email, password: hashedPassword, phone,
+        role: finalRole, dealerName, lastLoginAt: new Date(), lastLoginIp: ip,
+        // حفظ حقول ملف التاجر فورًا كي يُعرَض الاسم في صفحة الإدارة
+        // (dealerVerified يبقى false — يحتاج اعتمادًا اختياريًا).
+        ...(isTrader ? {
+          dealerDescription, dealerAddress, dealerLogo,
+          dealerCommercialReg: commercialReg,
+        } : {}),
+      },
+      select: {
+        id: true, name: true, email: true, role: true, image: true,
+        phone: true, whatsapp: true, whatsappNotifications: true,
+        dealerName: true, dealerVerified: true,
+      },
     });
+
+    // لم نعد ننشئ صف TraderVerification PENDING هنا — راجع التعليق أعلاه.
 
     notifyAdmins(
       isTrader ? 'NEW_TRADER' : 'NEW_USER',

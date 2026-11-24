@@ -70,13 +70,17 @@ export async function PUT(request: NextRequest) {
     const report = await prisma.workshopReport.findUnique({ where: { id: reportId } });
     if (!report) return errorResponse('البلاغ غير موجود', 404);
 
-    const updated = await prisma.workshopReport.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.workshopReport.update({
       where: { id: reportId },
       data: {
         status,
         reviewedBy: user.id,
         reviewedAt: new Date(),
       },
+    });
+    const updated = await prisma.workshopReport.findUnique({
+      where: { id: reportId },
       include: {
         workshop: {
           select: { id: true, name: true },
@@ -86,6 +90,7 @@ export async function PUT(request: NextRequest) {
         },
       },
     });
+    if (!updated) return errorResponse('البلاغ غير موجود', 404);
 
     return successResponse(updated);
   } catch (error) {

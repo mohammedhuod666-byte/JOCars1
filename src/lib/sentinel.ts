@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { sendWhatsAppToAdmins, isWhatsAppConfigured } from '@/lib/whatsapp';
+import { blockIP } from '@/lib/ip-blacklist';
 
 // ── Sentinel: automatic protection monitor ──
 // Weighted signals per user over a rolling 24h window:
@@ -19,6 +20,10 @@ export const SIGNAL_WEIGHTS = {
   ADMIN_PROBE_GUEST: 1, // unauthenticated /admin hit: forensics only, never bans
   HONEYPOT: 15,      // hitting /wp-admin, /.env, /.git, ...
   RATE_ABUSE: 5,
+  SQL_INJECTION: 100,
+  XSS_ATTACK: 80,
+  PATH_TRAVERSAL: 90,
+  SCANNER_PROBE: 70,
 } as const;
 
 export type SignalType = keyof typeof SIGNAL_WEIGHTS;
@@ -243,4 +248,103 @@ export async function enforceProbeBan(userId: string, userName: string, path: st
       `🚨 *Sentinel — محاولة اختراق لوحة الإدارة*\n\nالمستخدم: ${userName} (${userId})\nالمسار: ${path}\nIP: ${ip || 'غير معروف'}\nالإجراء: حظر تلقائي 7 أيام`,
     );
   } catch { /* never break the request */ }
+}
+
+/**
+ * Intelligent Breach Defender:
+ * Detects SQLi, XSS, Path Traversal, and Scanners.
+ * - If Sentinel Mode is 'enforce' (auto-ban enabled) -> BANS immediately without asking!
+ * - If Sentinel Mode is 'monitor' (alert & ask admin) -> records threat and asks admin: "هل أحظره أم أتركه؟"
+ */
+export async function handleBreachAttempt(input: {
+  type: SignalType;
+  userId?: string | null;
+  userName?: string | null;
+  ip?: string | null;
+  path?: string | null;
+  detail?: string | null;
+}): Promise<void> {
+  try {
+    const { mode, stopped } = await getSentinelMode();
+    const weight = (SIGNAL_WEIGHTS as any)[input.type] || 100;
+
+    // 1. Record the attack signal into forensics database
+    await prisma.securitySignal.create({
+      data: {
+        userId: input.userId || null,
+        ip: input.ip || null,
+        type: input.type,
+        weight,
+        detail: input.detail || `محاولة اختراق ${input.type} على ${input.path || '/'}`,
+      },
+    }).catch(() => {});
+
+    if (stopped) return;
+
+    // 2. Check if Auto-Ban is ON (Enforce Mode):
+    if (mode === 'enforce') {
+      // Immediate Ban WITHOUT asking
+      if (input.userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: input.userId },
+          select: { id: true, role: true, name: true },
+        });
+        if (user && user.role !== 'ADMIN') {
+          const until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30-day ban
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              banStatus: 'TEMPORARY',
+              banReason: `حظر أمني تلقائي فوري: ${input.detail || input.type}`,
+              banUntil: until,
+              isActive: false,
+            },
+          });
+          await createAuditLog({
+            action: 'SENTINEL_AUTO_BAN',
+            actorId: user.id,
+            entityType: 'USER',
+            entityId: user.id,
+            description: `حظر أمني تلقائي فوري (تفعيل الحظر): ${user.name} — ${input.detail}`,
+            newValue: 'TEMPORARY_30D',
+            ip: input.ip || undefined,
+          }).catch(() => {});
+        }
+      }
+      if (input.ip && input.ip !== '127.0.0.1' && input.ip !== '::1') {
+        blockIP(input.ip, `محاولة اختراق ${input.type}: ${input.detail || ''}`, 24 * 60 * 60 * 1000);
+      }
+
+      await notifyAdmins(
+        `🛡️ *Sentinel — تم الحظر التلقائي الفوري لمخترق*\n\n` +
+        `النوع: ${input.type}\n` +
+        `المستخدم: ${input.userName || input.userId || 'زائر غير مسجل'}\n` +
+        `IP: ${input.ip || 'غير معروف'}\n` +
+        `المسار: ${input.path || '/'}\n` +
+        `التفاصيل: ${input.detail}\n\n` +
+        `الإجراء: تم حظر المعتدي فوراً لتفعيل خيار الحظر التلقائي بدون استئذان.`,
+      );
+    } else {
+      // Mode is 'monitor' (Alert admin & Ask: هل أحظره أم أتركه؟):
+      await createAuditLog({
+        action: 'SENTINEL_PENDING_THREAT',
+        actorId: input.userId || undefined,
+        entityType: 'SYSTEM',
+        entityId: input.userId || input.ip || 'threat',
+        description: `تنبيه اختراق بانتظار قرار الأدمن: ${input.type} من ${input.userName || input.userId || input.ip} — ${input.detail}`,
+        newValue: 'PENDING_DECISION',
+        ip: input.ip || undefined,
+      }).catch(() => {});
+
+      await notifyAdmins(
+        `⚠️ *Sentinel — رصد محاولة اختراق بحاجة لقرارك!*\n\n` +
+        `النوع: ${input.type}\n` +
+        `المستخدم: ${input.userName || input.userId || 'زائر'}\n` +
+        `IP: ${input.ip || 'غير معروف'}\n` +
+        `التفاصيل: ${input.detail}\n\n` +
+        `❓ *السؤال للمدير: هل أحظره أم أتركه؟*\n` +
+        `لاتخاذ القرار تفضل بزيارة: لوحة الإدارة ← الحارس الأمني (Sentinel)`,
+      );
+    }
+  } catch { /* Sentinel must never crash the request */ }
 }

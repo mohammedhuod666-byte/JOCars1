@@ -7,35 +7,35 @@
 
 @layer base {
   :root {
-    --background: #faf7f0;
-    --foreground: #1a1712;
+    --background: #f8fafc;
+    --foreground: #0f172a;
     --card: #ffffff;
-    --card-foreground: #1a1712;
-    --border: #e5dcc8;
-    --muted: #f1ebdc;
-    --muted-foreground: #6b6250;
-    --accent: #b38600;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --accent: #0284c7;
     --accent-foreground: #ffffff;
-    --gold: #ffc640;
+    --gold: #f59e0b;
     --destructive: #ef4444;
-    --success: #12b76a;
-    --warning: #f79009;
+    --success: #10b981;
+    --warning: #f59e0b;
   }
 
   .dark {
-    --background: #12100c;
-    --foreground: #ece5d3;
-    --card: #221f17;
-    --card-foreground: #ece5d3;
-    --border: #353126;
-    --muted: #1a1712;
-    --muted-foreground: #8d8168;
-    --accent: #e3aa00;
-    --accent-foreground: #1a1712;
-    --gold: #ffc640;
-    --destructive: #ef4444;
-    --success: #12b76a;
-    --warning: #f79009;
+    --background: #080a0f;
+    --foreground: #f8fafc;
+    --card: #111520;
+    --card-foreground: #f8fafc;
+    --border: rgba(255, 255, 255, 0.08);
+    --muted: #151a27;
+    --muted-foreground: #94a3b8;
+    --accent: #38bdf8;
+    --accent-foreground: #080a0f;
+    --gold: #fbbf24;
+    --destructive: #f87171;
+    --success: #34d399;
+    --warning: #fbbf24;
   }
 
   * {
@@ -51,30 +51,32 @@
 
   body {
     @apply bg-[var(--background)] text-[var(--foreground)];
-    font-family: 'Be Vietnam Pro', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+    font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
-    background-color: #12100c;
+    background-color: #080a0f;
     background-image:
-      radial-gradient(ellipse at 50% -10%, rgba(255, 198, 64, 0.05), transparent 55%);
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.09), transparent 70%),
+      radial-gradient(circle 600px at 85% 15%, rgba(14, 165, 233, 0.05), transparent 60%);
     background-attachment: fixed;
   }
 
   .dark body {
-    background-color: #12100c;
+    background-color: #080a0f;
     background-image:
-      radial-gradient(ellipse at 50% -10%, rgba(255, 198, 64, 0.06), transparent 55%);
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(245, 158, 11, 0.1), transparent 70%),
+      radial-gradient(circle 600px at 85% 15%, rgba(14, 165, 233, 0.06), transparent 60%);
   }
 
   ::selection {
-    background: #ffc640;
-    color: #1a1712;
+    background: #f59e0b;
+    color: #080a0f;
   }
 
   .dark ::selection {
-    background: #ffc640;
-    color: #1a1712;
+    background: #fbbf24;
+    color: #080a0f;
   }
 
   input, textarea, select {
@@ -117,38 +119,37 @@
     @apply inline-flex items-center justify-center rounded-lg bg-error-500 px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:bg-error-600 active:scale-[0.98];
   }
 
-  /* ===== Cards — Velocity Elite ===== */
+  /* ===== Cards — Luxury Automotive Glass ===== */
   .card {
-    @apply rounded-xl border border-surface-700/50 bg-surface-800 transition-all duration-300;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 4px 16px -8px rgba(0, 0, 0, 0.1);
+    @apply rounded-2xl border border-white/[0.08] bg-[#121622]/90 backdrop-blur-xl transition-all duration-300;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.2);
   }
 
   .card-hover {
     @apply card;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 4px 16px -8px rgba(0, 0, 0, 0.1);
   }
   .card-hover:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 4px 4px 0 rgba(255, 198, 64, 0.85);
-    border-color: rgba(255, 198, 64, 0.6);
+    transform: translateY(-4px);
+    border-color: rgba(245, 158, 11, 0.35);
+    box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.6), 0 0 20px -4px rgba(245, 158, 11, 0.15);
   }
 
   .glass-card {
-    @apply bg-surface-800/70 backdrop-blur-xl border border-surface-700/40 rounded-xl;
+    @apply bg-[#121622]/80 backdrop-blur-2xl border border-white/[0.08] rounded-2xl shadow-xl;
   }
 
-  /* Warm nav glass */
+  /* Luxury nav glass */
   .glass-premium {
-    background: rgba(18, 16, 12, 0.85);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    border: 1px solid rgba(53, 49, 38, 0.6);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    background: rgba(10, 13, 20, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
   }
 
-  /* ===== Inputs — Asphalt & Amber ===== */
+  /* ===== Inputs — Precision Titanium ===== */
   .input-field {
-    @apply w-full rounded-lg border border-surface-600 bg-surface-800 px-4 py-3 text-sm text-surface-200 placeholder-surface-500 transition-all duration-200 focus:border-gold-100/60 focus:ring-2 focus:ring-gold-100/15 focus:shadow-soft outline-none;
+    @apply w-full rounded-xl border border-white/[0.1] bg-[#141824]/90 px-4 py-3 text-sm text-surface-100 placeholder-surface-400 transition-all duration-200 focus:border-gold-500/70 focus:ring-2 focus:ring-gold-500/20 focus:bg-[#181d2c] outline-none;
   }
 
   .select-field {
@@ -225,31 +226,21 @@
     text-wrap: balance;
   }
 
-  /* Road stripe — signature dashed divider motif */
+  /* Sleek modern divider */
   .road-line {
-    height: 2px;
-    background-image: repeating-linear-gradient(to left, #ffc640 0, #ffc640 12px, transparent 12px, transparent 24px);
-    opacity: 0.5;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), rgba(56, 189, 248, 0.3), transparent);
+    opacity: 0.8;
   }
 
-  /* Hard brutalist button */
+  /* Luxury Gold Action Button */
   .btn-hard {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border-2 border-gold-100 bg-gold-100 px-6 py-3 text-sm font-black text-gold-900 transition-all duration-150 cursor-pointer;
-    box-shadow: 4px 4px 0 rgba(255, 198, 64, 0.35);
-  }
-  .btn-hard:hover {
-    transform: translate(-1px, -1px);
-    box-shadow: 5px 5px 0 rgba(255, 198, 64, 0.5);
-  }
-  .btn-hard:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 rgba(255, 198, 64, 0);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-gold-400/50 bg-gradient-to-r from-amber-500 via-gold-500 to-amber-600 px-6 py-3 text-sm font-black text-slate-950 transition-all duration-200 cursor-pointer shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98];
   }
 
   /* Sticker badge */
   .sticker {
-    @apply inline-flex items-center gap-1.5 rounded-full bg-gold-100 px-4 py-1.5 text-xs font-black text-gold-900;
-    box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+    @apply inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500/15 via-gold-500/20 to-amber-500/15 border border-amber-400/40 px-4 py-1.5 text-xs font-black text-amber-300 backdrop-blur-md shadow-sm;
   }
 
   /* Hard card hover */
@@ -263,14 +254,27 @@
   }
 
   /* Marquee ticker */
-  @keyframes marquee-rtl {
-    from { transform: translateX(0); }
-    to { transform: translateX(50%); }
+  @keyframes marquee-slide-continuous {
+    0% { transform: translate3d(0, 0, 0); }
+    100% { transform: translate3d(-50%, 0, 0); }
+  }
+  .animate-marquee-smooth {
+    display: flex !important;
+    width: max-content !important;
+    will-change: transform;
+    animation: marquee-slide-continuous 26s linear infinite !important;
+  }
+  .animate-marquee-smooth:hover {
+    animation-play-state: paused;
   }
   .marquee-track {
-    display: flex;
-    width: max-content;
-    animation: marquee-rtl 30s linear infinite;
+    display: flex !important;
+    width: max-content !important;
+    will-change: transform;
+    animation: marquee-slide-continuous 26s linear infinite !important;
+  }
+  .marquee-track:hover {
+    animation-play-state: paused;
   }
 
   /* ===== Car drive loader ===== */

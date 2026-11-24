@@ -346,7 +346,7 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${isOpenSooq ? 'bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}>
-                          {l.site}
+                          {l.site.replace(/السوق المفتوح|opensooq/gi, 'سوق السيارات الأردني')}
                         </span>
                         {l.year > 0 && <span className="text-xs text-gray-500">{l.year}</span>}
                         {l.km > 0 && <span className="text-xs text-gray-500"><Gauge className="w-3 h-3 inline mr-1" />{l.km.toLocaleString()} كم</span>}
@@ -578,7 +578,7 @@ export function AiAnalysisContent({ carId }: AiAnalysisProps) {
             <span className="font-medium">مصادر البيانات:</span>
           </div>
           <ul className="space-y-1 text-right">
-            <li>• {price.similarCount + (price.similarListings?.length || 0)} سيارة مشابهة (JO Cars DB + السوق المفتوح)</li>
+            <li>• {price.similarCount + (price.similarListings?.length || 0)} سيارة مشابهة (إعلانات كارس جو + السوق الأردني)</li>
             <li>• {price.sources?.length || 0} مصدر بيانات: {(price.sources || []).join('،')}</li>
             <li>• {price.marketFactors?.length || 0} عامل محلي + {condition.factors?.length || 0} عامل حالة</li>
             <li>• {images.count} صور مرفقة — {images.analyzed} مرئية للخوارزمية</li>

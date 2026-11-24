@@ -61,7 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const auction = await prisma.auction.findUnique({ where: { id } });
   if (!auction) return Response.json({ error: 'المزاد غير موجود' }, { status: 404 });

@@ -115,25 +115,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const urlById = new Map(existing.map((i) => [i.id, i.url]));
 
-    await prisma.$transaction([
-      ...order.map((imageId, index) =>
-        prisma.carImage.update({
-          where: { id: imageId },
-          data: {
-            order: index,
-            // Exactly one row carries the flag, so the card and the carousel can
-            // never disagree about the first image.
-            isCover: imageId === coverId,
-          },
-        }),
-      ),
-      prisma.car.update({
-        where: { id: car.id },
-        // Keep the denormalised coverImage in step with the isCover row: the ad
-        // card and the search grid read this column directly.
-        data: { coverImage: coverId ? urlById.get(coverId) ?? null : null },
-      }),
-    ]);
+    // HTTP adapter لا يدعم $transaction المتسلسل — ننفّذ نفس العمليات المتتالية
+    // (كلها تحديثات صف واحد مدعومة). فشل في المنتصف يترك ترتيبًا جزئيًا،
+    // وإعادة المحاولة بنفس الترتيب تكمل بلا ضرر لأن كل تحديث idempotent.
+    for (const [index, imageId] of order.entries()) {
+      await prisma.carImage.update({
+        where: { id: imageId },
+        data: {
+          order: index,
+          // Exactly one row carries the flag, so the card and the carousel can
+          // never disagree about the first image.
+          isCover: imageId === coverId,
+        },
+      });
+    }
+    await prisma.car.update({
+      where: { id: car.id },
+      // Keep the denormalised coverImage in step with the isCover row: the ad
+      // card and the search grid read this column directly.
+      data: { coverImage: coverId ? urlById.get(coverId) ?? null : null },
+    });
 
     const updated = await prisma.carImage.findMany({
       where: { carId: car.id },

@@ -68,6 +68,12 @@ export const useAuth = create<AuthState>()(
           const res = await fetch('/api/auth/profile', {
             headers: { Authorization: `Bearer ${token}` },
           });
+          if (res.status === 401) {
+            // Token is invalid or expired - clear stale auth state immediately
+            set({ user: null, token: null, isAuthenticated: false, _refreshing: false });
+            try { localStorage.removeItem('jo-cars-auth'); } catch {}
+            return;
+          }
           const d = await res.json();
           if (d.success && d.data) {
             set({

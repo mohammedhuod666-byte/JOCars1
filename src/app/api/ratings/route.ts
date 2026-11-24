@@ -4,7 +4,7 @@ import { authenticateRequest } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const { targetUserId, carId, score, comment } = await request.json();
 

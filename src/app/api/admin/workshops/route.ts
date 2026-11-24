@@ -122,15 +122,20 @@ export async function PUT(request: NextRequest) {
       if (updateData.banUntil) data.banUntil = new Date(updateData.banUntil);
     }
 
-    const updated = await prisma.workshop.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.workshop.update({
       where: { id: workshopId },
       data,
+    });
+    const updated = await prisma.workshop.findUnique({
+      where: { id: workshopId },
       include: {
         user: {
           select: { id: true, name: true, email: true },
         },
       },
     });
+    if (!updated) return errorResponse('الورشة غير موجودة', 404);
 
     return successResponse(updated);
   } catch (error) {

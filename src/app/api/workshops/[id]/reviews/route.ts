@@ -68,8 +68,13 @@ export async function POST(
       cleanlinessRating, punctualityRating, partsRating, recommend,
     } = body;
 
-    const review = await prisma.$transaction(async (tx) => {
-      const newReview = await tx.workshopReview.create({
+    // HTTP adapter لا يدعم المعاملات — ننفّذ بالتتابع، وعند أي فشل بعد إنشاء
+    // التقييم نحذفه تعويضًا (كان roll-back المعاملة يلغيه) حتى لا يظلّ
+    // التقييم موجودًا بينما لم يُحدَّث ملخّص الورشة.
+    let createdReviewId: string | null = null;
+    let review: any;
+    try {
+      review = await prisma.workshopReview.create({
         data: {
           workshopId: id,
           userId: user.id,
@@ -92,8 +97,9 @@ export async function POST(
           recommend: recommend !== false,
         },
       });
+      createdReviewId = review.id;
 
-      const allReviews = await tx.workshopReview.findMany({
+      const allReviews = await prisma.workshopReview.findMany({
         where: { workshopId: id, isHidden: false },
         select: {
           qualityRating: true,
@@ -122,7 +128,7 @@ export async function POST(
       const recommendCount = allReviews.filter(r => r.recommend).length;
       const recommendPercent = allReviews.length > 0 ? (recommendCount / allReviews.length) * 100 : 0;
 
-      await tx.workshop.update({
+      await prisma.workshop.update({
         where: { id },
         data: {
           rating: Math.round(avgRating * 10) / 10,
@@ -131,9 +137,12 @@ export async function POST(
           carFixedCount: { increment: 1 },
         },
       });
-
-      return newReview;
-    });
+    } catch (createErr) {
+      if (createdReviewId) {
+        await prisma.workshopReview.delete({ where: { id: createdReviewId } }).catch(() => {});
+      }
+      throw createErr;
+    }
 
     return successResponse(review, 201);
   } catch (error) {

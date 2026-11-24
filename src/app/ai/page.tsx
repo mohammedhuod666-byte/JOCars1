@@ -16,13 +16,13 @@ import { useAuth } from '@/hooks/useAuth';
 const CONVERSATION_STORAGE_KEY = 'jo-cars-ai-conversation';
 const CONVERSATION_META_KEY = 'jo-cars-ai-meta';
 
-type AIModelId = 'glm' | 'minimax' | 'mistral' | 'gpt-oss';
+type AIModelId = 'glm' | 'bolt' | 'mistral' | 'gpt-oss';
 interface AIModelOption { id: AIModelId; nameAr: string; nameEn: string; description: string; }
 const AI_MODELS_LIST: AIModelOption[] = [
-  { id: 'gpt-oss', nameAr: 'GPT OSS 20B (الافتراضي)', nameEn: 'GPT OSS 20B', description: 'الأسرع حالياً — رد خلال ثانية' },
-  { id: 'glm', nameAr: 'GLM 5.3 Flash', nameEn: 'GLM 5.3 Flash', description: 'بديل — قد يتأخر أحياناً من جهة المزود' },
-  { id: 'minimax', nameAr: 'Kimi K3', nameEn: 'Kimi K3', description: 'قوي للنصوص الطويلة — التحليل المعمّق' },
-  { id: 'mistral', nameAr: 'Mistral Large', nameEn: 'Mistral Large', description: 'ذكي مع reasoning — الأسئلة المعقدة' },
+  { id: 'glm', nameAr: 'GLM 5.3 Flash (الافتراضي الذكي)', nameEn: 'GLM 5.3 Flash', description: 'نموذج GLM الذكي المعتمد — ذكاء متقدم وتحليل دقيق للسيارات' },
+  { id: 'bolt', nameAr: 'Nemotron Bolt (خبير كارس جو)', nameEn: 'Nemotron Bolt', description: 'الأسرع والأذكى — ردود فورية وخبرة عميقة بسوق سيارات الأردن' },
+  { id: 'mistral', nameAr: 'Mistral Large', nameEn: 'Mistral Large', description: 'نموذج متطور للتحليلات التفصيلية والمقارنات' },
+  { id: 'gpt-oss', nameAr: 'GPT OSS 20B', nameEn: 'GPT OSS 20B', description: 'نموذج محادثة عام بديل' },
 ];
 
 function loadConversation(): { messages: Message[]; sessionId: string } | null {
@@ -140,7 +140,7 @@ export default function AIPage() {
   const [sessionId, setSessionId] = useState(() => generateSessionId());
   const [lastSuggestions, setLastSuggestions] = useState<string[]>([]);
   const [isRecordingSound, setIsRecordingSound] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<AIModelId>('gpt-oss');
+  const [selectedModel, setSelectedModel] = useState<AIModelId>('glm');
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const [carFlowStep, setCarFlowStep] = useState<CarFlowStep | null>(null);
@@ -431,13 +431,26 @@ export default function AIPage() {
     }
 
     // Handle car listing cancel
-    if (content === 'إلغاء' && carFlowStep !== null && carFlowStep !== 'done') {
+    if ((content === 'إلغاء' || content === 'الغاء' || content === 'خروج') && carFlowStep !== null && carFlowStep !== 'done') {
       setCarFlowStep(null);
       setCarFlowData({});
       setCarFlowImages([]);
       setCarFlowHint('');
-      botReply(' تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت.');
+      botReply('تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت، كيف أقدر أساعدك اليوم؟');
       return;
+    }
+
+    // If user asks a question or changes topic while in car flow, reset car flow so AI answers normally
+    const isQuestionOrTopicChange =
+      /[؟\?]/.test(content) ||
+      /^(شو|ايش|مين|كيف|ليش|لماذا|هل|وين|أين|كم سعر|احكيلي|نصيحة|افضل|أفضل|سؤال|مرحبا|السلام|مساء|صباح)/i.test(content.trim()) ||
+      content.trim().length > 40;
+
+    if (isQuestionOrTopicChange && carFlowStep !== null && carFlowStep !== 'done') {
+      setCarFlowStep(null);
+      setCarFlowData({});
+      setCarFlowImages([]);
+      setCarFlowHint('');
     }
 
     if (personalityStep !== null) {

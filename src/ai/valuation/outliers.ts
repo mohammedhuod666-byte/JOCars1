@@ -136,7 +136,8 @@ export function dedupeExact(rows: Comparable[]): Comparable[] {
 
 /**
  * Cross-source near-duplicates: same model+year, km within 2%, price
- * identical, different source → almost surely the same car reposted.
+ * identical or near-identical (within 2.5% or 400 JOD cross-posted spread),
+ * different source → almost surely the same car reposted across portals.
  * Keep the higher-similarity copy.
  */
 export function dedupeNear(rows: Comparable[]): Comparable[] {
@@ -151,7 +152,11 @@ export function dedupeNear(rows: Comparable[]): Comparable[] {
         const d = Math.abs(a.kilometers - b.kilometers) / Math.max(a.kilometers, 1);
         if (d > 0.02) continue;
       }
-      if (a.priceJod !== b.priceJod) continue;
+      const priceDiff = Math.abs(a.priceJod - b.priceJod);
+      const maxPrice = Math.max(a.priceJod, b.priceJod, 1);
+      const isPriceMirror = priceDiff === 0 || (priceDiff / maxPrice <= 0.025 && priceDiff <= 400);
+      if (!isPriceMirror) continue;
+
       const loser = a.similarity >= b.similarity ? b : a;
       const winner = loser === a ? b : a;
       loser.included = false;
@@ -220,7 +225,7 @@ export function iqrFences(prices: number[]): IqrResult {
 }
 
 export type SanityReason =
-  | 'INVALID_PRICE' | 'POSSIBLE_PLACEHOLDER' | 'SUSPICIOUS_PRICE' | 'EXTREME_OUTLIER' | 'NON_CAR_LISTING';
+  | 'INVALID_PRICE' | 'POSSIBLE_PLACEHOLDER' | 'SUSPICIOUS_PRICE' | 'EXTREME_OUTLIER' | 'NON_CAR_LISTING' | 'DOWN_PAYMENT_NOT_CASH';
 
 export interface SanityExclusion {
   listing: NormalizedListing;
@@ -272,6 +277,23 @@ export function sanityCheck(
       continue;
     }
 
+    // 1b) Filter down-payment / installment teaser ads pretending to be total vehicle price
+    const downPaymentTokens = [
+      'دفعة اولى', 'دفعة أولى', 'بدفعة', 'دفعة وقسط', 'أقساط شهرية', 'اقساط شهرية',
+      'تنازل كمبيالات', 'تنازل عن كمبيالات', 'متبقي عليها شيكات', 'متبقي عليها كمبيالات',
+    ];
+    const k = `${(l.brandEn || l.brand || '').toLowerCase()}|${(l.modelEn || l.model || '').toLowerCase()}`;
+    const med = medians.get(k);
+    const isDownPaymentThreshold = med !== undefined ? l.priceJod < med * 0.40 : l.priceJod < 3500;
+    if (isDownPaymentThreshold && downPaymentTokens.some((p) => textToCheck.includes(p))) {
+      excluded.push({
+        listing: l,
+        reason: 'DOWN_PAYMENT_NOT_CASH',
+        reasonAr: `إعلان دفعة أولى أو تنازل أقساط وليس سعراً كاش إجمالياً (${l.priceJod.toLocaleString()} د.أ)`,
+      });
+      continue;
+    }
+
     if (!l.priceJod || l.priceJod <= 0) {
       excluded.push({ listing: l, reason: 'INVALID_PRICE', reasonAr: 'سعر غير صالح (≤0)' });
       continue;
@@ -280,8 +302,6 @@ export function sanityCheck(
       excluded.push({ listing: l, reason: 'POSSIBLE_PLACEHOLDER', reasonAr: `سعر رمزي مشبوه (${l.priceJod}) — غالباً إعلان صوري` });
       continue;
     }
-    const k = `${(l.brandEn || l.brand || '').toLowerCase()}|${(l.modelEn || l.model || '').toLowerCase()}`;
-    const med = medians.get(k);
     if (med !== undefined && med > 3000) {
       if (l.priceJod < med * 0.15) {
         excluded.push({ listing: l, reason: 'SUSPICIOUS_PRICE', reasonAr: `سعر مشبوه (${l.priceJod.toLocaleString()} < 15% من وسط الموديل ${med.toLocaleString()})` });

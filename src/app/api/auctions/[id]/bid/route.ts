@@ -10,7 +10,7 @@ const bidSchema = z.object({
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   // Reversible kill-switch: set AUCTIONS_ENABLED=false to freeze bidding
   // without deleting code or data. Reads stay visible.
@@ -25,8 +25,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const auction = await tx.auction.findUnique({
+    // HTTP adapter لا يدعم المعاملات — ننفّذ بالتتابع مع تراجع يدوي أدناه،
+    // مع الحفاظ على قفل التفاؤلي عبر UPDATE شرطي ذري واحد (بديل updateMany).
+    const result = await (async () => {
+      const auction = await prisma.auction.findUnique({
         where: { id },
         include: { bids: { orderBy: { amount: 'desc' }, take: 1 } },
       });
@@ -40,37 +42,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return { status: 400, message: `المبلغ يجب أن يكون على الأقل ${minimumAmount} د.أ` };
       }
 
-      const updatedAuction = await tx.auction.updateMany({
-        where: {
-          id,
-          status: 'ACTIVE',
-          endDate: { gt: new Date() },
-          currentPrice: { lte: parsed.data.amount - auction.minBidIncrement },
-        },
-        data: { currentPrice: parsed.data.amount },
-      });
+      // Optimistic-lock guard — atomic conditional UPDATE, statement-for-statement
+      // equivalent of the old updateMany WHERE (unsupported over HTTP). Single
+      // statement, so a concurrent request still cannot slip between read and
+      // write. $executeRaw affected-row count verified (1 on hit, 0 when stale).
+      const affected = await prisma.$executeRaw`
+        UPDATE "auctions"
+        SET "currentPrice" = ${parsed.data.amount}
+        WHERE "id" = ${auction.id}
+          AND "status" = 'ACTIVE'
+          AND "endDate" > ${new Date()}
+          AND "currentPrice" <= ${parsed.data.amount - auction.minBidIncrement}
+      `;
 
-      if (updatedAuction.count !== 1) {
+      if (affected !== 1) {
         return { status: 409, message: 'تمت مزايدة أعلى قبل لحظة، حدّث السعر وحاول مجددًا' };
       }
 
-      const bid = await tx.bid.create({
-        data: { amount: parsed.data.amount, auctionId: id, userId: user.id },
-      });
-
-      // Anti-sniping: a bid in the last 2 minutes extends the auction by 2 minutes.
-      const SNIPING_WINDOW_MS = 2 * 60 * 1000;
-      let extended = false;
-      if (auction.endDate.getTime() - Date.now() < SNIPING_WINDOW_MS) {
-        await tx.auction.update({
-          where: { id },
-          data: { endDate: new Date(Date.now() + SNIPING_WINDOW_MS) },
+      let bidId: string | null = null;
+      try {
+        const bid = await prisma.bid.create({
+          data: { amount: parsed.data.amount, auctionId: id, userId: user.id },
         });
-        extended = true;
-      }
+        bidId = bid.id;
 
-      return { status: 201, bid, previousTopBidderId: auction.bids[0]?.userId, extended };
-    });
+        // Anti-sniping: a bid in the last 2 minutes extends the auction by 2 minutes.
+        const SNIPING_WINDOW_MS = 2 * 60 * 1000;
+        let extended = false;
+        if (auction.endDate.getTime() - Date.now() < SNIPING_WINDOW_MS) {
+          await prisma.auction.update({
+            where: { id },
+            data: { endDate: new Date(Date.now() + SNIPING_WINDOW_MS) },
+          });
+          extended = true;
+        }
+
+        return { status: 201, bid, previousTopBidderId: auction.bids[0]?.userId, extended };
+      } catch (writeErr) {
+        // Manual rollback of the price bump (was the tx's job): remove our bid
+        // and restore the previous price — but only if no newer bid already
+        // moved it (never clobber a concurrent higher bid).
+        if (bidId) await prisma.bid.delete({ where: { id: bidId } }).catch(() => {});
+        await prisma.$executeRaw`
+          UPDATE "auctions"
+          SET "currentPrice" = ${auction.currentPrice}
+          WHERE "id" = ${auction.id} AND "currentPrice" = ${parsed.data.amount}
+        `.catch(() => {});
+        throw writeErr;
+      }
+    })();
 
     if (result.status !== 201) {
       return Response.json({ error: result.message }, { status: result.status });

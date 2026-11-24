@@ -647,24 +647,37 @@ export async function POST(request: NextRequest) {
     const slug = generateSlug(data.brandId as string, data.modelId as string, data.year as number, Date.now().toString());
     const refCode = await generateRefCode();
 
-    const car = await prisma.car.create({
-      data: {
-        ...validation.data,
-        // DB requires drivetrain; explicit UNKNOWN beats a false FWD.
-        drivetrain: (validation.data as any).drivetrain || 'UNKNOWN',
-        conditionDetails: conditionDetailsStr,
-        aiConditionReport: inspectionSummaryStr,
-        slug,
-        refCode,
-        status: 'PENDING',
-        userId: user.id,
-        coverImage: coverUrl || null,
-        licenseDocUrl: licenseDocUrl || null,
-        inspectionDocUrl: inspectionDocUrl || null,
-        serviceRecordDocUrl: serviceRecordDocUrl || null,
-        inspectionDocUrls: extraInspectionDocUrls.length ? JSON.stringify(extraInspectionDocUrls) : null,
-        images: uploadedImages.length > 0 ? {
-          create: uploadedImages.map((img, i) => ({
+    // HTTP adapter لا يدعم المعاملات ولا الكتابات المتداخلة (nested writes) —
+    // ننشئ السيارة أولًا ثم صورها صفًا صفًا، وعند أي فشل نحذف ما كُتب
+    // (تعويض يدوي) حتى لا يبقى إعلان بدون معرض صور ولا صفوف ميتة.
+    let createdCarId: string | null = null;
+    let car: any;
+    try {
+      const created = await prisma.car.create({
+        data: {
+          ...validation.data,
+          // DB requires drivetrain; explicit UNKNOWN beats a false FWD.
+          drivetrain: (validation.data as any).drivetrain || 'UNKNOWN',
+          conditionDetails: conditionDetailsStr,
+          aiConditionReport: inspectionSummaryStr,
+          slug,
+          refCode,
+          status: 'PENDING',
+          userId: user.id,
+          coverImage: coverUrl || null,
+          licenseDocUrl: licenseDocUrl || null,
+          inspectionDocUrl: inspectionDocUrl || null,
+          serviceRecordDocUrl: serviceRecordDocUrl || null,
+          inspectionDocUrls: extraInspectionDocUrls.length ? JSON.stringify(extraInspectionDocUrls) : null,
+        },
+      });
+      createdCarId = created.id;
+
+      for (let i = 0; i < uploadedImages.length; i++) {
+        const img = uploadedImages[i];
+        await prisma.carImage.create({
+          data: {
+            carId: created.id,
             // Cloudinary returns `url` as http:// — the site is https, so a
             // plain http image is mixed content (blocked by modern browsers).
             url: img.secure_url || img.url,
@@ -672,13 +685,24 @@ export async function POST(request: NextRequest) {
             // gallery carousel and the ad card can show different first images.
             isCover: !Number.isNaN(coverIndex) ? i === coverIndex : i === 0,
             order: i,
-          })),
-        } : undefined,
-      },
-      include: {
-        brand: true, model: true, city: true, images: true,
-      },
-    });
+          },
+        });
+      }
+
+      car = await prisma.car.findUnique({
+        where: { id: created.id },
+        include: {
+          brand: true, model: true, city: true, images: true,
+        },
+      });
+      if (!car) throw new Error('car row not found right after create');
+    } catch (createErr) {
+      if (createdCarId) {
+        await prisma.carImage.deleteMany({ where: { carId: createdCarId } }).catch(() => {});
+        await prisma.car.delete({ where: { id: createdCarId } }).catch(() => {});
+      }
+      throw createErr;
+    }
 
     // Sentinel: listing-burst signal — more than 5 cars/hour is spam behavior.
     prisma.car.count({

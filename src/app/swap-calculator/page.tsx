@@ -38,14 +38,14 @@ export default function SwapCalculatorPage() {
           </span>
           <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">حاسبة فرق البدل للسيارات (Trade-in)</h1>
           <p className="text-sm text-gray-500 leading-relaxed">
-            احسب فرق البدل العادل في السوق الأردني سواء مع تاجر أو شخص عادي. تستند القيم الافتراضية إلى أسعار السوق الفعلية (OpenSooq): كامري 2019 بين 16,370 – 19,740 ديناراً، وكامري 2023 بين 23,200 – 23,700 ديناراً.
+            احسب فرق البدل العادل في السوق الأردني سواء مع تاجر أو شخص عادي. تستند القيم الافتراضية إلى أسعار السوق الفعلية في الأردن: كامري 2019 بين 16,370 – 19,740 ديناراً، وكامري 2023 بين 23,200 – 23,700 ديناراً.
           </p>
         </div>
 
         <div className="flex justify-center mb-8">
           <div className="inline-flex bg-gray-200 dark:bg-gray-800 rounded-full p-1 border border-gray-300 dark:border-gray-700">
             <button onClick={() => setIsDealerSwap(false)} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${!isDealerSwap ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-md' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}>
-              بدل مع شخص (السوق المفتوح)
+              بدل مباشر (مالك لمالك)
             </button>
             <button onClick={() => setIsDealerSwap(true)} className={`px-6 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${isDealerSwap ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-md' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'}`}>
               <Briefcase className="w-4 h-4" /> بدل مع تاجر / معرض

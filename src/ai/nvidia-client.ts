@@ -12,7 +12,7 @@ const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || process.env.OPENAI_API_KEY 
 const NVIDIA_BASE_URL = process.env.OPENAI_API_BASE || 'https://integrate.api.nvidia.com/v1';
 
 // ── Model Registry ──
-export type AIModelId = 'glm' | 'minimax' | 'mistral' | 'gpt-oss';
+export type AIModelId = 'glm' | 'bolt' | 'mistral' | 'gpt-oss';
 
 export interface AIModelInfo {
   id: AIModelId;
@@ -26,42 +26,42 @@ export interface AIModelInfo {
 }
 
 export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
-  'gpt-oss': {
-    id: 'gpt-oss',
-    model: 'openai/gpt-oss-20b',
-    nameAr: 'GPT OSS 20B ',
-    nameEn: 'GPT OSS 20B',
-    description: 'الأذكى والأدق — الأفضل لإجابات السيارات والأسعار',
-    maxTokens: 4096,
-    temperature: 0.7,
-    topP: 1,
-  },
   glm: {
     id: 'glm',
-    model: 'z-ai/glm-5.3',
-    nameAr: 'GLM 5.3',
-    nameEn: 'GLM 5.3',
-    description: 'نموذج التقييم والذكاء السوقي المتقدم للأردن (Z-AI / GLM 5.3)',
+    model: 'z-ai/glm-5.3-flash',
+    nameAr: 'GLM 5.3 Flash (الذكي المعتمد)',
+    nameEn: 'GLM 5.3 Flash',
+    description: 'نموذج الذكاء الاصطناعي المتقدم والتقييم الدقيق لسيارات وسوق الأردن',
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1,
   },
-  minimax: {
-    id: 'minimax',
-    model: 'moonshotai/kimi-k3',
-    nameAr: 'Kimi K3 ',
-    nameEn: 'Kimi K3',
-    description: 'قوة قصوى للتحليل المعمّق ومقارنة الأسعار بالسوق الأردني',
+  bolt: {
+    id: 'bolt',
+    model: 'nvidia/nemotron-3.5-bolt-e4b',
+    nameAr: 'خبير كارس جو (Nemotron Bolt)',
+    nameEn: 'Nemotron 3.5 Bolt',
+    description: 'الأسرع والأذكى — إجابات فورية متمرسة بلهجة أردنية وخبرة عميقة بالسيارات',
     maxTokens: 4096,
     temperature: 0.7,
-    topP: 0.95,
+    topP: 1,
   },
   mistral: {
     id: 'mistral',
-    model: 'mistralai/mistral-large-2-instruct',
-    nameAr: 'Mistral Large ',
+    model: 'mistralai/mistral-large-4-1t-a52b',
+    nameAr: 'Mistral Large',
     nameEn: 'Mistral Large',
-    description: 'نموذج محادثة مختصر وسريع للإجابات التكتيكية',
+    description: 'نموذج محادثة متطور للإجابات التحليلية والمفصلة',
+    maxTokens: 4096,
+    temperature: 0.7,
+    topP: 1,
+  },
+  'gpt-oss': {
+    id: 'gpt-oss',
+    model: 'openai/gpt-oss-20b',
+    nameAr: 'GPT OSS 20B',
+    nameEn: 'GPT OSS 20B',
+    description: 'نموذج محادثة عام بديل',
     maxTokens: 4096,
     temperature: 0.7,
     topP: 1,
@@ -71,7 +71,7 @@ export const AI_MODELS: Record<AIModelId, AIModelInfo> = {
 // Default = gpt-oss-20b (verified live: ~1s replies). glm-flash currently
 // hangs on NVIDIA's side (60s+ with no token), so it stays selectable in
 // the UI but is never first in line. User can still pick any model manually.
-export const DEFAULT_MODEL: AIModelId = 'gpt-oss';
+export const DEFAULT_MODEL: AIModelId = 'glm';
 
 let client: OpenAI | null = null;
 
@@ -121,8 +121,10 @@ function getModelInfo(modelId?: AIModelId | string): AIModelInfo {
 // the cascade: it hangs on NVIDIA's side (no token within 60s) and would
 // add only dead waiting time. It stays manually selectable in the UI.
 const FAILOVER_MODELS = [
+  'nvidia/nemotron-3.5-bolt-e4b',
+  'z-ai/glm-5.3-flash',
+  'mistralai/mistral-large-4-1t-a52b',
   'openai/gpt-oss-20b',
-  'mistralai/mistral-large-2-instruct',
 ];
 
 /**
@@ -311,9 +313,12 @@ export async function* chatCompletionStream(
           // Stall watchdog: drop a stream that goes quiet mid-answer.
           if (Date.now() - lastChunkAt > STREAM_STALL_MS) break;
           const delta: string = chunk?.choices?.[0]?.delta?.content || '';
-          if (delta) {
+          const reasoning: string = (chunk?.choices?.[0]?.delta as any)?.reasoning_content || '';
+          if (reasoning || delta) {
             gotToken = true;
             clearTimeout(ttftTimer);
+          }
+          if (delta) {
             lastChunkAt = Date.now();
             yield delta;
           }

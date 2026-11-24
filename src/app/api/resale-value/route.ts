@@ -97,9 +97,9 @@ export async function POST(request: NextRequest) {
 
     let tips: string[] = [];
     if (kmPenalty > 0) tips.push('الكيلومترات العالية تقلل قيمة إعادة البيع');
-    if (fuelType === 'HYBRID' || fuelType === 'ELECTRIC') tips.push('السيارات الهجينة/Kهربائية تحتفظ بقيمتها بشكل أفضل');
+    if (fuelType === 'HYBRID' || fuelType === 'ELECTRIC') tips.push('السيارات الهجينة والكهربائية تحتفظ بقيمتها بشكل أفضل');
     if (bodyType === 'SUV') tips.push('سيارات SUV تحتفظ بقيمتها جيداً في السوق الأردني');
-    if (age > 5) tips.push('السيارات الأقدم ت失lose قيمتها بشكل أسرع');
+    if (age > 5) tips.push('السيارات الأقدم تفقد قيمتها بشكل أسرع');
     if (condition === 'EXCELLENT') tips.push('الحالة الممتازة تزيد من القيمة');
     tips.push('الصيانة الدورية تحافظ على قيمة السيارة');
     tips.push('السوق الأردني يفضل ماركات تويوتا وهوندا وكيا');

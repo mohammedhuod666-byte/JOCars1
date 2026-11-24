@@ -13,7 +13,7 @@ import {
   Shield, CheckCircle, AlertTriangle, BarChart3, Bot, Sparkles, Eye,
   Clock, Building2, Palette, DoorOpen, Cpu, Bike, Loader2, GitCompare, ChevronDown,
   RotateCcw, Trash2, Crown, Send, Car as CarIcon, X, RefreshCw, CalendarCheck, ShieldCheck, Zap,
-  MessageSquare, Compass, Handshake, Pencil, FileText, FileCheck2, AlertCircle, CheckCircle2
+  MessageSquare, Compass, Handshake, Pencil, FileText, FileCheck2, AlertCircle, CheckCircle2, Play
 } from 'lucide-react';
 import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, getConditionLabel, formatDate } from '@/lib/utils';
 import { CarDriveLoader } from '@/components/cars/CarDriveLoader';
@@ -88,6 +88,8 @@ export default function CarDetailPage() {
   const [hasMoreImages, setHasMoreImages] = useState(false);
   const [loadingMoreImages, setLoadingMoreImages] = useState(false);
   const [liveFairPrice, setLiveFairPrice] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const chatSubmittingRef = useRef(false);
 
   const applyCarData = (data: any) => {
     setCar(data);
@@ -188,7 +190,7 @@ export default function CarDetailPage() {
     }
   };
 
-  const isOwner = !!currentUser && !!car && (currentUser.id === (car as any).userId);
+  const isOwner = !!currentUser && !!car && (currentUser.id === (car as any).userId || currentUser.id === (car as any).user?.id);
 
   const handleDeleteCar = async () => {
     if (!car) return;
@@ -231,10 +233,18 @@ export default function CarDetailPage() {
       return;
     }
     if (!car) return;
-    if (currentUser.id === car.user.id) {
+    const sellerId = car.user?.id || (car as any).userId;
+    if (!sellerId) {
+      toast.error('معلومات البائع غير متوفرة');
+      return;
+    }
+    if (currentUser.id === sellerId) {
       toast.error('أنت صاحب هذا الإعلان، لا يمكنك مراسلة نفسك');
       return;
     }
+    if (actionLoading || chatSubmittingRef.current) return;
+    chatSubmittingRef.current = true;
+    setActionLoading('message');
     try {
       const res = await fetch('/api/conversations', {
         method: 'POST',
@@ -245,7 +255,7 @@ export default function CarDetailPage() {
         },
         body: JSON.stringify({
           carId: car.id,
-          sellerId: car.user.id,
+          sellerId,
           content: `مرحباً، أنا مهتم بسيارتك المعروضة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى التواصل لمناقشة التفاصيل.`,
         }),
       });
@@ -258,6 +268,9 @@ export default function CarDetailPage() {
       }
     } catch {
       toast.error('حدث خطأ أثناء فتح المحادثة');
+    } finally {
+      chatSubmittingRef.current = false;
+      setActionLoading(null);
     }
   };
 
@@ -269,10 +282,18 @@ export default function CarDetailPage() {
       return;
     }
     if (!car) return;
-    if (currentUser.id === car.user.id) {
-      toast.error('أنت صاحب هذا الإعلان');
+    const sellerId = car.user?.id || (car as any).userId;
+    if (!sellerId) {
+      toast.error('معلومات البائع غير متوفرة');
       return;
     }
+    if (currentUser.id === sellerId) {
+      toast.error('أنت صاحب هذا الإعلان، لا يمكنك التفاوض مع نفسك');
+      return;
+    }
+    if (actionLoading || chatSubmittingRef.current) return;
+    chatSubmittingRef.current = true;
+    setActionLoading('negotiate');
     try {
       const priceTxt = car.price.toLocaleString('ar-JO');
       const res = await fetch('/api/conversations', {
@@ -284,7 +305,7 @@ export default function CarDetailPage() {
         },
         body: JSON.stringify({
           carId: car.id,
-          sellerId: car.user.id,
+          sellerId,
           content: `مرحباً، أعجبتني سيارتك (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}) المعروضة بسعر ${priceTxt} د.أ. هل السعر نهائي أم يوجد مجال للتفاوض؟ `,
         }),
       });
@@ -297,19 +318,31 @@ export default function CarDetailPage() {
       }
     } catch {
       toast.error('حدث خطأ أثناء فتح المحادثة');
+    } finally {
+      chatSubmittingRef.current = false;
+      setActionLoading(null);
     }
   };
 
-  const handleTestDriveRequest = async () => {    if (!currentUser) {
+  const handleTestDriveRequest = async () => {
+    if (!currentUser) {
       toast.error('يرجى تسجيل الدخول أولاً لطلب اختبار القيادة');
       router.push('/auth/login');
       return;
     }
     if (!car) return;
-    if (currentUser.id === car.user.id) {
+    const sellerId = car.user?.id || (car as any).userId;
+    if (!sellerId) {
+      toast.error('معلومات البائع غير متوفرة');
+      return;
+    }
+    if (currentUser.id === sellerId) {
       toast.error('أنت صاحب هذا الإعلان، لا يمكنك تجربة سيارتك الخاصة');
       return;
     }
+    if (actionLoading || chatSubmittingRef.current) return;
+    chatSubmittingRef.current = true;
+    setActionLoading('testdrive');
     try {
       const res = await fetch('/api/conversations', {
         method: 'POST',
@@ -320,8 +353,8 @@ export default function CarDetailPage() {
         },
         body: JSON.stringify({
           carId: car.id,
-          sellerId: car.user.id,
-          content: ` **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
+          sellerId,
+          content: `🚗 **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
         }),
       });
       const data = await res.json();
@@ -333,6 +366,9 @@ export default function CarDetailPage() {
       }
     } catch {
       toast.error('حدث خطأ أثناء إرسال الطلب');
+    } finally {
+      chatSubmittingRef.current = false;
+      setActionLoading(null);
     }
   };
 
@@ -516,6 +552,31 @@ export default function CarDetailPage() {
         </div>
       </div>
 
+      {/* ── Walkaround video attached at publish (car.videoUrl) ──
+              Saved by the publish route and returned in the car payload; shown
+              here as a native player so the attachment is actually visible on
+              the ad instead of silently disappearing. */}
+      {(car as any).videoUrl && (
+        <div className="container-custom max-w-6xl pt-4">
+          <div className="rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl">
+            <div className="flex items-center gap-2 px-5 pt-4 pb-3">
+              <Play className="w-5 h-5 text-emerald-400" />
+              <h3 className="font-black text-white text-base">فيديو السيارة</h3>
+            </div>
+            <video
+              src={(car as any).videoUrl}
+              controls
+              preload="metadata"
+              playsInline
+              poster={allImages[0]?.url}
+              className="w-full max-h-[70vh] bg-black"
+            >
+              متصفحك لا يدعم تشغيل الفيديو
+            </video>
+          </div>
+        </div>
+      )}
+
       {/* Main Body Details Grid */}
       <div className="container-custom max-w-6xl pt-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -569,13 +630,17 @@ export default function CarDetailPage() {
                   </Button>
                 )}
 
-                <Button variant="ghost" icon={<MessageSquare className="w-4 h-4 text-emerald-400" />} onClick={handleSendMessage}>
-                  إرسال رسالة عبر الموقع 
-                </Button>
+                {!isOwner && (
+                  <>
+                    <Button variant="ghost" icon={<MessageSquare className="w-4 h-4 text-emerald-400" />} onClick={handleSendMessage} disabled={!!actionLoading}>
+                      {actionLoading === 'message' ? 'جاري التجهيز...' : 'إرسال رسالة عبر الموقع'}
+                    </Button>
 
-                <Button variant="ghost" icon={<CarIcon className="w-4 h-4 text-amber-400" />} onClick={handleTestDriveRequest}>
-                  طلب اختبار قيادة 
-                </Button>
+                    <Button variant="ghost" icon={<CarIcon className="w-4 h-4 text-amber-400" />} onClick={handleTestDriveRequest} disabled={!!actionLoading}>
+                      {actionLoading === 'testdrive' ? 'جاري الطلب...' : 'طلب اختبار قيادة'}
+                    </Button>
+                  </>
+                )}
 
                 <Button variant="ghost" icon={<Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />} onClick={toggleFavorite}>
                   {isSaved ? 'محفوظة ' : 'حفظ'}
@@ -607,7 +672,7 @@ export default function CarDetailPage() {
             </div>
 
             {/* Unified Fair Market Valuation & AI Analysis Engine */}
-            <ValuationReport carId={car.id} askingPrice={car.price} onValuationLoaded={setLiveFairPrice} />
+            <ValuationReport carId={car.id} askingPrice={car.price} car={car} onValuationLoaded={setLiveFairPrice} />
 
             {/* Specifications Matrix Grid */}
             <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
@@ -732,39 +797,60 @@ export default function CarDetailPage() {
                   </Button>
                 )}
 
-                {/* Quick Negotiation */}
-                <button
-                  type="button"
-                  onClick={handleNegotiate}
-                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-500/20 cursor-pointer"
-                >
-                  <Handshake className="w-4.5 h-4.5" />
-                  <span>تفاوض على السعر </span>
-                </button>
+                {!isOwner ? (
+                  <>
+                    {/* Quick Negotiation */}
+                    <button
+                      type="button"
+                      onClick={handleNegotiate}
+                      disabled={!!actionLoading}
+                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-500/20 cursor-pointer disabled:opacity-60"
+                    >
+                      <Handshake className="w-4.5 h-4.5" />
+                      <span>{actionLoading === 'negotiate' ? 'جاري فتح المحادثة...' : 'تفاوض على السعر '}</span>
+                    </button>
 
-                {/* Send Message on Website */}
-                <button
-                  type="button"
-                  onClick={handleSendMessage}
-                  className="w-full h-12 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <MessageSquare className="w-4.5 h-4.5" />
-                  <span>إرسال رسالة عبر الموقع </span>
-                </button>
+                    {/* Send Message on Website */}
+                    <button
+                      type="button"
+                      onClick={handleSendMessage}
+                      disabled={!!actionLoading}
+                      className="w-full h-12 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+                    >
+                      <MessageSquare className="w-4.5 h-4.5" />
+                      <span>{actionLoading === 'message' ? 'جاري تجهيز المحادثة...' : 'إرسال رسالة عبر الموقع '}</span>
+                    </button>
 
-                {/* Request Test Drive */}
-                <button
-                  type="button"
-                  onClick={handleTestDriveRequest}
-                  className="w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 cursor-pointer"
-                >
-                  <CarIcon className="w-4.5 h-4.5" />
-                  <span>طلب اختبار قيادة </span>
-                </button>
+                    {/* Request Test Drive */}
+                    <button
+                      type="button"
+                      onClick={handleTestDriveRequest}
+                      disabled={!!actionLoading}
+                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-60"
+                    >
+                      <CarIcon className="w-4.5 h-4.5" />
+                      <span>{actionLoading === 'testdrive' ? 'جاري إرسال الطلب...' : 'طلب اختبار قيادة '}</span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
+                    <p className="text-xs text-amber-400 font-bold flex items-center justify-center gap-1.5">
+                      <span>⭐</span>
+                      <span>هذا إعلانك المعروض في كارس جو</span>
+                    </p>
+                    <Link
+                      href={`/cars/${car?.id}/edit`}
+                      className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
+                    >
+                      <Pencil className="w-4 h-4" />
+                      <span>تعديل بيانات الإعلان</span>
+                    </Link>
+                  </div>
+                )}
               </div>
 
               {/* Inspection / Booking Request */}
-              {car.status === 'APPROVED' && (!currentUser || currentUser.id !== car.user.id) && (
+              {car.status === 'APPROVED' && (!currentUser || !isOwner) && (
                 <button
                   onClick={() => setBookingOpen(true)}
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black text-xs hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"

@@ -216,7 +216,7 @@ const personalityTypes: PersonalityType[] = [
       { brand: 'Lexus', model: 'RX', yearRange: '2019-2024', priceRange: '22,000-40,000 د.أ', reason: 'فخامة هادئة وموثوقة', category: 'SUV فاخر' },
       { brand: 'BMW', model: '7 Series', yearRange: '2016-2023', priceRange: '18,000-40,000 د.أ', reason: 'قمة الفخامة الألمانية', category: 'سيدان فاخرة' },
       { brand: 'Mercedes-Benz', model: 'S-Class', yearRange: '2015-2023', priceRange: '20,000-50,000 د.أ', reason: 'ملك السيارات الفاخرة', category: 'سيدان فاخرة' },
-      { brand: 'Audi', model: 'Q7', yearRange: '2018-2024', priceRange: '25,000-45,000 د.أ', reason: '技术和 فخامة في حزمة واحدة', category: 'SUV فاخر' },
+      { brand: 'Audi', model: 'Q7', yearRange: '2018-2024', priceRange: '25,000-45,000 د.أ', reason: 'تقنيات متطورة وفخامة في حزمة واحدة', category: 'SUV فاخر' },
     ],
   },
   {
@@ -235,7 +235,7 @@ const personalityTypes: PersonalityType[] = [
       { brand: 'Honda', model: 'Accord Hybrid', yearRange: '2020-2024', priceRange: '14,000-22,000 د.أ', reason: 'راحة واقتصادية ممتازة', category: 'سيدان هايبرد' },
       { brand: 'Hyundai', model: 'Sonata Hybrid', yearRange: '2020-2024', priceRange: '12,000-19,000 د.أ', reason: 'تصميم جميل وهيدريو', category: 'سيدان هايبرد' },
       { brand: 'Toyota', model: 'RAV4 Hybrid', yearRange: '2020-2024', priceRange: '16,000-24,000 د.أ', reason: 'SUV هايبرد عملي وهادئ', category: 'SUV هايبرد' },
-      { brand: 'Hyundai', model: 'Ioniq', yearRange: '2020-2024', priceRange: '11,000-17,000 د.أ', reason: '未来انية وهادئة', category: 'هايبرد/كهرباء' },
+      { brand: 'Hyundai', model: 'Ioniq', yearRange: '2020-2024', priceRange: '11,000-17,000 د.أ', reason: 'مستقبلية وهادئة', category: 'هايبرد/كهرباء' },
     ],
   },
 ];

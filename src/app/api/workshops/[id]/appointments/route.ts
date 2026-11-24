@@ -83,8 +83,13 @@ export async function POST(
       return errorResponse('الورشة غير متاحة حالياً');
     }
 
-    const appointment = await prisma.$transaction(async (tx) => {
-      const newAppointment = await tx.workshopAppointment.create({
+    // HTTP adapter لا يدعم المعاملات — ننفّذ بالتتابع: إنشاء الموعد، ثم العدّاد،
+    // ثم رسالة الإشعار (التي كانت أيضًا غير قاتلة داخل المعاملة). لو فشل
+    // العدّاد نحذف الموعد تعويضًا كما كان roll-back يفعل.
+    let appointmentId: string | null = null;
+    let appointment: any;
+    try {
+      appointment = await prisma.workshopAppointment.create({
         data: {
           workshopId: id,
           userId: user.id,
@@ -100,53 +105,57 @@ export async function POST(
           isUrgent: Boolean(isUrgent),
         },
       });
+      appointmentId = appointment.id;
 
-      await tx.workshop.update({
+      await prisma.workshop.update({
         where: { id },
         data: { appointmentCount: { increment: 1 } },
       });
+    } catch (createErr) {
+      if (appointmentId) {
+        await prisma.workshopAppointment.delete({ where: { id: appointmentId } }).catch(() => {});
+      }
+      throw createErr;
+    }
 
-      // Send notification message to workshop owner safely
+    // Send notification message to workshop owner safely
+    try {
       const bookingDate = new Date(date).toLocaleDateString('ar-JO', { year: 'numeric', month: 'long', day: 'numeric' });
       const notificationContent = ` موعد جديد: ${user.name} حجز موعداً في ${bookingDate} الساعة ${time}\nالخدمة: ${serviceType}${carMake ? `\nالسيارة: ${carMake} ${carModel || ''}${carYear ? ` (${carYear})` : ''}${plateNumber ? ` [${plateNumber}]` : ''}` : ''}${isUrgent ? `\n حجز طارئ` : ''}${budget ? `\nالميزانية المقدرة: ${budget} د.أ` : ''}${description ? `\nملاحظات: ${description}` : ''}`;
 
-      try {
-        let conv = await tx.conversation.findFirst({
-          where: {
-            OR: [
-              { buyerId: user.id, sellerId: workshop.userId },
-              { buyerId: workshop.userId, sellerId: user.id }
-            ]
-          },
-        });
+      let conv = await prisma.conversation.findFirst({
+        where: {
+          OR: [
+            { buyerId: user.id, sellerId: workshop.userId },
+            { buyerId: workshop.userId, sellerId: user.id }
+          ]
+        },
+      });
 
-        if (!conv) {
-          const sellerCar = await tx.car.findFirst({ where: { userId: workshop.userId }, select: { id: true } });
-          if (sellerCar) {
-            conv = await tx.conversation.create({
-              data: {
-                carId: sellerCar.id,
-                buyerId: user.id,
-                sellerId: workshop.userId,
-              },
-            });
-          }
+      if (!conv) {
+        const sellerCar = await prisma.car.findFirst({ where: { userId: workshop.userId }, select: { id: true } });
+        if (sellerCar) {
+          conv = await prisma.conversation.create({
+            data: {
+              carId: sellerCar.id,
+              buyerId: user.id,
+              sellerId: workshop.userId,
+            },
+          });
         }
-
-        await tx.message.create({
-          data: {
-            content: notificationContent,
-            senderId: user.id,
-            receiverId: workshop.userId,
-            conversationId: conv ? conv.id : null,
-          },
-        });
-      } catch (msgErr) {
-        console.warn('Notification message creation warning:', msgErr);
       }
 
-      return newAppointment;
-    });
+      await prisma.message.create({
+        data: {
+          content: notificationContent,
+          senderId: user.id,
+          receiverId: workshop.userId,
+          conversationId: conv ? conv.id : null,
+        },
+      });
+    } catch (msgErr) {
+      console.warn('Notification message creation warning:', msgErr);
+    }
 
     return successResponse(appointment, 201);
   } catch (error) {

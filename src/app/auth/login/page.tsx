@@ -149,27 +149,26 @@ export default function LoginPage() {
               <span className="text-[#ffc640]">الأردني</span> الأرقى
             </h1>
             <p className="text-lg text-[#909096] leading-relaxed max-w-md">
-              منصة ذكية تجمع بين البائعين والمشترين بأمان وشفافية. اكتشف آلاف السيارات بأسعار منافسة.
+              منصة ذكية تجمع بين البائعين والمشترين بأمان وشفافية. تصفح السيارات وتواصل مباشرة دون وسطاء.
             </p>
           </motion.div>
 
-          {/* Stats */}
+          {/* Features */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="mt-12 grid grid-cols-3 gap-6"
+            className="mt-12 grid grid-cols-3 gap-3"
           >
             {[
-              { number: '+15K', label: 'سيارة معروضة' },
-              { number: '+8K', label: 'بائع موثوق' },
-              { number: '+50K', label: 'مستخدم نشط' },
-            ].map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-2xl font-bold text-[#ffc640]" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                  {stat.number}
-                </div>
-                <div className="text-xs text-[#909096] mt-1">{stat.label}</div>
+              { icon: '🚗', label: 'إعلانات مباشرة', sub: 'تواصل فوري مع المالك' },
+              { icon: '🛡️', label: 'أمان وشفافية', sub: 'بيانات فحص واضحة' },
+              { icon: '⚡', label: 'تقييم ذكي', sub: 'تحليل دقيق للأسعار' },
+            ].map((feat, i) => (
+              <div key={i} className="text-center p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                <div className="text-xl mb-1">{feat.icon}</div>
+                <div className="text-xs font-bold text-white">{feat.label}</div>
+                <div className="text-[10px] text-[#909096] mt-0.5">{feat.sub}</div>
               </div>
             ))}
           </motion.div>

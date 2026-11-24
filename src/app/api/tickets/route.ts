@@ -39,22 +39,41 @@ export async function POST(request: NextRequest) {
 
     if (!subject || !message) return errorResponse('العنوان والرسالة مطلوبان');
 
-    const ticket = await prisma.ticket.create({
-      data: {
-        subject,
-        message,
-        category: category || 'GENERAL',
-        priority: priority || 'NORMAL',
-        userId: user.id,
-        messages: {
-          create: { content: message, userId: user.id, isStaff: false },
+    // HTTP adapter لا يدعم الكتابات المتداخلة (nested writes) — ننشئ التذكرة
+    // ثم رسالة الرسالة الأولى، مع حذف تعويضي للتذكرة لو فشلت الرسالة.
+    let createdTicketId: string | null = null;
+    let ticket: any;
+    try {
+      const created = await prisma.ticket.create({
+        data: {
+          subject,
+          message,
+          category: category || 'GENERAL',
+          priority: priority || 'NORMAL',
+          userId: user.id,
         },
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        messages: { take: 1, include: { user: { select: { id: true, name: true } } } },
-      },
-    });
+      });
+      createdTicketId = created.id;
+
+      await prisma.ticketMessage.create({
+        data: { content: message, userId: user.id, isStaff: false, ticketId: created.id },
+      });
+
+      ticket = await prisma.ticket.findUnique({
+        where: { id: created.id },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          messages: { take: 1, include: { user: { select: { id: true, name: true } } } },
+        },
+      });
+      if (!ticket) throw new Error('ticket row not found right after create');
+    } catch (createErr) {
+      if (createdTicketId) {
+        await prisma.ticketMessage.deleteMany({ where: { ticketId: createdTicketId } }).catch(() => {});
+        await prisma.ticket.delete({ where: { id: createdTicketId } }).catch(() => {});
+      }
+      throw createErr;
+    }
 
     sendWhatsAppToAdmins(buildAdminMessage('new_ticket', {
       userName: user.name, subject, category: category || 'GENERAL', priority: priority || 'NORMAL',

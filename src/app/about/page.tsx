@@ -38,7 +38,7 @@ export default function AboutPage() {
         <h2 className="text-2xl font-bold text-surface-900 dark:text-white mb-8 text-center">لماذا JO Cars؟</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
           {[
-            { icon: Car, title: 'سوق متكامل', desc: 'آلاف الإعلانات عن السيارات الجديدة والمستعملة' },
+            { icon: Car, title: 'سوق متكامل', desc: 'إعلانات متنوعة للسيارات الجديدة والمستعملة' },
             { icon: Shield, title: 'آمن وموثوق', desc: 'تحقق من الهوية وحماية المستخدمين' },
             { icon: Zap, title: 'ذكاء اصطناعي', desc: 'تقدير الأسعار وتحليل الحالة بالذكاء الاصطناعي' },
             { icon: Users, title: 'مجتمع نشط', desc: 'منتدى نقاش ومشاركة الخبرات' },

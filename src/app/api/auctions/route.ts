@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     return Response.json({ success: true, data: auctions, pagination: { page, limit, hasMore: auctions.length === limit } });
   }
 
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   if (type === 'seller') {
     const auctions = await prisma.auction.findMany({
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   if (process.env.AUCTIONS_ENABLED === 'false') {
     return Response.json({ error: 'المزادات متوقفة مؤقتًا' }, { status: 403 });

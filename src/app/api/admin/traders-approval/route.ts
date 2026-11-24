@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { createAuditLog } from '@/lib/audit';
+import { sendPushToUser } from '@/lib/push';
 
 /**
  * Admin trader-approval queue. Mirrors the premium-requests route structure
@@ -72,11 +73,40 @@ export async function POST(request: NextRequest) {
     const now = new Date();
 
     if (action === 'APPROVE') {
-      // Persist the verified profile onto the User inside a transaction so
-      // a failure mid-write can't leave the User flagged as a dealer while
-      // the verification row still reads PENDING (or vice-versa).
-      await prisma.$transaction([
-        prisma.user.update({
+      // HTTP adapter لا يدعم المعاملات — ننفّذ التحديثين متتاليين ونلتزم
+      // بنفس قاعدة الاتّساق: نحدّث الطلب أولًا فلو تعذّر لم يبقَ قبول دون
+      // تاجر معتمد، وعند فشل تراجع صف الطلب إلى PENDING (كان roll-back
+      // المعاملة يلغي كلتَي الكتابتين).
+      try {
+        await prisma.traderVerification.update({
+          where: { id: requestId },
+          data: {
+            status: 'APPROVED',
+            reviewedBy: user.id,
+            reviewedAt: now,
+          },
+        });
+      } catch (approveErr) {
+        // لم نكتب شيئًا — أعد الخطأ كما هو.
+        throw approveErr;
+      }
+
+      try {
+        // Persist the verified profile onto the User: a failure here can't
+        // leave the verification row as the only approved artifact, so we
+        // revert it to PENDING (compensating write for the rolled-back tx).
+        // Parse existing badges and add VERIFIED_DEALER
+        let existingBadges: string[] = [];
+        try {
+          existingBadges = JSON.parse(verification.user.badges || '[]');
+        } catch {
+          existingBadges = [];
+        }
+        if (!existingBadges.includes('VERIFIED_DEALER')) {
+          existingBadges.push('VERIFIED_DEALER');
+        }
+
+        await prisma.user.update({
           where: { id: verification.userId },
           data: {
             role: 'TRADER',
@@ -88,17 +118,36 @@ export async function POST(request: NextRequest) {
             dealerLat: verification.dealerLat,
             dealerLng: verification.dealerLng,
             dealerCommercialReg: verification.commercialReg,
+            badges: JSON.stringify(existingBadges),
           },
-        }),
-        prisma.traderVerification.update({
-          where: { id: requestId },
+        });
+
+        // Send Push Notification + In-App notification directly to dealer's phone
+        const notifTitle = '🎉 مبروك! تم توثيق معرضك ومنحك الشارة الرسمية';
+        const notifBody = `وافقت إدارة كارس جو على اعتماد معرضك (${verification.dealerName}) ومنحك الشارة الذهبية الموثقة!`;
+
+        await prisma.notification.create({
           data: {
-            status: 'APPROVED',
-            reviewedBy: user.id,
-            reviewedAt: now,
+            userId: verification.userId,
+            title: notifTitle,
+            message: notifBody,
+            type: 'TRADER_APPROVED',
+            link: '/dealers/dashboard',
           },
-        }),
-      ]);
+        }).catch(() => {});
+
+        await sendPushToUser(verification.userId, {
+          title: notifTitle,
+          body: notifBody,
+          url: '/dealers/dashboard',
+        }).catch(() => {});
+      } catch (userErr) {
+        await prisma.traderVerification.update({
+          where: { id: requestId },
+          data: { status: 'PENDING', reviewedBy: null, reviewedAt: null },
+        }).catch(() => {});
+        throw userErr;
+      }
     } else {
       // REJECT — persist the rejectReason so we can show the applicant why.
       await prisma.traderVerification.update({
@@ -110,6 +159,26 @@ export async function POST(request: NextRequest) {
           reviewedAt: now,
         },
       });
+
+      // Send rejection notification to dealer
+      const rejTitle = 'إشعار بخصوص طلب توثيق المعرض';
+      const rejBody = `تمت مراجعة طلب توثيق معرضك من الإدارة: ${rejectReason || 'يرجى مراجعة وتحديث البيانات المطلوبة'}`;
+
+      await prisma.notification.create({
+        data: {
+          userId: verification.userId,
+          title: rejTitle,
+          message: rejBody,
+          type: 'TRADER_REJECTED',
+          link: '/dealers/dashboard',
+        },
+      }).catch(() => {});
+
+      await sendPushToUser(verification.userId, {
+        title: rejTitle,
+        body: rejBody,
+        url: '/dealers/dashboard',
+      }).catch(() => {});
     }
 
     await createAuditLog({

@@ -127,8 +127,12 @@ export async function POST(request: NextRequest) {
 
     if (!name) return errorResponse('اسم الورشة مطلوب');
 
-    const workshop = await prisma.$transaction(async (tx) => {
-      const newWorkshop = await tx.workshop.create({
+    // HTTP adapter لا يدعم المعاملات ولا createMany — ننفّذ بالتتابع مع حذف
+    // تعويضي (البنين ثم الأب حسب القيود) لو فشلت أي خطوة، بدل roll-back المعاملة.
+    let workshopId: string | null = null;
+    let workshop: any;
+    try {
+      const newWorkshop = await prisma.workshop.create({
         data: {
           userId: user.id,
           name,
@@ -162,42 +166,58 @@ export async function POST(request: NextRequest) {
           discountOffer: discountOffer || null,
         },
       });
+      workshopId = newWorkshop.id;
 
       if (services && services.length > 0) {
-        await tx.workshopService.createMany({
-          data: services.map((s: { name: string; category?: string } | string) => ({
-            workshopId: newWorkshop.id,
-            name: typeof s === 'string' ? s : s.name,
-            category: typeof s === 'string' ? null : (s.category || null),
-          })),
-        });
+        for (const s of services) {
+          await prisma.workshopService.create({
+            data: {
+              workshopId: newWorkshop.id,
+              name: typeof s === 'string' ? s : s.name,
+              category: typeof s === 'string' ? null : (s.category || null),
+            },
+          });
+        }
       }
 
       if (brands && brands.length > 0) {
-        await tx.workshopBrand.createMany({
-          data: brands.map((b: { brand: string } | string) => ({
-            workshopId: newWorkshop.id,
-            brand: typeof b === 'string' ? b : b.brand,
-          })),
-        });
+        for (const b of brands) {
+          await prisma.workshopBrand.create({
+            data: {
+              workshopId: newWorkshop.id,
+              brand: typeof b === 'string' ? b : b.brand,
+            },
+          });
+        }
       }
 
       if (prices && prices.length > 0) {
-        await tx.workshopPrice.createMany({
-          data: prices.map((p: { serviceName: string; minPrice: number; maxPrice: number }) => ({
-            workshopId: newWorkshop.id,
-            serviceName: p.serviceName,
-            minPrice: Number(p.minPrice) || 0,
-            maxPrice: Number(p.maxPrice) || 0,
-          })),
-        });
+        for (const p of prices) {
+          await prisma.workshopPrice.create({
+            data: {
+              workshopId: newWorkshop.id,
+              serviceName: p.serviceName,
+              minPrice: Number(p.minPrice) || 0,
+              maxPrice: Number(p.maxPrice) || 0,
+            },
+          });
+        }
       }
 
-      return tx.workshop.findUnique({
+      workshop = await prisma.workshop.findUnique({
         where: { id: newWorkshop.id },
         include: { services: true, brands: true, prices: true },
       });
-    });
+      if (!workshop) throw new Error('workshop row not found right after create');
+    } catch (createErr) {
+      if (workshopId) {
+        await prisma.workshopService.deleteMany({ where: { workshopId } }).catch(() => {});
+        await prisma.workshopBrand.deleteMany({ where: { workshopId } }).catch(() => {});
+        await prisma.workshopPrice.deleteMany({ where: { workshopId } }).catch(() => {});
+        await prisma.workshop.delete({ where: { id: workshopId } }).catch(() => {});
+      }
+      throw createErr;
+    }
 
     return successResponse(workshop, 201);
   } catch (error) {

@@ -62,7 +62,7 @@ const BRAND_ALIASES: Record<string, string> = {
   'مرسيدس': 'mercedes', 'مرسيديس': 'mercedes',
   'أودي': 'audi', 'اودي': 'audi',
   'لكزس': 'lexus', 'لكسز': 'lexus',
-  'سوزوكي': 'suzuki', 'سوзуكي': 'suzuki',
+  'سوزوكي': 'suzuki',
   'ام جي': 'mg',
   'شيري': 'chery',
   'جيلي': 'geely', 'بي واي دي': 'byd', 'BYD': 'byd',

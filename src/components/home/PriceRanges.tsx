@@ -1,36 +1,40 @@
 'use client';
 
 import Link from 'next/link';
-import { Banknote } from 'lucide-react';
+import { Banknote, Sparkles } from 'lucide-react';
 import { useInScrollView, scrollStyle } from '@/hooks/useInScrollView';
 
 const priceRanges = [
-  { label: 'أقل من 5,000', min: 0, max: 5000, accent: 'bg-success-500/15 text-success-400' },
-  { label: '5,000 - 10,000', min: 5000, max: 10000, accent: 'bg-accent-500/15 text-accent-400' },
-  { label: '10,000 - 20,000', min: 10000, max: 20000, accent: 'bg-purple-500/15 text-purple-400' },
-  { label: '20,000 - 40,000', min: 20000, max: 40000, accent: 'bg-gold-100/15 text-gold-200' },
-  { label: 'أكثر من 40,000', min: 40000, max: 0, accent: 'bg-error-500/15 text-error-400' },
+  { label: 'أقل من 5,000 د.أ', sub: 'اقتصادية وشعبية', min: 0, max: 5000, accent: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  { label: '5,000 - 10,000 د.أ', sub: 'فئة متوسطة عملية', min: 5000, max: 10000, accent: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
+  { label: '10,000 - 20,000 د.أ', sub: 'هايبرد وكهرباء حديثة', min: 10000, max: 20000, accent: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  { label: '20,000 - 40,000 د.أ', sub: 'سيارات فارهة وSUV', min: 20000, max: 40000, accent: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  { label: 'أكثر من 40,000 د.أ', sub: 'نخبة السيارات الفاخرة', min: 40000, max: 0, accent: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
 ];
 
 export function PriceRanges() {
   const { ref, isInView } = useInScrollView(0.05);
 
   return (
-    <section ref={ref} className="py-16 sm:py-20 relative">
-      <div className="container-custom">
-        <div className="text-center mb-10 sm:mb-12" style={scrollStyle(isInView)}>
-          <p className="kicker kicker-center justify-center mb-3">الميزانية</p>
-          <h2 className="display text-2xl sm:text-3xl md:text-4xl text-surface-50"
-            style={scrollStyle(isInView, { delay: 0.1 })}>
-            تصفح حسب الميزانية
+    <section ref={ref} className="py-20 sm:py-28 bg-[#080a0f] border-t border-white/[0.06] relative overflow-hidden">
+      <div className="container-custom relative z-10">
+        
+        {/* Header */}
+        <div className="text-center max-w-xl mx-auto mb-12 sm:mb-16 space-y-3" style={scrollStyle(isInView)}>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/10 border border-amber-400/25 text-amber-300 text-xs font-bold mx-auto">
+            <Banknote className="w-3.5 h-3.5 text-amber-400" />
+            <span>نطاقات الميزانية</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tight">
+            تصفح حسب ميزانيتك
           </h2>
-          <p className="text-surface-500 mt-2 text-sm sm:text-base"
-            style={scrollStyle(isInView, { delay: 0.15 })}>
-            اختر النطاق السعري المناسب لميزانيتك
+          <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
+            حدد النطاق السعري المناسب لك واستعرض السيارات المطابقة لميزانيتك بدقة.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+        {/* Ranges Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
           {priceRanges.map((range, i) => {
             const href = range.max === 0
               ? `/cars?minPrice=${range.min}`
@@ -40,20 +44,25 @@ export function PriceRanges() {
               <div key={range.label} style={scrollStyle(isInView, { delay: Math.min(i * 0.05, 0.4) })}>
                 <Link
                   href={href}
-                  className="group relative flex flex-col items-center gap-3 rounded-xl border border-surface-700/50 bg-surface-800 p-5 transition-all duration-300 hover:border-accent-500/40 hover:shadow-card-hover hover:-translate-y-1 overflow-hidden active:scale-[0.98]"
+                  className="group relative flex flex-col items-center gap-3 rounded-3xl border border-white/[0.08] bg-[#111520]/80 p-6 transition-all duration-300 hover:border-amber-400/40 hover:bg-[#161c2b] hover:-translate-y-1.5 text-center overflow-hidden"
                 >
-                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gold-100 opacity-0 group-hover:opacity-60 transition-opacity duration-300" />
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                  <span className={`relative flex items-center justify-center w-12 h-12 rounded-lg transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-6 ${range.accent}`}><Banknote className="w-6 h-6" /></span>
-                  <span className="relative text-sm font-semibold text-surface-200 text-center leading-tight">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border group-hover:scale-110 transition-transform duration-300 ${range.accent}`}>
+                    <Banknote className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-black text-white group-hover:text-amber-300 transition-colors leading-snug">
                     {range.label}
                   </span>
-                  <span className="relative text-xs text-surface-500">دينار أردني</span>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    {range.sub}
+                  </span>
                 </Link>
               </div>
             );
           })}
         </div>
+
       </div>
     </section>
   );

@@ -82,9 +82,12 @@ export function computeDetailedWeight(
   // 6. Source Quality weight
   const sourceQualityWeight = sourceTrust[c.source] ?? 0.85;
 
-  // 7. Recency weight: freshness decay
+  // 7. Recency weight: dynamic exponential freshness decay
   const days = c.ageDays ?? 30;
-  const recencyWeight = days <= 7 ? 1.0 : days <= 30 ? 0.90 : days <= 90 ? 0.75 : 0.60;
+  // Fresh listings (<= 7 days) hold full 1.0 weight; gentle continuous decay down to 0.60 floor
+  const recencyWeight = days <= 7
+    ? 1.0
+    : Math.max(0.60, Math.round(Math.exp(-0.008 * (days - 7)) * 100) / 100);
 
   const rawCompositeWeight = Math.round(
     identityWeight *
@@ -228,6 +231,79 @@ export function weightedAvg(items: { price: number; weight: number }[]): number 
   const tw = items.reduce((x, y) => x + y.weight, 0);
   if (tw <= 0) return 0;
   return Math.round(items.reduce((x, y) => x + y.price * y.weight, 0) / tw);
+}
+
+/**
+ * Monte Carlo Bootstrap Confidence Intervals:
+ * Runs deterministic pseudo-random bootstrap resampling with replacement over weighted comparables
+ * to calculate empirical 90% confidence bounds and price variance without guessing.
+ */
+export function computeBootstrapConfidenceBands(
+  comps: Comparable[],
+  iterations = 200
+): {
+  bootstrapMedian: number;
+  ciLower90: number;
+  ciUpper90: number;
+  standardError: number;
+  bootstrapSpread: number;
+} {
+  const items = comps.map((c) => ({ price: c.adjustedPrice ?? c.priceJod, weight: Math.max(0.01, c.weight) }));
+  if (items.length === 0) {
+    return { bootstrapMedian: 0, ciLower90: 0, ciUpper90: 0, standardError: 0, bootstrapSpread: 0 };
+  }
+  if (items.length === 1) {
+    const p = items[0].price;
+    return { bootstrapMedian: p, ciLower90: p, ciUpper90: p, standardError: 0, bootstrapSpread: 0 };
+  }
+
+  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+  const cdf: number[] = [];
+  let cum = 0;
+  for (const item of items) {
+    cum += item.weight / totalWeight;
+    cdf.push(cum);
+  }
+  cdf[cdf.length - 1] = 1.0;
+
+  let seed = 42;
+  const nextRandom = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
+  const sampleMedians: number[] = [];
+  const n = items.length;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const resampled: { price: number; weight: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      const r = nextRandom();
+      let idx = 0;
+      while (idx < cdf.length - 1 && r > cdf[idx]) {
+        idx++;
+      }
+      resampled.push(items[idx]);
+    }
+    sampleMedians.push(weightedMedian(resampled));
+  }
+
+  sampleMedians.sort((a, b) => a - b);
+  const ciLower90 = quantile(sampleMedians, 0.05);
+  const ciUpper90 = quantile(sampleMedians, 0.95);
+  const bootstrapMedian = quantile(sampleMedians, 0.50);
+
+  const mean = sampleMedians.reduce((a, b) => a + b, 0) / sampleMedians.length;
+  const variance = sampleMedians.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / sampleMedians.length;
+  const standardError = Math.round(Math.sqrt(variance));
+
+  return {
+    bootstrapMedian: Math.round(bootstrapMedian),
+    ciLower90: Math.round(ciLower90),
+    ciUpper90: Math.round(ciUpper90),
+    standardError,
+    bootstrapSpread: Math.round(ciUpper90 - ciLower90),
+  };
 }
 
 /**
@@ -421,7 +497,7 @@ export interface ConfidenceInput {
   spreadRatio: number; // iqr / median
   freshShare: number;  // share of comps <= 30 days
   specComplete: boolean;
-  yearMatchShare: number;   // share with |Δyear| == 0
+  yearMatchShare: number;   // share with |diff_year| == 0
   trimMatchShare: number;   // share with trim equal-or-unknown
   engineMatchShare: number; // share with fuel+trans equal-or-unknown
   tier1Share: number;       // share of exact-tier comps

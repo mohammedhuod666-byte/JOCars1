@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from '@/lib/api';
@@ -38,22 +39,20 @@ export async function POST(request: NextRequest) {
   if (eligible.length === 0) return errorResponse('لا يوجد مستخدمون صالحون لهذا الإجراء', 400);
   const eligibleIds = eligible.map((t) => t.id);
 
-  let data: Record<string, unknown> = {};
-  if (action === 'unban') data = { banStatus: null, banReason: null, banUntil: null, isActive: true };
-  else if (action === 'activate') data = { isActive: true };
-  else if (action === 'deactivate') data = { isActive: false };
-  else if (action === 'canpost_on') data = { canPost: true };
-  else if (action === 'canpost_off') data = { canPost: false };
-  else if (action === 'ban_perm') data = { banStatus: 'PERMANENT', banReason: banReason || null, banUntil: null, isActive: false };
-  else if (action === 'ban_temp') {
-    data = {
-      banStatus: 'TEMPORARY', banReason: banReason || null,
-      banUntil: new Date(Date.now() + (banDays || 7) * 24 * 60 * 60 * 1000),
-      isActive: false,
-    };
-  }
+  // HTTP adapter لا يدعم updateMany — نبني جملة UPDATE واحدة معلّمة بدلها
+  // (القيم parameterized، والفتحة من enum مفحوص بـ zod أعلاه).
+  let setSql: Prisma.Sql;
+  if (action === 'unban') setSql = Prisma.sql`"banStatus" = NULL, "banReason" = NULL, "banUntil" = NULL, "isActive" = true`;
+  else if (action === 'activate') setSql = Prisma.sql`"isActive" = true`;
+  else if (action === 'deactivate') setSql = Prisma.sql`"isActive" = false`;
+  else if (action === 'canpost_on') setSql = Prisma.sql`"canPost" = true`;
+  else if (action === 'canpost_off') setSql = Prisma.sql`"canPost" = false`;
+  else if (action === 'ban_perm') setSql = Prisma.sql`"banStatus" = 'PERMANENT', "banReason" = ${banReason || null}, "banUntil" = NULL, "isActive" = false`;
+  else setSql = Prisma.sql`"banStatus" = 'TEMPORARY', "banReason" = ${banReason || null}, "banUntil" = ${new Date(Date.now() + (banDays || 7) * 24 * 60 * 60 * 1000)}, "isActive" = false`;
 
-  const result = await prisma.user.updateMany({ where: { id: { in: eligibleIds } }, data: data as any });
+  const count = await prisma.$executeRaw(
+    Prisma.sql`UPDATE "users" SET ${setSql} WHERE "id" IN (${Prisma.join(eligibleIds)})`
+  );
 
   await createAuditLog({
     action: 'BULK_USER_UPDATE', actorId: actor.id,
@@ -63,5 +62,5 @@ export async function POST(request: NextRequest) {
     ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
   }).catch(() => {});
 
-  return successResponse({ updated: result.count, skipped: ids.length - eligibleIds.length });
+  return successResponse({ updated: count, skipped: ids.length - eligibleIds.length });
 }

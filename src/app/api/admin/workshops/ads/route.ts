@@ -96,7 +96,8 @@ export async function PUT(request: NextRequest) {
     const ad = await prisma.workshopAd.findUnique({ where: { id: adId } });
     if (!ad) return errorResponse('الإعلان غير موجود', 404);
 
-    const updated = await prisma.workshopAd.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.workshopAd.update({
       where: { id: adId },
       data: {
         status,
@@ -104,12 +105,16 @@ export async function PUT(request: NextRequest) {
         reviewedBy: user.id,
         reviewedAt: new Date(),
       },
+    });
+    const updated = await prisma.workshopAd.findUnique({
+      where: { id: adId },
       include: {
         workshop: {
           select: { id: true, name: true },
         },
       },
     });
+    if (!updated) return errorResponse('الإعلان غير موجود', 404);
 
     return successResponse(updated);
   } catch (error) {

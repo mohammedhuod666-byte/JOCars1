@@ -12,6 +12,7 @@ import {
   Phone, X, Save, Loader2, Trophy, TrendingUp, ChevronDown, Star, Users, FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
+import { DealerIntelligenceSuite } from './DealerIntelligenceSuite';
 
 interface DealerCar {
   id: string;
@@ -611,8 +612,12 @@ export function DealerDashboardComponent() {
                 <div className="pt-14 sm:pt-16 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-2xl font-black text-gray-900 dark:text-white break-words min-w-0">{dealerName || 'معرض السيارات'}</h1>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> تاجر معتمد 
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${
+                      user?.dealerVerified
+                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                    }`}>
+                      <ShieldCheck className="w-3.5 h-3.5" /> {user?.dealerVerified ? 'تاجر معتمد' : 'تاجر مسجل'}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
@@ -625,7 +630,7 @@ export function DealerDashboardComponent() {
               </div>
 
               <div className="flex gap-2 flex-wrap justify-center">
-                <Link href="/cars/new" className="btn btn-emerald px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                <Link href="/cars/add" className="btn btn-emerald px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20">
                   <Plus className="w-4 h-4" /> إضافة سيارة
                 </Link>
                 <Link href={`/profile/${user?.id}`} className="btn btn-outline px-4 py-2.5 text-xs font-bold">
@@ -920,6 +925,17 @@ export function DealerDashboardComponent() {
           )}
         </div>
 
+        {/* ── Dealer Intelligence & Trading Suite (رادار الصيد، البدل، الترسيم، الطلب، العروض) ── */}
+        <DealerIntelligenceSuite
+          dealerCars={cars}
+          dealerName={dealerName}
+          dealerPhone={dealerPhone}
+          dealerLogo={avatarUrl || logoUrl}
+          isVerified={Boolean(user?.dealerVerified)}
+          onRequestVerification={() => setShowVerifyForm(true)}
+          onShowToast={showToast}
+        />
+
         {/* ── Inventory ─────────────────────────────────────────────── */}
         <div className="card p-6">
           <div className="flex flex-col gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
@@ -965,7 +981,7 @@ export function DealerDashboardComponent() {
                 {cars.length === 0 ? 'لا توجد سيارات في معرضك حالياً' : 'لا توجد نتائج مطابقة للبحث'}
               </p>
               {cars.length === 0 && (
-                <Link href="/cars/new" className="btn btn-emerald px-5 py-2 text-xs mt-3 inline-block font-bold">
+                <Link href="/cars/add" className="btn btn-emerald px-5 py-2 text-xs mt-3 inline-block font-bold">
                   إضافة أول سيارة للمعرض
                 </Link>
               )}

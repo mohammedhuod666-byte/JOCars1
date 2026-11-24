@@ -22,6 +22,26 @@ import {
  *                              completed. dealerId-side is the only one allowed to
  *                              ACCEPT/REJECT/COMPLETE.
  */
+
+/**
+ * Booking relations for the read-back after a write. PrismaNeonHTTP rejects
+ * write + include (implicit transaction), so writes run plain and the
+ * response is re-read with these relations.
+ */
+const bookingInclude = {
+  car: {
+    select: {
+      id: true, slug: true, price: true, year: true,
+      brand: { select: { nameAr: true } },
+      model: { select: { nameAr: true } },
+      images: { take: 1, orderBy: { order: 'asc' }, select: { url: true } },
+    },
+  },
+  buyer: { select: { id: true, name: true, image: true, phone: true } },
+  dealer: { select: { id: true, name: true, image: true, dealerName: true, phone: true, whatsapp: true } },
+  conversation: { select: { id: true } },
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -129,19 +149,26 @@ export async function PATCH(
       const buyerId = booking.buyerId;
       const sellerId = booking.dealerId;
 
-      const updated = await prisma.$transaction(async (tx) => {
-        // upsert against @@unique([carId, buyerId, sellerId])
-        const conversation = await tx.conversation.upsert({
-          where: { carId_buyerId_sellerId: { carId, buyerId, sellerId } },
-          create: { carId, buyerId, sellerId },
-          update: { updatedAt: new Date() },
-        });
+      // HTTP adapter لا يدعم المعاملات ($transaction يرمي خطأ في وضع HTTP) —
+      // ننفّذ الخطوات بالتتابع: المسار idempotent (upsert على الثلاثية الفريدة)
+      // وإعادة المحاولة بعد أي فشل تلتئم من تلقاء نفسها، ونحذف رسالة الافتتاح
+      // يدويًا لو فشلت أي خطوة بعدها حتى لا تتكرر عند إعادة المحاولة.
+      // upsert against @@unique([carId, buyerId, sellerId])
+      const conversation = await prisma.conversation.upsert({
+        where: { carId_buyerId_sellerId: { carId, buyerId, sellerId } },
+        create: { carId, buyerId, sellerId },
+        update: { updatedAt: new Date() },
+      });
 
-        // Opening system message from the dealer
-        const openingText =
-          `تم قبول حجزك للسيارة ${booking.car.slug || ''} من قبل التاجر. ` +
-          `يمكنك الآن ترتيب موعد الزيارة أو مناقشة السعر.`;
-        await tx.message.create({
+      // Opening system message from the dealer
+      const openingText =
+        `تم قبول حجزك للسيارة ${booking.car.slug || ''} من قبل التاجر. ` +
+        `يمكنك الآن ترتيب موعد الزيارة أو مناقشة السعر.`;
+
+      let openingMessageId: string | null = null;
+      let updated;
+      try {
+        const msg = await prisma.message.create({
           data: {
             content: openingText,
             senderId: sellerId,
@@ -150,41 +177,35 @@ export async function PATCH(
             conversationId: conversation.id,
           },
         });
+        openingMessageId = msg.id;
 
         // Stamp the conversation with bookingId (one-to-one) if not set
-        // AND link the booking back. Use updateMany on the conversation to
-        // only set bookingId if it's currently null (idempotent re-accepts).
+        // AND link the booking back — idempotent re-accepts.
         if (!conversation.bookingId) {
-          await tx.conversation.update({
+          await prisma.conversation.update({
             where: { id: conversation.id },
             data: { bookingId: booking.id },
           });
         }
 
-        const updatedBooking = await tx.carBooking.update({
+        await prisma.carBooking.update({
           where: { id: booking.id },
           data: {
             ...updateData,
             conversationId: conversation.id,
             viewedByDealer: true, // dealer just acted → no longer "unread"
           },
-          include: {
-            car: {
-              select: {
-                id: true, slug: true, price: true, year: true,
-                brand: { select: { nameAr: true } },
-                model: { select: { nameAr: true } },
-                images: { take: 1, orderBy: { order: 'asc' }, select: { url: true } },
-              },
-            },
-            buyer: { select: { id: true, name: true, image: true, phone: true } },
-            dealer: { select: { id: true, name: true, image: true, dealerName: true, phone: true, whatsapp: true } },
-            conversation: { select: { id: true } },
-          },
         });
-
-        return updatedBooking;
-      });
+        updated = await prisma.carBooking.findUnique({
+          where: { id: booking.id },
+          include: bookingInclude,
+        });
+      } catch (acceptErr) {
+        if (openingMessageId) {
+          await prisma.message.delete({ where: { id: openingMessageId } }).catch(() => {});
+        }
+        throw acceptErr;
+      }
 
       // Outside the transaction — best-effort buyer notification
       await prisma.notification.create({
@@ -201,22 +222,13 @@ export async function PATCH(
     }
 
     if (status === 'COMPLETED') {
-      const updated = await prisma.carBooking.update({
+      await prisma.carBooking.update({
         where: { id: booking.id },
         data: updateData,
-        include: {
-          car: {
-            select: {
-              id: true, slug: true, price: true, year: true,
-              brand: { select: { nameAr: true } },
-              model: { select: { nameAr: true } },
-              images: { take: 1, orderBy: { order: 'asc' }, select: { url: true } },
-            },
-          },
-          buyer: { select: { id: true, name: true, image: true, phone: true } },
-          dealer: { select: { id: true, name: true, image: true, dealerName: true, phone: true, whatsapp: true } },
-          conversation: { select: { id: true } },
-        },
+      });
+      const updated = await prisma.carBooking.findUnique({
+        where: { id: booking.id },
+        include: bookingInclude,
       });
 
       // Notify the buyer that the deal completed → they can now rate
@@ -234,22 +246,13 @@ export async function PATCH(
     }
 
     // REJECTED or CANCELLED — straightforward update
-    const updated = await prisma.carBooking.update({
+    await prisma.carBooking.update({
       where: { id: booking.id },
       data: updateData,
-      include: {
-        car: {
-          select: {
-            id: true, slug: true, price: true, year: true,
-            brand: { select: { nameAr: true } },
-            model: { select: { nameAr: true } },
-            images: { take: 1, orderBy: { order: 'asc' }, select: { url: true } },
-          },
-        },
-        buyer: { select: { id: true, name: true, image: true, phone: true } },
-        dealer: { select: { id: true, name: true, image: true, dealerName: true, phone: true, whatsapp: true } },
-        conversation: { select: { id: true } },
-      },
+    });
+    const updated = await prisma.carBooking.findUnique({
+      where: { id: booking.id },
+      include: bookingInclude,
     });
 
     // Notify the other side when the deal is closed by one party

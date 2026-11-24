@@ -49,10 +49,11 @@ export async function GET(
     });
 
     if (user.role !== 'ADMIN') {
-      await prisma.message.updateMany({
-        where: { conversationId: id, receiverId: user.id, read: false },
-        data: { read: true },
-      });
+      // HTTP adapter لا يدعم updateMany — UPDATE شرطي واحد ذري (نفس WHERE).
+      await prisma.$executeRaw`
+        UPDATE "messages" SET "read" = true
+        WHERE "conversationId" = ${id} AND "receiverId" = ${user.id} AND "read" = false
+      `;
     }
 
     return successResponse(messages);

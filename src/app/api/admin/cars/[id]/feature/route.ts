@@ -20,11 +20,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const featuredUntil = new Date();
     featuredUntil.setDate(featuredUntil.getDate() + plan.durationDays);
 
-    const car = await prisma.car.update({
+    // HTTP adapter: write without include (implicit read transaction would
+    // throw), then fetch the relations in a separate read.
+    await prisma.car.update({
       where: { id },
       data: { featured: true, featuredUntil },
+    });
+    const car = await prisma.car.findUnique({
+      where: { id },
       include: { brand: true, model: true },
     });
+    if (!car) return notFoundResponse('السيارة');
 
     await createAuditLog({
       action: 'FEATURE_CAR', actorId: user.id,
@@ -59,11 +65,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!user || user.role !== 'ADMIN') return unauthorizedResponse();
 
   try {
-    const car = await prisma.car.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.car.update({
       where: { id },
       data: { featured: false, featuredUntil: null },
+    });
+    const car = await prisma.car.findUnique({
+      where: { id },
       include: { brand: true, model: true },
     });
+    if (!car) return notFoundResponse('السيارة');
 
     await createAuditLog({
       action: 'UNFEATURE_CAR', actorId: user.id,

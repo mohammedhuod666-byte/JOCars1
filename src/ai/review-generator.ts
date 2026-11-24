@@ -27,8 +27,8 @@ const positiveWords: Record<string, string[]> = {
   engine: ['محرك', 'قوة', 'سرعة', 'أداء', 'turbo', 'تيربو', 'حريك', 'omech', 'mazbut', 'ممتاز', 'قوي', 'خوارق', 'fast', 'سريع'],
   comfort: ['راحة', 'مريح', 'ناعم', 'رفيع', 'واسع', 'قناص', 'comfy', 'spacious', 'مكين', 'جلد', 'دفايز', 'تكييف', 'تبريد'],
   value: ['سعر', 'قيمة', 'رخيص', 'اقتصادي', 'iean', 'monastery', 'munasib', 'مناسب', 'عادي', 'mnoo', 'عوالة'],
-  design: ['شكل', 'تصميم', 'حلو', 'جميل', 'appealing', 'nice', 'أنيق', 'شيك', 'fancy', '外观', 'modeen', 'modern'],
-  reliability: ['موثوق', 'موثوقية', 'mafoo', 'muthooq', 'quality', 'جودة', 'durable', 'م強い', 'mafoo7', 'mafoo', 'ما في مشاكل', 'ما شفت مشاكل', 'ممتازة'],
+  design: ['شكل', 'تصميم', 'حلو', 'جميل', 'appealing', 'nice', 'أنيق', 'شيك', 'fancy', 'modeen', 'modern'],
+  reliability: ['موثوق', 'موثوقية', 'mafoo', 'muthooq', 'quality', 'جودة', 'durable', 'mafoo7', 'mafoo', 'ما في مشاكل', 'ما شفت مشاكل', 'ممتازة'],
 };
 
 const negativeWords: Record<string, string[]> = {

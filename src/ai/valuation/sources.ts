@@ -57,7 +57,7 @@ async function collectOpenSooq(spec: VehicleSpec, timeoutMs: number): Promise<No
 
       const row: NormalizedListing = {
         source: 'opensooq',
-        sourceLabel: 'السوق المفتوح',
+        sourceLabel: 'سوق السيارات المحلي',
         externalId: `os-${contentHash([canonicalUrl || l.url])}-${i}`,
         url: canonicalUrl || l.url || null,
         canonicalUrl: canonicalUrl || null,
@@ -93,7 +93,7 @@ async function collectOpenSooq(spec: VehicleSpec, timeoutMs: number): Promise<No
       const enriched = enrichFromTitle(row, l.title);
       enriched.sourceSnapshot = createSourceSnapshot({
         source: 'opensooq',
-        sourceLabel: 'السوق المفتوح',
+        sourceLabel: 'سوق السيارات المحلي',
         url: canonicalUrl || l.url,
         title: l.title,
         price: l.price,
@@ -210,7 +210,7 @@ async function collectJoCars(spec: VehicleSpec, timeoutMs: number): Promise<Norm
 
 // ── Registry: All 7 market sources in the Jordanian ecosystem ──
 export const SOURCE_ADAPTERS: SourceAdapter[] = [
-  { id: 'opensooq', label: 'السوق المفتوح', country: 'JO', enabled: true, collect: collectOpenSooq },
+  { id: 'opensooq', label: 'سوق السيارات المحلي', country: 'JO', enabled: true, collect: collectOpenSooq },
   { id: 'jocars', label: 'سوق JO Cars', country: 'JO', enabled: true, collect: collectJoCars },
   { id: 'ordonauto', label: 'أردن أوتو (وكيل)', country: 'JO', enabled: true, collect: collectOrdonAuto },
   { id: 'karmal', label: 'كارمال الأردن', country: 'JO', enabled: true, collect: collectKarmal },

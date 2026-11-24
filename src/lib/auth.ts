@@ -125,34 +125,41 @@ export async function authenticateRequest(request: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      image: true,
-      phone: true,
-      whatsapp: true,
-      isActive: true,
-      canPost: true,
-      banStatus: true,
-      banUntil: true,
-      dealerName: true,
-      dealerLogo: true,
-      dealerVerified: true,
-      forumBannedCommentUntil: true,
-      forumBannedTopicUntil: true,
-      carCommentBannedUntil: true,
-    },
-  });
+  const userId = payload.userId || (payload as any).id || (payload as any).sub;
+  if (!userId || typeof userId !== 'string') return null;
 
-  if (!user) return null;
-  if (!user.isActive) return null;
-  if (user.banStatus && user.banUntil && new Date(user.banUntil) > new Date()) return null;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+        phone: true,
+        whatsapp: true,
+        isActive: true,
+        canPost: true,
+        banStatus: true,
+        banUntil: true,
+        dealerName: true,
+        dealerLogo: true,
+        dealerVerified: true,
+        forumBannedCommentUntil: true,
+        forumBannedTopicUntil: true,
+        carCommentBannedUntil: true,
+      },
+    });
 
-  return user;
+    if (!user) return null;
+    if (!user.isActive) return null;
+    if (user.banStatus && user.banUntil && new Date(user.banUntil) > new Date()) return null;
+
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 export function requireRole(...roles: string[]) {

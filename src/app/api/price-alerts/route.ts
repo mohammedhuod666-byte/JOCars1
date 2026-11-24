@@ -4,7 +4,7 @@ import { authenticateRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const alerts = await prisma.priceAlert.findMany({
     where: { userId: user.id },
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return NextResponse.json({ success: false, error: 'يرجى تسجيل الدخول أولاً' }, { status: 401 });
 
   const body = await request.json();
   const { brandId, modelId, minPrice, maxPrice, yearFrom, yearTo, cityId } = body;

@@ -195,15 +195,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       prisma.favorite.findMany({ where: { carId: id }, select: { userId: true } }).then(async (favs) => {
         const targets = [...new Set(favs.map(f => f.userId))].filter(uid => uid !== user.id);
         if (targets.length === 0) return;
-        await prisma.notification.createMany({
-          data: targets.map(uid => ({
-            type: 'PRICE_DROP',
-            title: 'انخفاض سعر سيارة تتابعها ',
-            message: `${carLabel} — نزل السعر ${drop.toLocaleString('ar-JO')} د.أ وأصبح ${newPrice.toLocaleString('ar-JO')} د.أ`,
-            userId: uid,
-            link,
-          })),
-        });
+        // HTTP adapter لا يدعم createMany — صفًا صفًا (العدد = متابعو السيارة).
+        for (const uid of targets) {
+          await prisma.notification.create({
+            data: {
+              type: 'PRICE_DROP',
+              title: 'انخفاض سعر سيارة تتابعها ',
+              message: `${carLabel} — نزل السعر ${drop.toLocaleString('ar-JO')} د.أ وأصبح ${newPrice.toLocaleString('ar-JO')} د.أ`,
+              userId: uid,
+              link,
+            },
+          });
+        }
         // Browser push for the same watchers (only subscribed browsers get it)
         await Promise.all(targets.map(uid => sendPushToUser(uid, {
           title: 'انخفاض سعر سيارة تتابعها ',

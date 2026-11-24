@@ -38,8 +38,12 @@ export async function POST(request: NextRequest) {
 
     if (existing) return errorResponse('الوسم مضاف مسبقاً لهذه السيارة');
 
-    const assignment = await prisma.carTagAssignment.create({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.carTagAssignment.create({
       data: { carId, tagId, assignedBy: user.id },
+    });
+    const assignment = await prisma.carTagAssignment.findUnique({
+      where: { carId_tagId: { carId, tagId } },
       include: { tag: true },
     });
 

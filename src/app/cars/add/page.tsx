@@ -18,11 +18,13 @@ import {
 import { MapPicker } from '@/components/cars/MapPicker';
 import { compressImagesClient, compressDocsClient, fitGalleryToBudget } from '@/lib/image-compress-client';
 import { AIPriceEstimator } from '@/components/cars/AIPriceEstimator';
+import { SearchableBrandModelSelect } from '@/components/cars/SearchableBrandModelSelect';
+import { LocationSelector, ProvinceItem } from '@/components/cars/LocationSelector';
 import toast from 'react-hot-toast';
 
 interface Brand { id: string; nameAr: string; nameEn: string; slug: string; }
 interface Model { id: string; nameAr: string; nameEn: string; slug: string; }
-interface City { id: string; nameAr: string; nameEn: string; slug: string; }
+interface City { id: string; nameAr: string; nameEn: string; slug: string; provinceId?: string | null; province?: { id: string; nameAr: string; nameEn: string; slug: string } | null; }
 
 type CarFormData = {
   brandId: string; modelId: string; year: number; trim: string;
@@ -395,6 +397,7 @@ export default function AddCarPage() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [cities, setCities] = useState<City[]>([]);
+  const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
   
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -689,6 +692,7 @@ export default function AddCarPage() {
     if (isAuthenticated) {
       if (user?.phone) setForm(f => ({ ...f, phone: user.phone || '' }));
       fetch('/api/cars/brands').then(r => r.json()).then(d => setBrands(d.data || [])).catch(() => {});
+      fetch('/api/cars/provinces').then(r => r.json()).then(d => setProvinces(d.data || [])).catch(() => {});
       fetch('/api/cars/cities').then(r => r.json()).then(d => setCities(d.data || [])).catch(() => {});
     }
   }, [isAuthenticated, _hydrated, router, user]);
@@ -1446,25 +1450,25 @@ export default function AddCarPage() {
   const stepErrors = (n: number) => errorEntries.filter(([f]) => fieldStep(f) === n);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-24 py-8">
+    <div className="min-h-screen bg-[#080a0f] text-slate-100 pb-28 pt-24 sm:pt-28">
       <div className="container-custom max-w-4xl space-y-6">
         
         {/* Header Title */}
-        <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-b from-emerald-950/40 via-slate-900 to-slate-950 border border-slate-800 space-y-4 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-1/4 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-b from-[#121622] via-[#141926] to-[#0d1017] border border-white/[0.08] space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-1/4 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-amber-500/25">
                 <Car className="w-7 h-7" />
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-black text-white">إضافة إعلان سيارة للبيع</h1>
-                <p className="text-slate-400 text-xs mt-0.5">اعرض سيارتك لأكثر من 50,000 مشتري شهرياً في الأردن</p>
+                <p className="text-slate-400 text-xs mt-0.5">اعرض سيارتك وتواصل مباشرة مع المشترين والمهتمين في الأردن</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-emerald-400 text-xs font-bold">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-amber-400 text-xs font-bold">
               <Sparkles className="w-4 h-4" />
               <span>ميزات الذكاء الاصطناعي مفعلة</span>
             </div>
@@ -1509,7 +1513,7 @@ export default function AddCarPage() {
           {/* Progress Steps Header */}
           <div className="space-y-3 pt-4 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-emerald-400">
+              <span className="text-xs font-black text-amber-400">
                 الخطوة {step} من 5
               </span>
               <span className="text-[11px] text-slate-500">
@@ -1526,7 +1530,7 @@ export default function AddCarPage() {
               aria-label="تقدم إنشاء الإعلان"
             >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-300"
                 style={{ width: `${(step / 5) * 100}%` }}
               />
             </div>
@@ -1544,9 +1548,9 @@ export default function AddCarPage() {
                 onClick={() => goToStep(s.num)}
                 className={`p-3 rounded-2xl border text-xs font-extrabold transition-all flex items-center gap-2 ${
                   step === s.num
-                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                    ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/25 font-black'
                     : step > s.num
-                      ? 'bg-slate-900 border-slate-800 text-emerald-400'
+                      ? 'bg-[#121622] border-white/[0.08] text-amber-400'
                       : 'bg-slate-950/60 border-slate-900 text-slate-500'
                 } ${stepErrors(s.num).length ? 'ring-2 ring-rose-500/80 border-rose-500/60' : ''}`}
               >
@@ -1617,32 +1621,21 @@ export default function AddCarPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 
                 {/* Brand */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">الشركة المصنعة (الماركة) *</label>
-                  <select
-                    value={form.brandId}
-                    onChange={e => { updateForm('brandId', e.target.value); updateForm('modelId', ''); }}
-                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
-                  >
-                    <option value="">اختر الشركة</option>
-                    {brands.map(b => <option key={b.id} value={b.id}>{b.nameAr}</option>)}
-                  </select>
-                  <FieldErrors fields={['brandId']} errors={errors} />
-                </div>
-
-                {/* Model */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">الموديل (الطراز) *</label>
-                  <select
-                    value={form.modelId}
-                    disabled={!form.brandId}
-                    onChange={e => updateForm('modelId', e.target.value)}
-                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 disabled:opacity-50"
-                  >
-                    <option value="">{form.brandId ? 'اختر الموديل' : 'اختر الشركة أولاً'}</option>
-                    {models.map(m => <option key={m.id} value={m.id}>{m.nameAr}</option>)}
-                  </select>
-                  <FieldErrors fields={['modelId']} errors={errors} />
+                                {/* Searchable Brand & Model Selector */}
+                <div className="sm:col-span-2">
+                  <SearchableBrandModelSelect
+                    brands={brands}
+                    models={models}
+                    selectedBrandId={form.brandId}
+                    selectedModelId={form.modelId}
+                    onBrandChange={(brandId) => {
+                      updateForm('brandId', brandId);
+                      updateForm('modelId', '');
+                    }}
+                    onModelChange={(modelId) => updateForm('modelId', modelId)}
+                    brandError={errors.brandId}
+                    modelError={errors.modelId}
+                  />
                 </div>
 
                 {/* Year */}
@@ -1916,7 +1909,7 @@ export default function AddCarPage() {
                         onChange={e => updateForm('isFirstOwner', e.target.checked)}
                         className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
                       />
-                      <span className="text-xs font-bold text-slate-300">السيارة أول مالك (لم تُنتقل بين上过)</span>
+                      <span className="text-xs font-bold text-slate-300">السيارة أول مالك (لم تنتقل ملكيتها)</span>
                     </label>
                   </div>
                 </div>
@@ -2073,7 +2066,7 @@ export default function AddCarPage() {
                 <button
                   type="button"
                   onClick={() => goToStep(2)}
-                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                  className="px-8 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/20 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <span>التالي: الفحص والجمرك</span>
                   <ChevronLeft className="w-4 h-4" />
@@ -2375,7 +2368,7 @@ export default function AddCarPage() {
                 <button
                   type="button"
                   onClick={() => goToStep(3)}
-                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                  className="px-8 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/20 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <span>التالي: الصور والفيديو</span>
                   <ChevronLeft className="w-4 h-4" />
@@ -2561,7 +2554,7 @@ export default function AddCarPage() {
                 <button
                   type="button"
                   onClick={() => goToStep(4)}
-                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                  className="px-8 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/20 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <span>التالي: السعر والموقع</span>
                   <ChevronLeft className="w-4 h-4" />
@@ -2640,8 +2633,17 @@ export default function AddCarPage() {
                 />
               </div>
 
+              {/* Location Selector (Governorate -> Area/Village + Search) */}
+              <LocationSelector
+                provinces={provinces}
+                cities={cities}
+                selectedCityId={form.cityId}
+                onCityChange={(cityId) => updateForm('cityId', cityId)}
+                error={errors.cityId}
+              />
+
               {/* Contact Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم الهاتف للاتصال *</label>
                   <input
@@ -2656,7 +2658,7 @@ export default function AddCarPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم الواتساب</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">رقم الواتساب للتواصل المباشر</label>
                   <input
                     type="text"
                     value={form.whatsapp}
@@ -2665,19 +2667,6 @@ export default function AddCarPage() {
                     className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500 font-mono"
                     dir="ltr"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">المحافظة / المدينة *</label>
-                  <select
-                    value={form.cityId}
-                    onChange={e => updateForm('cityId', e.target.value)}
-                    className="w-full h-12 px-4 rounded-2xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
-                  >
-                    <option value="">اختر المحافظة</option>
-                    {cities.map(c => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
-                  </select>
-                  <FieldErrors fields={['cityId']} errors={errors} />
                 </div>
               </div>
 
@@ -2708,7 +2697,7 @@ export default function AddCarPage() {
                 <button
                   type="button"
                   onClick={() => goToStep(5)}
-                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                  className="px-8 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/20 font-black text-sm transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   <span>التالي: مراجعة الإعلان</span>
                   <ChevronLeft className="w-4 h-4" />

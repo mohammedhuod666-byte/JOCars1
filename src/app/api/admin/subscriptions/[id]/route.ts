@@ -49,13 +49,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (existing.status !== 'ACTIVE') updateData.status = 'ACTIVE';
     }
 
-    const updated = await prisma.subscription.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.subscription.update({
       where: { id },
       data: updateData,
+    });
+    const updated = await prisma.subscription.findUnique({
+      where: { id },
       include: {
         user: { select: { id: true, name: true, email: true, image: true } },
       },
     });
+    if (!updated) return notFoundResponse('الاشتراك');
 
     await prisma.auditLog.create({
       data: {

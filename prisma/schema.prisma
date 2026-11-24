@@ -32,6 +32,7 @@ model User {
   name                  String
   email                 String    @unique
   password              String
+  passwordVersion       String    @default("1")
   phone                 String?
   whatsapp              String?
   image                 String?
@@ -1191,6 +1192,7 @@ model ForumPost {
   likeCount      Int      @default(0)
   isAnswer       Boolean  @default(false)
   isHidden       Boolean  @default(false)
+  isPinned       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

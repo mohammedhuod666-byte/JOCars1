@@ -96,9 +96,72 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
 // deprecated `middleware.ts` + `export middleware`.
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const search = request.nextUrl.search || '';
+  const fullTarget = (pathname + ' ' + search).toLowerCase();
+  const userAgent = (request.headers.get('user-agent') || '').toLowerCase();
 
-  // Block path traversal attempts
-  if (pathname.includes('..') || pathname.includes('%2e%2e') || pathname.includes('%252e%252e')) {
+  // ── Sentinel Deep Intrusion Detection ──
+  // 1. Malicious Scanner User Agents
+  if (/(sqlmap|nikto|acunetix|dirbuster|gobuster|wpscan|masscan|zgrab|nmap|havij)/i.test(userAgent)) {
+    const intruder = await getTokenUser(request).catch(() => null);
+    await reportToSentinel(request, {
+      kind: 'breach_attempt',
+      type: 'SCANNER_PROBE',
+      userId: intruder?.id || null,
+      userName: intruder?.name || null,
+      ip: getIp(request),
+      path: pathname,
+      detail: `أداة فحص وهجوم أمني: ${userAgent.slice(0, 60)}`,
+    });
+    return applySecurityHeaders(NextResponse.json({ error: 'Blocked by Sentinel Security Guard' }, { status: 403 }));
+  }
+
+  // 2. SQL Injection Patterns
+  const sqliPattern = /(\b(union\s+(all\s+)?select|select\s+.*\s+from|insert\s+into|delete\s+from|drop\s+table|update\s+.*\s+set)\b|--|\/\*|\b(sleep|benchmark|extractvalue)\s*\(|'\s*(or|and)\s*'?\d+'?\s*=\s*'?\d+)/i;
+  let decodedTarget = fullTarget;
+  try { decodedTarget = decodeURIComponent(fullTarget); } catch {}
+  if (sqliPattern.test(decodedTarget)) {
+    const intruder = await getTokenUser(request).catch(() => null);
+    await reportToSentinel(request, {
+      kind: 'breach_attempt',
+      type: 'SQL_INJECTION',
+      userId: intruder?.id || null,
+      userName: intruder?.name || null,
+      ip: getIp(request),
+      path: pathname,
+      detail: `محاولة حقن قواعد بيانات (SQL Injection) على ${pathname}`,
+    });
+    return applySecurityHeaders(NextResponse.json({ error: 'Security Violation: SQL Injection detected' }, { status: 403 }));
+  }
+
+  // 3. XSS / Script Injection
+  const xssPattern = /(<script\b|javascript:|onerror\s*=|onload\s*=|eval\s*\(|document\.cookie|<iframe\b)/i;
+  if (xssPattern.test(decodedTarget)) {
+    const intruder = await getTokenUser(request).catch(() => null);
+    await reportToSentinel(request, {
+      kind: 'breach_attempt',
+      type: 'XSS_ATTACK',
+      userId: intruder?.id || null,
+      userName: intruder?.name || null,
+      ip: getIp(request),
+      path: pathname,
+      detail: `محاولة حقن نصوص خبيثة (XSS Attack) على ${pathname}`,
+    });
+    return applySecurityHeaders(NextResponse.json({ error: 'Security Violation: XSS detected' }, { status: 403 }));
+  }
+
+  // 4. Path Traversal & LFI attempts
+  if (pathname.includes('..') || pathname.includes('%2e%2e') || pathname.includes('%252e%252e') || /etc\/passwd|win\.ini|boot\.ini/i.test(decodedTarget)) {
+    const intruder = await getTokenUser(request).catch(() => null);
+    await reportToSentinel(request, {
+      kind: 'breach_attempt',
+      type: 'PATH_TRAVERSAL',
+      userId: intruder?.id || null,
+      userName: intruder?.name || null,
+      ip: getIp(request),
+      path: pathname,
+      detail: `محاولة تخطي مسارات وسيرفرات (Path Traversal): ${pathname}`,
+    });
     return applySecurityHeaders(NextResponse.json({ error: 'Invalid path' }, { status: 400 }));
   }
 
@@ -107,7 +170,9 @@ export async function proxy(request: NextRequest) {
   // the attacker's Origin; non-browser clients (mobile apps) send none and
   // stay unaffected. Combined with SameSite=Strict auth cookies.
   const method = request.method.toUpperCase();
-  if ((method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') && pathname.startsWith('/api/')) {
+  // Skip CSRF for warmup endpoint (public endpoint for reducing cold start latency)
+  const isWarmupEndpoint = pathname === '/api/valuations/warmup';
+  if ((method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') && pathname.startsWith('/api/') && !isWarmupEndpoint) {
     const origin = request.headers.get('origin');
     if (origin) {
       try {

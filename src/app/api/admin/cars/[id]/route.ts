@@ -26,11 +26,16 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (key in body) safeData[key] = body[key];
     }
 
-    const updated = await prisma.car.update({
+    // HTTP adapter: write without include, then read relations separately.
+    await prisma.car.update({
       where: { id },
       data: safeData,
+    });
+    const updated = await prisma.car.findUnique({
+      where: { id },
       include: { brand: { select: { nameAr: true } }, model: { select: { nameAr: true } }, user: { select: { name: true } } },
     });
+    if (!updated) return notFoundResponse('السيارة');
 
     if (body.status && body.status !== oldCar.status) {
       const action = body.status === 'APPROVED' ? 'APPROVE_CAR' : body.status === 'REJECTED' ? 'REJECT_CAR' : null;
@@ -99,25 +104,26 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     });
     if (!oldCar) return notFoundResponse('السيارة');
 
-    await prisma.$transaction([
-      prisma.carViewer.deleteMany({ where: { carId: id } }),
-      prisma.carReminder.deleteMany({ where: { carId: id } }),
-      prisma.carComment.deleteMany({ where: { carId: id } }),
-      prisma.carTagAssignment.deleteMany({ where: { carId: id } }),
-      prisma.premiumRequest.deleteMany({ where: { carId: id } }),
-      prisma.userRating.deleteMany({ where: { carId: id } }),
-      prisma.carHistory.deleteMany({ where: { carId: id } }),
-      prisma.carLog.deleteMany({ where: { carId: id } }),
-      prisma.comparisonItem.deleteMany({ where: { carId: id } }),
-      prisma.carView.deleteMany({ where: { carId: id } }),
-      prisma.report.deleteMany({ where: { carId: id } }),
-      prisma.message.deleteMany({ where: { carId: id } }),
-      prisma.conversation.deleteMany({ where: { carId: id } }),
-      prisma.favorite.deleteMany({ where: { carId: id } }),
-      prisma.auction.deleteMany({ where: { carId: id } }),
-      prisma.carImage.deleteMany({ where: { carId: id } }),
-      prisma.car.delete({ where: { id } }),
-    ]);
+    // HTTP adapter لا يدعم $transaction — نحذف البنين ثم السيارة متتاليًا
+    // (نفس الترتيب، السيارة آخر صف فلا تختفي إلا بعد اكتمال حذف تبعاتها).
+    // لو تعذّر حذف سيارة بعد حذف بعض البنين، إعادة المحاولة تكمل بلا ضرر.
+    await prisma.carViewer.deleteMany({ where: { carId: id } });
+    await prisma.carReminder.deleteMany({ where: { carId: id } });
+    await prisma.carComment.deleteMany({ where: { carId: id } });
+    await prisma.carTagAssignment.deleteMany({ where: { carId: id } });
+    await prisma.premiumRequest.deleteMany({ where: { carId: id } });
+    await prisma.userRating.deleteMany({ where: { carId: id } });
+    await prisma.carHistory.deleteMany({ where: { carId: id } });
+    await prisma.carLog.deleteMany({ where: { carId: id } });
+    await prisma.comparisonItem.deleteMany({ where: { carId: id } });
+    await prisma.carView.deleteMany({ where: { carId: id } });
+    await prisma.report.deleteMany({ where: { carId: id } });
+    await prisma.message.deleteMany({ where: { carId: id } });
+    await prisma.conversation.deleteMany({ where: { carId: id } });
+    await prisma.favorite.deleteMany({ where: { carId: id } });
+    await prisma.auction.deleteMany({ where: { carId: id } });
+    await prisma.carImage.deleteMany({ where: { carId: id } });
+    await prisma.car.delete({ where: { id } });
 
     await createAuditLog({
       action: 'DELETE_CAR', actorId: actor.id,

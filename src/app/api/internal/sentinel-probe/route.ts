@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recordSignal, enforceProbeBan, type SignalType } from '@/lib/sentinel';
+import { recordSignal, enforceProbeBan, handleBreachAttempt, type SignalType } from '@/lib/sentinel';
 import { SIGNAL_WEIGHTS } from '@/lib/sentinel';
 
 // Ingestion for the edge middleware (proxy.ts), which cannot touch the DB.
@@ -16,6 +16,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { kind, userId, userName, path, ip, type, detail } = body;
+
+    if (kind === 'breach_attempt') {
+      await handleBreachAttempt({
+        type: type as SignalType,
+        userId: userId || null,
+        userName: userName || null,
+        ip: ip || null,
+        path: path || null,
+        detail: detail || null,
+      });
+      return NextResponse.json({ success: true });
+    }
 
     if (kind === 'probe' && userId) {
       // Logged-in non-admin on /admin* → immediate 7-day ban.
