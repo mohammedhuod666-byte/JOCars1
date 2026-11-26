@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, signToken, setAuthCookie } from '@/lib/auth';
+import { generateRecoveryKey, hashRecoveryKeyArgon2id } from '@/lib/recovery-key';
 import { registerSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
@@ -55,12 +56,15 @@ export async function POST(request: NextRequest) {
     const finalRole = isTrader ? 'TRADER' : (role || 'USER');
 
     const hashedPassword = await hashPassword(password);
+    const plainRecoveryKey = generateRecoveryKey();
+    const recoveryKeyHash = hashRecoveryKeyArgon2id(plainRecoveryKey);
 
     // HTTP adapter لا يدعم المعاملات ($transaction يرمي خطأ في وضع HTTP) —
     // العملية هنا إنشاء صف واحد فقط، لذا ننشئه مباشرةً بدون تغليف.
     const result = await prisma.user.create({
       data: {
         name, email, password: hashedPassword, phone,
+        recoveryKeyHash, recoveryKeyCreatedAt: new Date(),
         role: finalRole, dealerName, lastLoginAt: new Date(), lastLoginIp: ip,
         // حفظ حقول ملف التاجر فورًا كي يُعرَض الاسم في صفحة الإدارة
         // (dealerVerified يبقى false — يحتاج اعتمادًا اختياريًا).
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
     );
 
     const token = signToken({ userId: result.id, email: result.email, role: result.role });
-    const response = successResponse({ user: result, token }, 201);
+    const response = successResponse({ user: result, token, recoveryKey: plainRecoveryKey }, 201);
     setAuthCookie(response, token);
     await createAuditLog({
       action: 'REGISTER', actorId: result.id,

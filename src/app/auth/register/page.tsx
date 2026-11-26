@@ -22,14 +22,20 @@ import {
   Building2,
   Sparkles,
   ShieldCheck,
+  KeyRound,
+  Copy,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { downloadRecoveryKeyFile } from '@/components/auth/RecoveryKeyCard';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [issuedKey, setIssuedKey] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [accountType, setAccountType] = useState<'USER' | 'TRADER' | 'DEALER'>('USER');
   const isDealerLike = accountType === 'TRADER' || accountType === 'DEALER';
   const isTrader = accountType === 'TRADER';
@@ -96,7 +102,11 @@ export default function RegisterPage() {
       if (data.success) {
         login(data.data.user, data.data.token);
         toast.success(isTrader ? 'تم استلام طلبك — سيتم مراجعته خلال 24 ساعة' : 'تم إنشاء الحساب بنجاح');
-        router.push('/');
+        if (data.data.recoveryKey) {
+          setIssuedKey(data.data.recoveryKey);
+        } else {
+          router.push('/');
+        }
       } else {
         toast.error(data.error || 'فشل إنشاء الحساب');
       }
@@ -109,6 +119,51 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row relative overflow-x-hidden bg-[#07090d]" dir="rtl">
+      {issuedKey && (
+        <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4" dir="rtl">
+          <div className="w-full max-w-md bg-[#11141b] border border-[#ffc640]/30 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#ffc640]/15 border border-[#ffc640]/30 flex items-center justify-center">
+              <KeyRound className="w-7 h-7 text-[#ffc640]" />
+            </div>
+            <h3 className="text-xl font-black text-white">احفظ مفتاح الاسترداد السري</h3>
+            <p className="text-xs text-[#9ca3af] leading-relaxed">
+              هذا المفتاح مشفر بـ <strong className="text-white">Argon2id</strong> ويظهر <strong className="text-[#ffc640]">مرة واحدة فقط</strong>. احتفظ به لاستعادة حسابك فوراً إذا نسيت كلمة المرور:
+            </p>
+            <div className="p-3.5 rounded-xl bg-[#090b10] border border-white/10 font-mono text-sm sm:text-base font-bold tracking-wider text-[#ffc640] select-all" dir="ltr">
+              {issuedKey}
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(issuedKey);
+                  setCopiedKey(true);
+                  toast.success('تم نسخ المفتاح');
+                }}
+                className="h-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold flex items-center justify-center gap-1.5"
+              >
+                {copiedKey ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedKey ? 'تم النسخ' : 'نسخ المفتاح'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadRecoveryKeyFile(issuedKey, form.email)}
+                className="h-11 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-4 h-4 text-[#ffc640]" />
+                <span>تنزيل .txt</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="w-full h-12 rounded-xl bg-gradient-to-r from-[#ffc640] to-[#e3aa00] text-[#080a0a] font-bold text-sm shadow-lg shadow-[#ffc640]/20"
+            >
+              حفظت المفتاح، المتابعة إلى الموقع
+            </button>
+          </div>
+        </div>
+      )}
       {/* ═══ Visual Showcase (Desktop) ═══ */}
       <div className="hidden lg:flex lg:w-[52%] relative items-center justify-center overflow-hidden">
         <div

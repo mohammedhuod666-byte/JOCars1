@@ -11,6 +11,7 @@ import { CarGrid } from '@/components/cars/CarGrid';
 import { User, Mail, Phone, Store, MapPin, Save, Camera, LogOut, Trash2, Edit, Bell, MessageCircle, Eye, Star, FileText } from 'lucide-react';
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { FollowersModal } from '@/components/users/FollowersModal';
+import { RecoveryKeyCard } from '@/components/auth/RecoveryKeyCard';
 import toast from 'react-hot-toast';
 import type { Car } from '@/types';
 
@@ -254,7 +255,8 @@ export default function ProfilePage() {
 
           <div className="lg:col-span-3">
             {activeTab === 'profile' && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                <RecoveryKeyCard />
                 <div className="card p-8">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">تعديل الملف الشخصي</h2>
                   <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-2xl">

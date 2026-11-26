@@ -33,6 +33,8 @@ model User {
   email                 String    @unique
   password              String
   passwordVersion       String    @default("1")
+  recoveryKeyHash       String?
+  recoveryKeyCreatedAt  DateTime?
   phone                 String?
   whatsapp              String?
   image                 String?
