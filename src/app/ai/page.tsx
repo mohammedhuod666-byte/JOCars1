@@ -83,6 +83,7 @@ interface Message {
   id: string; type: 'user' | 'bot'; content: string;
   cars?: CarSuggestion[]; marketPriceResult?: MarketPriceResult; personalityResult?: any;
   suggestions?: string[]; intent?: string; feedback?: 'up' | 'down' | null;
+  navigate?: { url: string; label?: string } | null;
   timestamp: Date;
 }
 
@@ -571,14 +572,10 @@ export default function AIPage() {
                     content: streamedContent,
                     cars: streamCars.length > 0 ? streamCars : m.cars,
                     suggestions: streamSuggestions.length > 0 ? streamSuggestions : m.suggestions,
+                    navigate: streamNavigate || m.navigate,
                   } : m
                 ));
                 if (streamSuggestions.length > 0) setLastSuggestions(streamSuggestions);
-
-                // Auto-navigate if URL provided
-                if (streamNavigate?.url) {
-                  setTimeout(() => router.push(streamNavigate!.url), 800);
-                }
               }
             } catch {}
           }
@@ -618,14 +615,10 @@ export default function AIPage() {
             cars: data.data.cars?.length > 0 ? data.data.cars : undefined,
             suggestions: data.data.suggestions,
             intent: data.data.intent,
+            navigate: data.data.navigate || null,
             timestamp: new Date(),
           }]);
           if (data.data.suggestions) setLastSuggestions(data.data.suggestions);
-
-          // Auto-navigate if URL provided
-          if (data.data.navigate?.url) {
-            setTimeout(() => router.push(data.data.navigate.url), 800);
-          }
         } else {
           setMessages(prev => [...prev, {
             id: botMsgId, type: 'bot',
@@ -1157,6 +1150,19 @@ export default function AIPage() {
                       </div>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Optional suggested page link (user-initiated click only, never auto-redirect) */}
+              {msg.type === 'bot' && msg.navigate?.url && (
+                <div className="mt-2 ml-4">
+                  <Link
+                    href={msg.navigate.url}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/35 text-xs font-bold text-amber-300 transition-colors"
+                  >
+                    <span>الانتقال إلى: {msg.navigate.label || msg.navigate.url}</span>
+                    <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                  </Link>
                 </div>
               )}
 
