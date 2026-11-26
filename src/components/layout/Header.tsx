@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore, useNotificationStore, useCompareStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
+  const [hoveredNav, setHoveredNav] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const userBtnRef = useRef<HTMLButtonElement>(null);
@@ -197,26 +199,53 @@ export function Header() {
               </div>
             </Link>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden lg:flex items-center gap-1 bg-[#121622]/60 border border-white/[0.06] rounded-2xl p-1 backdrop-blur-md">
+            {/* Desktop Navigation Links — Sliding Glassmorphic Hover Box */}
+            <nav
+              onMouseLeave={() => setHoveredNav(null)}
+              className="hidden lg:flex items-center gap-1 bg-[#121622]/70 border border-white/[0.07] rounded-2xl p-1.5 backdrop-blur-xl shadow-inner"
+            >
               {primaryLinks.map((link) => {
                 const Icon = link.icon;
                 const active = pathname === link.href || pathname.startsWith(link.href + '/');
+                const isHovered = hoveredNav === link.href;
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
+                    onMouseEnter={() => setHoveredNav(link.href)}
                     className={cn(
-                      'relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 z-10',
+                      'group relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 z-10',
                       active
                         ? 'text-amber-300 font-bold'
+                        : isHovered
+                        ? 'text-white'
                         : 'text-slate-300 hover:text-white'
                     )}
                   >
-                    {active && (
-                      <span className="absolute inset-0 rounded-xl bg-[#1e2538] border border-amber-400/30 shadow-[0_0_15px_rgba(245,158,11,0.15)] -z-10" />
+                    {isHovered && (
+                      <motion.span
+                        layoutId="header-nav-hover-box"
+                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.11] to-white/[0.04] border border-amber-400/40 shadow-[0_0_18px_rgba(245,158,11,0.18),inset_0_1px_0_rgba(255,255,255,0.14)] -z-10"
+                      />
                     )}
-                    <Icon className={cn('w-4 h-4 transition-colors', active ? 'text-amber-400' : 'text-slate-400')} />
+                    {active && (
+                      <motion.span
+                        layoutId="header-nav-active-box"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        className="absolute inset-0 rounded-xl bg-[#1e2538] border border-amber-400/35 shadow-[0_0_15px_rgba(245,158,11,0.16)] -z-20"
+                      />
+                    )}
+                    <Icon
+                      className={cn(
+                        'w-4 h-4 transition-all duration-200',
+                        active
+                          ? 'text-amber-400'
+                          : isHovered
+                          ? 'text-amber-400 scale-110'
+                          : 'text-slate-400 group-hover:text-amber-400'
+                      )}
+                    />
                     <span>{link.label}</span>
                   </Link>
                 );
@@ -225,17 +254,36 @@ export function Header() {
               {/* More Mega Menu Trigger */}
               <button
                 ref={moreBtnRef}
+                onMouseEnter={() => setHoveredNav('__more__')}
                 onClick={() => setMoreOpen(!moreOpen)}
                 className={cn(
-                  'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer',
+                  'group relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 cursor-pointer z-10',
                   moreOpen
-                    ? 'text-amber-300 bg-[#1e2538] border border-amber-400/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
-                    : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
+                    ? 'text-amber-300 font-bold'
+                    : hoveredNav === '__more__'
+                    ? 'text-white'
+                    : 'text-slate-300 hover:text-white'
                 )}
                 aria-expanded={moreOpen}
               >
+                {hoveredNav === '__more__' && (
+                  <motion.span
+                    layoutId="header-nav-hover-box"
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.11] to-white/[0.04] border border-amber-400/40 shadow-[0_0_18px_rgba(245,158,11,0.18),inset_0_1px_0_rgba(255,255,255,0.14)] -z-10"
+                  />
+                )}
+                {moreOpen && (
+                  <span className="absolute inset-0 rounded-xl bg-[#1e2538] border border-amber-400/35 shadow-[0_0_15px_rgba(245,158,11,0.16)] -z-20" />
+                )}
                 <span>المزيد</span>
-                <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-300', moreOpen && 'rotate-180 text-amber-400')} />
+                <ChevronDown
+                  className={cn(
+                    'w-3.5 h-3.5 transition-all duration-300',
+                    moreOpen && 'rotate-180 text-amber-400',
+                    hoveredNav === '__more__' && !moreOpen && 'text-amber-400'
+                  )}
+                />
               </button>
             </nav>
 
