@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { DealerIntelligenceSuite } from './DealerIntelligenceSuite';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 
 interface DealerCar {
   id: string;
@@ -55,6 +56,7 @@ export function DealerDashboardComponent() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [uploading, setUploading] = useState<UploadTarget>(null);
+  const [cropTarget, setCropTarget] = useState<{ file: File; type: Exclude<UploadTarget, null> } | null>(null);
 
   // Inventory controls
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'APPROVED' | 'SOLD'>('ALL');
@@ -156,6 +158,12 @@ export function DealerDashboardComponent() {
   };
 
   // ── Image uploads (cover / avatar / logo) ──────────────────────────────
+  const handleImageSelection = (file: File, target: Exclude<UploadTarget, null>) => {
+    if (!file.type.startsWith('image/')) { showToast('يرجى اختيار ملف صورة فقط'); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast('حجم الصورة يتجاوز 10MB'); return; }
+    setCropTarget({ file, type: target });
+  };
+
   const handleFileUpload = async (file: File, target: Exclude<UploadTarget, null>) => {
     if (!file.type.startsWith('image/')) {
       showToast('يرجى اختيار ملف صورة فقط');
@@ -542,6 +550,18 @@ export function DealerDashboardComponent() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col justify-between">
+      <ImageCropModal
+        file={cropTarget?.file || null}
+        aspect={cropTarget?.type === 'cover' ? 4 : 1}
+        shape={cropTarget?.type === 'cover' ? 'rect' : 'rounded'}
+        title={cropTarget?.type === 'cover' ? 'ضبط صورة الغلاف' : cropTarget?.type === 'logo' ? 'ضبط شعار المعرض' : 'ضبط الصورة الشخصية'}
+        onCancel={() => setCropTarget(null)}
+        onConfirm={(croppedFile) => {
+          const target = cropTarget?.type;
+          setCropTarget(null);
+          if (target) void handleFileUpload(croppedFile, target);
+        }}
+      />
       <main className="container-custom max-w-6xl mx-auto px-4 py-8 flex-1">
 
         {/* Toast */}
@@ -561,11 +581,11 @@ export function DealerDashboardComponent() {
 
         {/* Hidden file inputs */}
         <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'cover'); e.target.value = ''; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageSelection(f, 'cover'); e.target.value = ''; }} />
         <input ref={avatarInputRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'avatar'); e.target.value = ''; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageSelection(f, 'avatar'); e.target.value = ''; }} />
         <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f, 'logo'); e.target.value = ''; }} />
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageSelection(f, 'logo'); e.target.value = ''; }} />
 
         {/* ── Showroom Hero ─────────────────────────────────────────── */}
         <div className="card overflow-hidden mb-6 border border-emerald-500/20 shadow-xl">
