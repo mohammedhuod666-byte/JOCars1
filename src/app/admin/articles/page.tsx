@@ -11,7 +11,7 @@ import type { Article } from '@/types';
 import toast from 'react-hot-toast';
 
 export default function AdminArticlesPage() {
-  const { user, isAuthenticated, _hydrated } = useAuth();
+  const { user, isAuthenticated, _hydrated, token } = useAuth();
   const router = useRouter();
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +54,10 @@ export default function AdminArticlesPage() {
             if (!confirm(`حذف جميع المقالات (${articles.length})؟ هذا الإجراء لا يمكن التراجع عنه.`)) return;
             setDeletingAll(true);
             try {
-              const res = await fetch('/api/articles', { method: 'DELETE' });
+              const res = await fetch('/api/articles?all=true', {
+                method: 'DELETE',
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+              });
               const d = await res.json();
               if (d.success) { toast.success('تم حذف جميع المقالات'); setArticles([]); }
               else toast.error(d.error || 'فشل');

@@ -4,6 +4,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { chatCompletion } from '@/ai/nvidia-client';
+import { getExpressiveNewsImage } from '@/lib/news-image';
 
 /**
  * Car-news importer v2 — fast, multi-source, cars-only.
@@ -369,6 +370,7 @@ export async function POST(request: NextRequest) {
         ? `**الخلاصة الذكية **\n${summary}\n\n---\n${p.body}\n\n---\n*المصدر: [${p.source}](${p.url})*`
         : `${p.body}\n\n---\n*المصدر: [${p.source}](${p.url})*`;
 
+      const cat = classifyCategory(p.title + ' ' + p.body.slice(0, 300));
       const slug = `news-${Date.now().toString(36)}-${i}`;
       try {
         const row = await prisma.article.create({
@@ -377,8 +379,8 @@ export async function POST(request: NextRequest) {
             slug,
             content,
             excerpt,
-            image: p.image,
-            category: classifyCategory(p.title + ' ' + p.body.slice(0, 300)),
+            image: p.image || getExpressiveNewsImage(p.title, cat),
+            category: cat,
             tags: JSON.stringify([]),
             published: true,
             publishedAt: p.pubDate ? new Date(p.pubDate) : new Date(),

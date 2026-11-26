@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { getExpressiveNewsImage } from '@/lib/news-image';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
         slug: slug || title.replace(/\s+/g, '-').toLowerCase(),
         content,
         excerpt: excerpt || null,
-        image: image || null,
+        image: image || getExpressiveNewsImage(title, category),
         category: category || 'NEWS',
         tags: tags || '[]',
         published: published === true,
@@ -65,8 +66,14 @@ export async function DELETE(request: NextRequest) {
   if (!user || user.role !== 'ADMIN') return unauthorizedResponse();
 
   try {
+    const deleteAll = request.nextUrl.searchParams.get('all') === 'true';
     const body = await request.json().catch(() => ({}));
-    const { ids } = body as { ids?: string[] };
+    const { ids, deleteAll: bodyDeleteAll } = body as { ids?: string[]; deleteAll?: boolean };
+
+    if (deleteAll || bodyDeleteAll) {
+      const deleted = await prisma.article.deleteMany({});
+      return successResponse({ message: `تم حذف جميع المقالات (${deleted.count})` });
+    }
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return errorResponse('يجب تحديد المقالات المراد حذفها');
