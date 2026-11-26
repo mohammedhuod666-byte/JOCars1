@@ -9,7 +9,7 @@ import {
   Search, SlidersHorizontal, X, MapPin, Star, Wrench, Store,
   Filter, Calendar, MessageCircle, Phone, Sparkles,
   ChevronLeft, ChevronRight, ShieldCheck, Clock, Plus, Truck,
-  Zap, Award, AlertTriangle, Calculator, CheckCircle2, ChevronDown, Headphones
+  Award, AlertTriangle, Calculator
 } from 'lucide-react';
 
 interface Workshop {
@@ -46,35 +46,41 @@ interface Workshop {
 }
 
 const SORT_OPTIONS = [
-  { value: 'rating', label: 'الأعلى تقييماً ' },
-  { value: 'reviews', label: 'الأكثر تقييمات ' },
-  { value: 'newest', label: 'الأحدث 🆕' },
-  { value: 'views', label: 'الأكثر مشاهدة ' },
+  { value: 'rating', label: 'الأعلى تقييماً' },
+  { value: 'reviews', label: 'الأكثر تقييمات' },
+  { value: 'newest', label: 'الأحدث' },
+  { value: 'views', label: 'الأكثر مشاهدة' },
 ];
 
 const CATEGORY_CHIPS = [
-  { id: '', label: 'الكل', icon: '' },
-  { id: 'هايبرد', label: 'صيانة هايبرد وكهرباء', icon: '' },
-  { id: 'فحص كمبيوتر', label: 'فحص كمبيوتر وكهرباء', icon: '' },
-  { id: 'ميكانيك', label: 'ميكانيك عام', icon: '' },
-  { id: 'برمجة', label: 'برمجة عقول ومفاتيح', icon: '' },
-  { id: 'تغيير زيت', label: 'سرفيس وزيوت', icon: '' },
-  { id: 'خدمات متنقلة', label: 'صيانة متنقلة', icon: '' },
-  { id: 'سحب سيارات', label: 'ونش وسحب 24/7', icon: '' },
+  { id: '', label: 'الكل' },
+  { id: 'هايبرد', label: 'هايبرد وكهرباء' },
+  { id: 'فحص كمبيوتر', label: 'فحص كمبيوتر' },
+  { id: 'ميكانيك', label: 'ميكانيك عام' },
+  { id: 'برمجة', label: 'برمجة ومفاتيح' },
+  { id: 'تغيير زيت', label: 'سرفيس وزيوت' },
+  { id: 'خدمات متنقلة', label: 'صيانة متنقلة' },
+  { id: 'سحب سيارات', label: 'ونش وسحب 24/7' },
 ];
 
 const PROVINCE_OPTIONS = [
   'عمّان', 'إربد', 'الزرقاء', 'العقبة', 'البلقاء', 'الكرك', 'المفرق', 'معان', 'الطفيلة', 'عجلون', 'جرش', 'مادبا'
 ];
 
-const ESTIMATOR_SERVICES: Record<string, { label: string; min: number; max: number; note: string }> = {
-  oil_change: { label: 'تغيير زيت وفلتر أصلي', min: 25, max: 55, note: 'يعتمد على نوع الزيت وسعة المحرك' },
-  computer_scan: { label: 'فحص كمبيوتر وشامل', min: 10, max: 25, note: 'يشمل قراءة جميع الأعطال وكشوف الميكانيك' },
-  hybrid_check: { label: 'فحص بطارية وجهاز الهايبرد', min: 15, max: 35, note: 'اختبار خلايا البطارية والأنظمة الكهروميكانيكية' },
-  brake_pads: { label: 'تبديل بريكات أمامي وخلفي', min: 30, max: 80, note: 'شامل الفحمات والتركيب والخراطة' },
-  spark_plugs: { label: 'تبديل بواجي وتنظيف بخاخات', min: 25, max: 60, note: 'تحسين مصروف البنزين وعزم السيارة' },
-  ac_recharge: { label: 'تعبئة غاز مكيف وفحص التسريب', min: 15, max: 30, note: 'غاز أمريكي/إيطالي أصلي مع زيت الكمبروسر' },
-  tires_balance: { label: 'ميزان مائي وترصيص إطارات', min: 10, max: 25, note: 'ضبط الهيئة الأمامية والخلفية' },
+const ESTIMATOR_SERVICES: Record<string, { label: string; searchKey: string; min: number; max: number; note: string }> = {
+  oil_change: { label: 'تغيير زيت وفلتر أصلي', searchKey: 'تغيير زيت', min: 25, max: 55, note: 'يعتمد على نوع الزيت (تخليقي بالكامل) وسعة المحرك' },
+  computer_scan: { label: 'فحص كمبيوتر وشامل', searchKey: 'فحص كمبيوتر', min: 10, max: 25, note: 'يشمل قراءة جميع الأعطال وكشوف الميكانيك' },
+  hybrid_check: { label: 'فحص بطارية وجهاز الهايبرد', searchKey: 'هايبرد', min: 15, max: 35, note: 'اختبار خلايا البطارية والأنظمة الكهروميكانيكية' },
+  brake_pads: { label: 'تبديل بريكات أمامي وخلفي', searchKey: 'ميكانيك', min: 30, max: 80, note: 'شامل الفحمات والتركيب والخراطة' },
+  spark_plugs: { label: 'تبديل بواجي وتنظيف بخاخات', searchKey: 'ميكانيك', min: 25, max: 60, note: 'تحسين مصروف البنزين وعزم السيارة' },
+  ac_recharge: { label: 'تعبئة غاز مكيف وفحص التسريب', searchKey: 'فحص كمبيوتر', min: 15, max: 30, note: 'غاز أمريكي/إيطالي أصلي مع زيت الكمبروسر' },
+  tires_balance: { label: 'ميزان مائي وترصيص إطارات', searchKey: 'ميكانيك', min: 10, max: 25, note: 'ضبط الهيئة الأمامية والخلفية' },
+};
+
+const CAR_TYPE_MULTIPLIER: Record<string, number> = {
+  'بنزين': 1,
+  'هايبرد': 1.15,
+  'كهرباء': 1.2,
 };
 
 export default function WorkshopsPage() {
@@ -150,131 +156,153 @@ export default function WorkshopsPage() {
     filterService, filterProvince, verifiedOnly, isMobileOnly, hasTowingOnly, hasWarrantyOnly
   ].filter(Boolean).length;
 
+  const estBase = ESTIMATOR_SERVICES[estSelected];
+  const estMult = CAR_TYPE_MULTIPLIER[estCarType] || 1;
+  const estMin = Math.round(estBase.min * estMult);
+  const estMax = Math.round(estBase.max * estMult);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-16">
+    <div className="min-h-screen bg-[#0e1013] text-slate-100 pb-28 md:pb-16">
       {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-b from-emerald-950/40 via-slate-900 to-slate-950 border-b border-emerald-500/10 py-12 md:py-16">
-        <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="container-custom relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-            <div className="space-y-3 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+      <div className="relative overflow-hidden bg-gradient-to-b from-[#151a22] via-[#11151b] to-[#0e1013] border-b border-white/[0.06] py-7 sm:py-12">
+        <div className="absolute top-0 right-1/4 w-80 h-80 bg-[#ffc640]/[0.06] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-80 h-80 bg-emerald-500/[0.06] rounded-full blur-3xl pointer-events-none" />
+
+        <div className="container-custom max-w-6xl relative z-10 space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div className="space-y-2.5 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ffc640]/10 border border-[#ffc640]/25 text-[#ffc640] text-[11px] sm:text-xs font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>دليل ورش السيارات الأول في المملكة الأردنية</span>
+                <span>دليل ورش الصيانة المعتمد في الأردن</span>
               </div>
-              <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-                اعثر على أفضل <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">ورش الصيانة</span> الموثوقة
+              <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+                اعثر على أفضل <span className="text-[#ffc640]">ورش الصيانة</span> الموثوقة
               </h1>
-              <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-                احجز موعداً فورياً، قارن الأسعار، وتواصل مباشرة مع فنيين متخصصين وصيانة هايبرد وكهرباء معتمدة في كافة المحافظات.
+              <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                احجز موعدك فوراً، قدّر تكلفة الإصلاح، وتواصل مباشرة مع فنيين متخصصين في الهايبرد والكهرباء والميكانيك في كافة المحافظات.
               </p>
             </div>
 
-            <div className="flex flex-wrap sm:flex-nowrap gap-3 shrink-0">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2.5 shrink-0">
               <button
+                type="button"
                 onClick={() => setShowCostEstimator(true)}
-                className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 font-bold text-sm hover:from-amber-400 hover:to-orange-500 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                className="flex items-center justify-center gap-2 h-11 sm:h-12 px-4 sm:px-5 rounded-2xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] font-black text-xs sm:text-sm shadow-lg shadow-[#ffc640]/15 transition-all cursor-pointer"
               >
-                <Calculator className="w-4 h-4" />
-                حاسبة تكاليف الإصلاح
+                <Calculator className="w-4 h-4 shrink-0" />
+                <span>حاسبة التكاليف</span>
               </button>
 
               {isAuthenticated ? (
                 <Link
                   href="/workshops/create"
-                  className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 transition-all"
+                  className="flex items-center justify-center gap-2 h-11 sm:h-12 px-4 sm:px-5 rounded-2xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 font-black text-xs sm:text-sm transition-all"
                 >
-                  <Plus className="w-4 h-4" />
-                  أضف ورشتك الآن
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>أضف ورشتك</span>
                 </Link>
               ) : (
                 <Link
                   href="/auth/login?redirect=/workshops/create"
-                  className="flex items-center gap-2 px-5 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-sm transition-all"
+                  className="flex items-center justify-center gap-2 h-11 sm:h-12 px-4 sm:px-5 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-200 font-bold text-xs sm:text-sm transition-all"
                 >
-                  <Store className="w-4 h-4 text-emerald-400" />
-                  سجّل ورشتك مجاناً
+                  <Store className="w-4 h-4 text-[#ffc640] shrink-0" />
+                  <span>سجّل ورشتك</span>
                 </Link>
               )}
             </div>
           </div>
 
-          {/* Quick Roadside Assistance Alert Widget */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-950/60 via-slate-900 to-rose-950/60 border border-rose-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+          {/* Roadside Emergency Banner */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#161215] border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0 animate-pulse">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-white text-sm font-bold flex items-center gap-2">
+                <h4 className="text-white text-xs sm:text-sm font-black">
                   عطل مفاجئ على الطريق أو بحاجة لـ ونش سحب 24/7؟
                 </h4>
-                <p className="text-slate-400 text-xs mt-0.5">
-                  ابحث عن الورش التي تقدم خدمة الونش السريع أو الصيانة المتنقلة الفورية في موقعك.
+                <p className="text-slate-400 text-[11px] sm:text-xs mt-0.5">
+                  اعرض الورش التي توفر ونش سحب سريع أو صيانة متنقلة فورية لموقعك.
                 </p>
               </div>
             </div>
             <button
-              onClick={() => { setHasTowingOnly(true); setPage(1); }}
-              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shrink-0 transition-colors"
+              type="button"
+              onClick={() => { setHasTowingOnly(prev => !prev); setPage(1); }}
+              className={`h-9 sm:h-10 px-4 rounded-xl text-xs font-black shrink-0 transition-all cursor-pointer ${
+                hasTowingOnly
+                  ? 'bg-white/10 text-white border border-white/20 hover:bg-white/15'
+                  : 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/20'
+              }`}
             >
-              عرض الورش ذات خدمة الونش والطوارئ 
+              {hasTowingOnly ? 'عرض جميع الورش' : 'عرض ورش الونش والطوارئ'}
             </button>
           </div>
         </div>
       </div>
 
-      <div className="container-custom pt-8">
+      <div className="container-custom max-w-6xl pt-5 sm:pt-7">
         {/* Quick Category Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 no-scrollbar mb-4">
           {CATEGORY_CHIPS.map((chip) => {
             const isActive = filterService === chip.id;
             return (
               <button
                 key={chip.id}
+                type="button"
                 onClick={() => { setFilterService(chip.id); setPage(1); }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border shrink-0 cursor-pointer ${
                   isActive
-                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:border-slate-700 hover:text-white'
+                    ? 'bg-[#ffc640] text-[#0e1013] border-[#ffc640] shadow-md shadow-[#ffc640]/15'
+                    : 'bg-[#14181f] text-slate-300 border-white/[0.08] hover:border-white/20 hover:text-white'
                 }`}
               >
-                <span>{chip.label}</span>
+                {chip.label}
               </button>
             );
           })}
         </div>
 
-        {/* Search & Main Filter Controls */}
-        <div className="mb-8 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* Search & Filter Controls */}
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col md:flex-row gap-2.5">
             <div className="relative flex-1">
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); fetchWorkshops(); } }}
-                placeholder="ابحث باسم الورشة، المدينة، أو تخصص الفحص..."
-                className="w-full rounded-2xl border border-slate-800 bg-slate-900/90 text-white px-4 py-3.5 pr-11 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all placeholder:text-slate-500"
+                placeholder="ابحث باسم الورشة، المنطقة، أو التخصص..."
+                className="w-full h-11 sm:h-12 rounded-2xl border border-white/[0.08] bg-[#14181f] text-white pr-10 pl-10 text-xs sm:text-sm outline-none focus:border-[#ffc640] transition-all placeholder:text-slate-500"
               />
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setPage(1); }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 sm:flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-3.5 rounded-2xl border text-sm font-semibold transition-all ${
+                className={`h-11 sm:h-12 flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-2xl border text-xs sm:text-sm font-bold transition-all cursor-pointer ${
                   showFilters || activeFilterCount > 0
-                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-400'
-                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[#ffc640]/15 border-[#ffc640]/40 text-[#ffc640]'
+                    : 'bg-[#14181f] border-white/[0.08] text-slate-300 hover:border-white/20'
                 }`}
               >
-                <SlidersHorizontal className="w-4 h-4" />
+                <SlidersHorizontal className="w-4 h-4 shrink-0" />
                 <span>الفلاتر</span>
                 {activeFilterCount > 0 && (
-                  <span className="w-5 h-5 bg-emerald-500 text-slate-950 text-xs rounded-full flex items-center justify-center font-bold">
+                  <span className="w-5 h-5 bg-[#ffc640] text-[#0e1013] text-[11px] rounded-full flex items-center justify-center font-black">
                     {activeFilterCount}
                   </span>
                 )}
@@ -283,7 +311,7 @@ export default function WorkshopsPage() {
               <select
                 value={sortBy}
                 onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
-                className="px-4 py-3.5 rounded-2xl border border-slate-800 bg-slate-900 text-slate-300 text-sm outline-none focus:border-emerald-500 appearance-none cursor-pointer font-medium"
+                className="h-11 sm:h-12 px-3 sm:px-4 rounded-2xl border border-white/[0.08] bg-[#14181f] text-slate-200 text-xs sm:text-sm outline-none focus:border-[#ffc640] cursor-pointer font-bold"
               >
                 {SORT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -291,8 +319,9 @@ export default function WorkshopsPage() {
               </select>
 
               <button
+                type="button"
                 onClick={() => { setPage(1); fetchWorkshops(); }}
-                className="px-6 py-3.5 bg-emerald-600 text-white rounded-2xl text-sm font-bold hover:bg-emerald-500 transition-colors shadow-md shadow-emerald-600/20"
+                className="h-11 sm:h-12 px-4 sm:px-6 bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] rounded-2xl text-xs sm:text-sm font-black transition-colors cursor-pointer"
               >
                 بحث
               </button>
@@ -306,60 +335,61 @@ export default function WorkshopsPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className="p-6 rounded-3xl border border-slate-800 bg-slate-900/95 space-y-5"
+                className="overflow-hidden"
               >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-emerald-400" />
-                    تصفية نتائج البحث المتقدمة
-                  </h3>
-                  {activeFilterCount > 0 && (
-                    <button onClick={resetFilters} className="text-xs text-rose-400 hover:underline">
-                      مسح كافة الفلاتر ({activeFilterCount})
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">المحافظة</label>
-                    <select
-                      value={filterProvince}
-                      onChange={(e) => { setFilterProvince(e.target.value); setPage(1); }}
-                      className="w-full h-11 px-3 rounded-xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-emerald-500"
-                    >
-                      <option value="">جميع المحافظات</option>
-                      {PROVINCE_OPTIONS.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
+                <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#14181f] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-white text-xs sm:text-sm flex items-center gap-2">
+                      <Filter className="w-4 h-4 text-[#ffc640]" />
+                      <span>تصفية نتائج البحث المتقدمة</span>
+                    </h3>
+                    {activeFilterCount > 0 && (
+                      <button type="button" onClick={resetFilters} className="text-xs text-rose-400 hover:underline font-bold cursor-pointer">
+                        مسح الكل ({activeFilterCount})
+                      </button>
+                    )}
                   </div>
 
-                  {/* Feature Checkboxes */}
-                  <div className="col-span-1 sm:col-span-2 md:col-span-2 flex flex-wrap items-center gap-3 pt-4 sm:pt-6">
-                    <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${verifiedOnly ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>
-                      <input type="checkbox" checked={verifiedOnly} onChange={(e) => { setVerifiedOnly(e.target.checked); setPage(1); }} className="hidden" />
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>ورش معتمدة وموثّقة فقط</span>
-                    </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1.5">المحافظة</label>
+                      <select
+                        value={filterProvince}
+                        onChange={(e) => { setFilterProvince(e.target.value); setPage(1); }}
+                        className="w-full h-11 px-3 rounded-xl border border-white/[0.08] bg-[#0e1013] text-white text-xs sm:text-sm outline-none focus:border-[#ffc640]"
+                      >
+                        <option value="">جميع المحافظات</option>
+                        {PROVINCE_OPTIONS.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${isMobileOnly ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>
-                      <input type="checkbox" checked={isMobileOnly} onChange={(e) => { setIsMobileOnly(e.target.checked); setPage(1); }} className="hidden" />
-                      <Truck className="w-3.5 h-3.5" />
-                      <span>خدمة صيانة متنقلة</span>
-                    </label>
+                    <div className="md:col-span-2 flex flex-wrap items-end gap-2">
+                      <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${verifiedOnly ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-[#0e1013] border-white/[0.08] text-slate-400'}`}>
+                        <input type="checkbox" checked={verifiedOnly} onChange={(e) => { setVerifiedOnly(e.target.checked); setPage(1); }} className="hidden" />
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>ورش معتمدة فقط</span>
+                      </label>
 
-                    <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${hasTowingOnly ? 'bg-rose-500/20 border-rose-500 text-rose-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>
-                      <input type="checkbox" checked={hasTowingOnly} onChange={(e) => { setHasTowingOnly(e.target.checked); setPage(1); }} className="hidden" />
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>خدمة ونش وطوارئ 24/7</span>
-                    </label>
+                      <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${isMobileOnly ? 'bg-sky-500/15 border-sky-500/40 text-sky-300' : 'bg-[#0e1013] border-white/[0.08] text-slate-400'}`}>
+                        <input type="checkbox" checked={isMobileOnly} onChange={(e) => { setIsMobileOnly(e.target.checked); setPage(1); }} className="hidden" />
+                        <Truck className="w-3.5 h-3.5" />
+                        <span>صيانة متنقلة</span>
+                      </label>
 
-                    <label className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${hasWarrantyOnly ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>
-                      <input type="checkbox" checked={hasWarrantyOnly} onChange={(e) => { setHasWarrantyOnly(e.target.checked); setPage(1); }} className="hidden" />
-                      <Award className="w-3.5 h-3.5" />
-                      <span>تقدم كفالة وضمان إصلاح</span>
-                    </label>
+                      <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${hasTowingOnly ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-[#0e1013] border-white/[0.08] text-slate-400'}`}>
+                        <input type="checkbox" checked={hasTowingOnly} onChange={(e) => { setHasTowingOnly(e.target.checked); setPage(1); }} className="hidden" />
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>ونش وطوارئ 24/7</span>
+                      </label>
+
+                      <label className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${hasWarrantyOnly ? 'bg-[#ffc640]/15 border-[#ffc640]/40 text-[#ffc640]' : 'bg-[#0e1013] border-white/[0.08] text-slate-400'}`}>
+                        <input type="checkbox" checked={hasWarrantyOnly} onChange={(e) => { setHasWarrantyOnly(e.target.checked); setPage(1); }} className="hidden" />
+                        <Award className="w-3.5 h-3.5" />
+                        <span>كفالة وضمان</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -367,203 +397,231 @@ export default function WorkshopsPage() {
           </AnimatePresence>
         </div>
 
-        {/* Results Counter */}
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-slate-400 text-sm font-medium">
-            {loading ? 'جاري التحميل...' : `عرض ${total} ورشة صيانة متوفرة`}
+        {/* Results Counter & Active Chips */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+          <p className="text-slate-400 text-xs sm:text-sm font-semibold">
+            {loading ? 'جاري تحميل الورش...' : `تم العثور على ${total} ورشة صيانة`}
           </p>
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-xs font-bold text-[#ffc640] hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>إعادة ضبط الفلاتر</span>
+            </button>
+          )}
         </div>
 
         {/* Loading Skeletons */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 space-y-4 animate-pulse">
-                <div className="h-44 bg-slate-800 rounded-2xl" />
-                <div className="h-5 bg-slate-800 rounded w-2/3" />
-                <div className="h-4 bg-slate-800 rounded w-1/2" />
-                <div className="h-10 bg-slate-800 rounded-xl" />
+              <div key={i} className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#14181f] p-4 space-y-4 animate-pulse">
+                <div className="h-40 bg-white/[0.05] rounded-2xl" />
+                <div className="h-5 bg-white/[0.05] rounded w-2/3" />
+                <div className="h-4 bg-white/[0.05] rounded w-1/2" />
+                <div className="h-10 bg-white/[0.05] rounded-xl" />
               </div>
             ))}
           </div>
         ) : workshops.length === 0 ? (
-          /* Empty State */
-          <div className="text-center py-20 bg-slate-900/40 rounded-3xl border border-slate-800 p-8">
-            <Store className="w-16 h-16 mx-auto text-slate-600 mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">لم نجد ورشات تطابق البحث</h3>
-            <p className="text-slate-400 text-sm mb-6 max-w-md mx-auto">
+          <div className="text-center py-16 bg-[#14181f] rounded-3xl border border-white/[0.08] p-6">
+            <Store className="w-14 h-14 mx-auto text-slate-600 mb-3" />
+            <h3 className="text-lg sm:text-xl font-black text-white mb-2">لم نجد ورشات تطابق البحث</h3>
+            <p className="text-slate-400 text-xs sm:text-sm mb-5 max-w-md mx-auto">
               جرب تغيير خيارات التصفية أو إلغاء تحديد بعض الفلاتر لعرض نتائج أكثر.
             </p>
             <button
+              type="button"
               onClick={resetFilters}
-              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition-all"
+              className="px-6 py-3 bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer"
             >
               إعادة ضبط جميع الفلاتر
             </button>
           </div>
         ) : (
           /* Workshop Cards Grid */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {workshops.map((ws) => (
-              <motion.div
-                key={ws.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="group relative rounded-3xl border border-slate-800/80 bg-slate-900/80 hover:bg-slate-900 hover:border-emerald-500/40 transition-all duration-300 flex flex-col overflow-hidden shadow-lg hover:shadow-2xl hover:shadow-emerald-500/5"
-              >
-                {/* Cover Image & Badges */}
-                <div className="relative h-44 w-full bg-slate-950 overflow-hidden">
-                  {ws.coverImage ? (
-                    <Image
-                      src={ws.coverImage}
-                      alt={ws.name}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-950 flex items-center justify-center">
-                      <Wrench className="w-14 h-14 text-slate-800" />
-                    </div>
-                  )}
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-
-                  {/* Top Badges */}
-                  <div className="absolute top-3 right-3 flex flex-wrap gap-1.5">
-                    {ws.isVerified && (
-                      <span className="px-2.5 py-1 rounded-xl text-[11px] font-extrabold bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 flex items-center gap-1 shadow-md">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        ورشة معتمدة
-                      </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {workshops.map((ws) => {
+              const phoneNum = ws.phone || ws.user?.phone;
+              const waNum = ws.whatsapp || ws.user?.whatsapp || ws.phone;
+              return (
+                <motion.div
+                  key={ws.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="group rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#14181f] hover:border-[#ffc640]/40 transition-all duration-300 flex flex-col overflow-hidden shadow-xl"
+                >
+                  {/* Cover Image */}
+                  <Link href={`/workshops/${ws.id}`} className="relative h-40 sm:h-44 w-full bg-[#0a0c0f] overflow-hidden block">
+                    {ws.coverImage ? (
+                      <Image
+                        src={ws.coverImage}
+                        alt={ws.name}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 768px) 100vw, 384px"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-[#161b24] to-[#0e1013] flex items-center justify-center">
+                        <Wrench className="w-12 h-12 text-slate-700" />
+                      </div>
                     )}
-                    {ws.hasTowingService && (
-                      <span className="px-2 py-1 rounded-xl text-[10px] font-bold bg-rose-600/90 text-white flex items-center gap-1">
-                         ونش 24/7
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Discount Offer Badge */}
-                  {ws.discountOffer && (
-                    <div className="absolute bottom-3 right-3 w-fit max-w-[calc(100%-1.5rem)] bg-emerald-500/90 backdrop-blur-md text-slate-950 text-xs font-bold px-3 py-1.5 rounded-xl truncate shadow-md">
-                       {ws.discountOffer}
-                    </div>
-                  )}
-                </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#14181f] via-transparent to-black/30" />
 
-                {/* Card Main Info */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex items-start gap-3 mb-2">
-                      <div className="w-12 h-12 rounded-2xl border-2 border-slate-700 bg-slate-950 overflow-hidden shrink-0 relative flex items-center justify-center">
-                        {ws.logo ? (
-                          <Image src={ws.logo} alt={ws.name} fill className="object-cover" />
-                        ) : (
-                          <Wrench className="w-5 h-5 text-emerald-400" />
+                    {/* Top Badges */}
+                    <div className="absolute top-3 right-3 left-3 flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex flex-wrap gap-1.5">
+                        {ws.isVerified && (
+                          <span className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-[#ffc640] text-[#0e1013] flex items-center gap-1 shadow-md">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>معتمدة</span>
+                          </span>
+                        )}
+                        {ws.hasTowingService && (
+                          <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-600/90 text-white backdrop-blur-md">
+                            ونش 24/7
+                          </span>
+                        )}
+                        {ws.isMobileService && (
+                          <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-sky-500/90 text-white backdrop-blur-md">
+                            متنقلة
+                          </span>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <Link href={`/workshops/${ws.id}`}>
-                          <h3 className="font-bold text-white text-base hover:text-emerald-400 transition-colors truncate">
-                            {ws.name}
-                          </h3>
+                    </div>
+
+                    {ws.discountOffer && (
+                      <div className="absolute bottom-3 right-3 max-w-[calc(100%-1.5rem)] bg-emerald-500/95 text-slate-950 text-[11px] font-black px-2.5 py-1 rounded-lg truncate shadow-md">
+                        {ws.discountOffer}
+                      </div>
+                    )}
+                  </Link>
+
+                  {/* Card Body */}
+                  <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3.5">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 rounded-2xl border border-white/10 bg-[#0e1013] overflow-hidden shrink-0 relative flex items-center justify-center">
+                          {ws.logo ? (
+                            <Image src={ws.logo} alt={ws.name} fill className="object-cover" sizes="48px" />
+                          ) : (
+                            <Wrench className="w-5 h-5 text-[#ffc640]" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/workshops/${ws.id}`}>
+                            <h3 className="font-black text-white text-sm sm:text-base hover:text-[#ffc640] transition-colors truncate">
+                              {ws.name}
+                            </h3>
+                          </Link>
+                          <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#ffc640] shrink-0" />
+                            <span className="truncate">{ws.address || 'الأردن'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rating, Hours & Warranty Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs py-2.5 border-y border-white/[0.06]">
+                        <div className="flex items-center gap-1.5">
+                          <Star className="w-4 h-4 fill-[#ffc640] text-[#ffc640]" />
+                          <span className="font-black text-white text-sm">{ws.rating > 0 ? ws.rating.toFixed(1) : '5.0'}</span>
+                          <span className="text-slate-500">({ws.reviewCount})</span>
+                        </div>
+
+                        {ws.workingHours && (
+                          <span className="text-slate-400 text-[11px] flex items-center gap-1 truncate max-w-[140px]">
+                            <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="truncate">{ws.workingHours}</span>
+                          </span>
+                        )}
+
+                        {ws.hasWarranty && (
+                          <span className="text-emerald-400 text-[11px] font-bold">
+                            كفالة {ws.warrantyPeriod || ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Services Chips */}
+                      {ws.services && ws.services.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {ws.services.slice(0, 3).map((s) => (
+                            <span key={s.id} className="px-2.5 py-1 rounded-lg bg-[#0e1013] border border-white/[0.06] text-slate-300 text-[11px] font-semibold">
+                              {s.name}
+                            </span>
+                          ))}
+                          {ws.services.length > 3 && (
+                            <span className="px-2 py-1 rounded-lg bg-[#0e1013] border border-white/[0.06] text-slate-400 text-[11px] font-bold">
+                              +{ws.services.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions Footer */}
+                    <div className="pt-1 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Link
+                          href={`/workshops/${ws.id}`}
+                          className="h-10 flex items-center justify-center gap-1.5 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] font-black text-xs transition-colors"
+                        >
+                          عرض الورشة
                         </Link>
-                        <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="truncate">{ws.address || 'الأردن'}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rating & Stats */}
-                    <div className="flex items-center justify-between text-xs py-2 border-y border-slate-800/80 my-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex items-center text-amber-400">
-                          <Star className="w-4 h-4 fill-amber-400" />
-                        </div>
-                        <span className="font-bold text-white text-sm">{ws.rating > 0 ? ws.rating.toFixed(1) : '5.0'}</span>
-                        <span className="text-slate-500">({ws.reviewCount} تقييم)</span>
-                      </div>
-
-                      {ws.hasWarranty && (
-                        <span className="text-amber-400 text-[11px] font-semibold flex items-center gap-1">
-                           كفالة {ws.warrantyPeriod || ''}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Services Chips */}
-                    {ws.services && ws.services.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-3">
-                        {ws.services.slice(0, 4).map((s) => (
-                          <span key={s.id} className="px-2.5 py-1 rounded-xl bg-slate-800 text-slate-300 text-[11px] font-medium">
-                            {s.name}
-                          </span>
-                        ))}
-                        {ws.services.length > 4 && (
-                          <span className="px-2 py-1 rounded-xl bg-slate-800 text-slate-400 text-[10px]">
-                            +{ws.services.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions Footer */}
-                  <div className="pt-2 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <Link
-                        href={`/workshops/${ws.id}`}
-                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-md shadow-emerald-600/15"
-                      >
-                        عرض الصفحة
-                      </Link>
-
-                      <Link
-                        href={`/workshops/${ws.id}#book`}
-                        className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition-colors"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        حجز موعد
-                      </Link>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-xs">
-                      {(ws.phone || ws.user?.phone) && (
-                        <a
-                          href={`tel:${ws.phone || ws.user?.phone}`}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+                        <Link
+                          href={`/workshops/${ws.id}#book`}
+                          className="h-10 flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-bold text-xs transition-colors"
                         >
-                          <Phone className="w-3 h-3 text-emerald-400" />
-                          <span>اتصال</span>
-                        </a>
-                      )}
-                      {(ws.whatsapp || ws.user?.whatsapp || ws.phone) && (
-                        <a
-                          href={`https://wa.me/${(ws.whatsapp || ws.phone || '').replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors"
-                        >
-                          <MessageCircle className="w-3 h-3 text-emerald-400" />
-                          <span>واتساب</span>
-                        </a>
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>حجز موعد</span>
+                        </Link>
+                      </div>
+
+                      {(phoneNum || waNum) && (
+                        <div className="flex items-center gap-2 text-xs">
+                          {phoneNum && (
+                            <a
+                              href={`tel:${phoneNum}`}
+                              className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl bg-[#0e1013] border border-white/[0.08] text-slate-300 hover:text-white hover:border-white/20 font-bold transition-colors"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-[#ffc640]" />
+                              <span>اتصال</span>
+                            </a>
+                          )}
+                          {waNum && (
+                            <a
+                              href={`https://wa.me/${waNum.replace(/[^0-9]/g, '').replace(/^0/, '962')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-xl bg-[#0e1013] border border-white/[0.08] text-slate-300 hover:text-emerald-400 hover:border-emerald-500/30 font-bold transition-colors"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>واتساب</span>
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         )}
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-12">
+          <div className="flex items-center justify-center gap-2 mt-10 flex-wrap">
             <button
+              type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="p-2.5 rounded-xl border border-white/[0.08] bg-[#14181f] text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -573,11 +631,12 @@ export default function WorkshopsPage() {
               return (
                 <button
                   key={pNum}
+                  type="button"
                   onClick={() => setPage(pNum)}
-                  className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                  className={`w-10 h-10 rounded-xl text-xs font-black transition-all cursor-pointer ${
                     page === pNum
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-[#ffc640] text-[#0e1013] shadow-md shadow-[#ffc640]/15'
+                      : 'bg-[#14181f] border border-white/[0.08] text-slate-300 hover:text-white'
                   }`}
                 >
                   {pNum}
@@ -586,9 +645,10 @@ export default function WorkshopsPage() {
             })}
 
             <button
+              type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="p-2.5 rounded-xl border border-white/[0.08] bg-[#14181f] text-slate-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -596,41 +656,41 @@ export default function WorkshopsPage() {
         )}
       </div>
 
-      {/* Interactive AI Repair Cost Estimator Modal */}
+      {/* Repair Cost Estimator Modal */}
       <AnimatePresence>
         {showCostEstimator && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={() => setShowCostEstimator(false)} />
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowCostEstimator(false)} />
 
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative z-10 w-full max-w-lg rounded-3xl border border-amber-500/30 bg-slate-900 p-6 md:p-8 space-y-6 shadow-2xl"
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 30, opacity: 0 }}
+              className="relative z-10 w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#ffc640]/30 bg-[#14181f] p-5 sm:p-7 space-y-5 shadow-2xl"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+              <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#ffc640]/15 border border-[#ffc640]/30 text-[#ffc640] flex items-center justify-center shrink-0">
                     <Calculator className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-white text-lg">حاسبة تقدير تكاليف الصيانة في الأردن</h3>
-                    <p className="text-slate-400 text-xs">تقدير متوسط أسعار الخدمات لدى الورش المعتمدة</p>
+                    <h3 className="font-black text-white text-base sm:text-lg">حاسبة تقدير تكاليف الصيانة</h3>
+                    <p className="text-slate-400 text-xs">تقدير متوسط الأسعار لدى الورش المعتمدة في الأردن</p>
                   </div>
                 </div>
 
-                <button onClick={() => setShowCostEstimator(false)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400">
+                <button type="button" onClick={() => setShowCostEstimator(false)} className="p-2 hover:bg-white/[0.06] rounded-xl text-slate-400 cursor-pointer">
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">نوع الخدمة المطلوبة</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">نوع الخدمة المطلوبة</label>
                   <select
                     value={estSelected}
                     onChange={(e) => setEstSelected(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl border border-slate-800 bg-slate-950 text-white text-sm outline-none focus:border-amber-400"
+                    className="w-full h-11 sm:h-12 px-4 rounded-xl border border-white/[0.08] bg-[#0e1013] text-white text-xs sm:text-sm outline-none focus:border-[#ffc640]"
                   >
                     {Object.entries(ESTIMATOR_SERVICES).map(([k, v]) => (
                       <option key={k} value={k}>{v.label}</option>
@@ -639,16 +699,17 @@ export default function WorkshopsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">نوع محرك / فئة السيارة</label>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">نوع محرك السيارة</label>
                   <div className="grid grid-cols-3 gap-2">
                     {['بنزين', 'هايبرد', 'كهرباء'].map((type) => (
                       <button
                         key={type}
+                        type="button"
                         onClick={() => setEstCarType(type)}
-                        className={`py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                        className={`py-2.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
                           estCarType === type
-                            ? 'bg-amber-500 text-slate-950 border-amber-400'
-                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
+                            ? 'bg-[#ffc640] text-[#0e1013] border-[#ffc640]'
+                            : 'bg-[#0e1013] text-slate-400 border-white/[0.08] hover:border-white/20'
                         }`}
                       >
                         {type}
@@ -657,35 +718,32 @@ export default function WorkshopsPage() {
                   </div>
                 </div>
 
-                {/* Estimation Result Display */}
-                <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-amber-400 font-semibold">
-                    <span>التكلفة التقريبية المتوقعة:</span>
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#ffc640]/10 border border-[#ffc640]/25 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-[#ffc640] font-bold">
+                    <span>التكلفة التقريبية المتوقعة</span>
                     <span>شامل أجور اليد والقطع</span>
                   </div>
-                  <div className="text-3xl font-black text-white flex items-baseline gap-2">
-                    <span>{ESTIMATOR_SERVICES[estSelected].min} - {ESTIMATOR_SERVICES[estSelected].max}</span>
-                    <span className="text-sm font-bold text-amber-400">دينار أردني (د.أ)</span>
+                  <div className="text-2xl sm:text-3xl font-black text-white flex items-baseline gap-2">
+                    <span>{estMin} - {estMax}</span>
+                    <span className="text-xs sm:text-sm font-bold text-[#ffc640]">دينار أردني (د.أ)</span>
                   </div>
-                  <p className="text-slate-400 text-xs leading-relaxed pt-1">
-                     {ESTIMATOR_SERVICES[estSelected].note}
+                  <p className="text-slate-300 text-xs leading-relaxed pt-1">
+                    {estBase.note}
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    const label = ESTIMATOR_SERVICES[estSelected].label;
-                    setFilterService(label.split('')[0]);
-                    setShowCostEstimator(false);
-                    setPage(1);
-                  }}
-                  className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-colors"
-                >
-                  ابحث عن ورش تقدم هذه الخدمة 
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterService(estBase.searchKey);
+                  setShowCostEstimator(false);
+                  setPage(1);
+                }}
+                className="w-full h-12 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] font-black text-sm transition-colors cursor-pointer"
+              >
+                ابحث عن ورش تقدم هذه الخدمة
+              </button>
             </motion.div>
           </div>
         )}
