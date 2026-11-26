@@ -399,17 +399,12 @@ export function Header() {
         </div>
       </header>
 
-      {/* Modern Luxury Mega Menu Panel ("المزيد") */}
-      <AnimatePresence>
-        {moreOpen && (
-          <motion.div
-            ref={moreMenuRef}
-            initial={{ opacity: 0, y: -10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="fixed top-[5.75rem] inset-x-0 mx-auto z-[70] w-[min(94vw,1120px)] max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-3xl border border-white/[0.12] bg-[#0b0e16]/95 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.08)] p-4 sm:p-5"
-          >
+      {/* Modern Luxury Mega Menu Panel ("المزيد") — plain conditional unmount so it can never linger invisibly */}
+      {moreOpen && (
+        <div
+          ref={moreMenuRef}
+          className="fixed top-[5.75rem] inset-x-0 mx-auto z-[70] w-[min(94vw,1120px)] max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-3xl border border-white/[0.12] bg-[#0b0e16]/95 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.08)] p-4 sm:p-5 animate-in fade-in zoom-in-95 duration-150"
+        >
             {/* Subtle Ambient Glow */}
             <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
             <div className="absolute top-0 left-1/4 w-96 h-32 bg-cyan-500/10 rounded-full blur-[90px] pointer-events-none" />
@@ -475,10 +470,8 @@ export function Header() {
                           )}
                         >
                           {isHovered && (
-                            <motion.span
-                              layoutId="mega-menu-hover-box"
-                              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                              className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.10] to-white/[0.03] border border-amber-400/40 shadow-[0_0_18px_rgba(245,158,11,0.14),inset_0_1px_0_rgba(255,255,255,0.12)] -z-10"
+                            <span
+                              className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.10] to-white/[0.03] border border-amber-400/40 shadow-[0_0_18px_rgba(245,158,11,0.14),inset_0_1px_0_rgba(255,255,255,0.12)] -z-10 pointer-events-none"
                             />
                           )}
                           {active && !isHovered && (
@@ -532,9 +525,8 @@ export function Header() {
                 إغلاق القائمة (Esc)
               </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
 
       {/* User Dropdown */}
       {userMenuOpen && isAuthenticated && (
