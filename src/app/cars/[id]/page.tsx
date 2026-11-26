@@ -889,8 +889,8 @@ export default function CarDetailPage() {
         )}
       </div>
 
-      {/*  Sticky Mobile Bottom Floating Contact Bar (فقط للهواتف) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-2.5 bg-slate-950/95 backdrop-blur-2xl border-t border-slate-800 md:hidden shadow-2xl">
+      {/*  Sticky Mobile Bottom Floating Contact Bar (فقط للهواتف — فوق شريط التنقل السفلي) */}
+      <div className="fixed bottom-[82px] left-0 right-0 z-40 p-2.5 bg-slate-950/95 backdrop-blur-2xl border-t border-slate-800 md:hidden shadow-2xl">
         <div className="grid grid-cols-4 gap-1.5">
           
           <a

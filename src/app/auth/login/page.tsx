@@ -259,7 +259,7 @@ export default function LoginPage() {
                       <Mail className="w-5 h-5" />
                     </div>
                     <input
-                      placeholder="example@email.com أو 0791234567"
+                      placeholder="البريد أو رقم الهاتف (079...)"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
                       autoComplete="username"

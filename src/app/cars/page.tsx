@@ -382,7 +382,7 @@ function CarsPage() {
                       <Input placeholder="كم إلى" value={filters.kilometersMax} onChange={e => updateFilter('kilometersMax', e.target.value)} />
                     </div>
 
-                    <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-4 pb-2 space-y-2">
+                    <div className="sticky bottom-0 bg-white dark:bg-gray-900 pt-4 pb-24 lg:pb-2 space-y-2">
                       <Button onClick={() => { fetchCars(); setShowFilters(false); }} className="w-full" icon={<Search className="w-4 h-4" />}>
                         تطبيق الفلاتر
                       </Button>

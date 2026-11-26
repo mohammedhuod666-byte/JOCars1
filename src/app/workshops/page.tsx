@@ -445,7 +445,7 @@ export default function WorkshopsPage() {
 
                   {/* Discount Offer Badge */}
                   {ws.discountOffer && (
-                    <div className="absolute bottom-3 right-3 left-3 bg-emerald-500/90 backdrop-blur-md text-slate-950 text-xs font-bold px-3 py-1.5 rounded-xl truncate">
+                    <div className="absolute bottom-3 right-3 w-fit max-w-[calc(100%-1.5rem)] bg-emerald-500/90 backdrop-blur-md text-slate-950 text-xs font-bold px-3 py-1.5 rounded-xl truncate shadow-md">
                        {ws.discountOffer}
                     </div>
                   )}

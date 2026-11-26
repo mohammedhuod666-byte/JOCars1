@@ -28,7 +28,7 @@ export function Footer() {
   const { ref, isInView } = useInScrollView(0.05);
 
   return (
-    <footer ref={ref} className="relative bg-surface-950 text-surface-400 overflow-hidden border-t border-surface-800">
+    <footer ref={ref} className="relative bg-surface-950 text-surface-400 overflow-hidden border-t border-surface-800 pb-24 lg:pb-0">
       <div className="container-custom py-16 sm:py-20 relative">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           {/* Brand */}

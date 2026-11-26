@@ -959,7 +959,7 @@ export function DealerDashboardComponent() {
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ابحث بالماركة أو الموديل أو السنة... (مثال: كامري 2020)"
+                <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="ابحث بالماركة أو الموديل أو السنة..."
                   className="input text-sm pr-9" />
               </div>
               <div className="relative">
