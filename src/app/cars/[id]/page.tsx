@@ -4,52 +4,41 @@ import { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { CarGrid } from '@/components/cars/CarGrid';
 import {
   Phone, MessageCircle, Share2, Flag, Heart, MapPin, Fuel, Gauge,
-  Calendar, Settings, Star, ChevronLeft, ChevronRight, Maximize2,
-  Shield, CheckCircle, AlertTriangle, BarChart3, Bot, Sparkles, Eye,
-  Clock, Building2, Palette, DoorOpen, Cpu, Bike, Loader2, GitCompare, ChevronDown,
-  RotateCcw, Trash2, Crown, Send, Car as CarIcon, X, RefreshCw, CalendarCheck, ShieldCheck, Zap,
-  MessageSquare, Compass, Handshake, Pencil, FileText, FileCheck2, AlertCircle, CheckCircle2, Play
+  Calendar, Settings, ChevronLeft, ChevronRight, Maximize2,
+  AlertTriangle, Eye, Clock, Building2, Palette, DoorOpen, Cpu, Bike,
+  Loader2, GitCompare, Trash2, Car as CarIcon, X, RefreshCw, CalendarCheck,
+  Zap, MessageSquare, Handshake, Pencil, Play, ArrowRight, CheckCircle2,
+  Sparkles, Calculator, FileCheck2
 } from 'lucide-react';
-import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, getConditionLabel, formatDate } from '@/lib/utils';
+import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, formatDate } from '@/lib/utils';
 import { CarDriveLoader } from '@/components/cars/CarDriveLoader';
 import { getCachedCarDetail, setCachedCarDetail } from '@/lib/car-detail-cache';
 import { CustomsCalculator } from '@/components/cars/CustomsCalculator';
-import { ConditionDetails } from '@/components/cars/ConditionDetails';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompareStore } from '@/store';
 import { ReportModal } from '@/components/cars/ReportModal';
 import { BookingModal } from '@/components/cars/BookingModal';
-import { BadgeDisplay } from '@/components/badges/BadgeDisplay';
 import { PriceFairnessIndicator } from '@/components/cars/PriceFairnessIndicator';
-import { SocialProof } from '@/components/cars/SocialProof';
-import { StarRating } from '@/components/ratings/StarRating';
-import { RatingModal } from '@/components/ratings/RatingModal';
 import type { Car } from '@/types';
 import { fetchWithRetry } from '@/lib/fetch-retry';
 import toast from 'react-hot-toast';
 import { sanitizePlainText } from '@/lib/sanitize';
-import WhatsAppShareButton from '@/components/ui/WhatsAppShareButton';
 import JordanianInspectionReport from '@/components/cars/JordanianInspectionReport';
 import CarDocumentsSection from '@/components/cars/CarDocumentsSection';
 import { ValuationReport } from '@/components/cars/ValuationReport';
 import { HoldButton } from '@/components/ui/HoldButton';
 import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/car-features';
 
-const AuctionSection = lazy(() => import('@/components/auctions/AuctionSection').then(m => ({ default: m.AuctionSection })));
-const CarHistorySection = lazy(() => import('@/components/cars/CarHistorySection').then(m => ({ default: m.CarHistorySection })));
-const EngineSoundSection = lazy(() => import('@/components/cars/EngineSoundSection').then(m => ({ default: m.EngineSoundSection })));
 const CarComments = lazy(() => import('@/components/cars/CarComments').then(m => ({ default: m.CarComments })));
-const CarReviews = lazy(() => import('@/components/cars/CarReviews').then(m => ({ default: m.CarReviews })));
 
 function SectionSpinner() {
   return (
     <div className="flex items-center justify-center py-8">
-      <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+      <Loader2 className="w-6 h-6 animate-spin text-[#ffc640]" />
     </div>
   );
 }
@@ -65,12 +54,21 @@ function resolveInspectionScore(car: { aiConditionReport?: string | null; descri
   return m ? m[1].trim() : undefined;
 }
 
+const QUICK_NAV_SECTIONS = [
+  { id: 'section-valuation', label: 'التقييم والسعر', icon: Sparkles },
+  { id: 'section-specs', label: 'المواصفات', icon: Cpu },
+  { id: 'section-inspection', label: 'الفحص والوثائق', icon: FileCheck2 },
+  { id: 'section-customs', label: 'حاسبة الجمرك', icon: Calculator },
+  { id: 'section-description', label: 'الوصف', icon: CarIcon },
+  { id: 'section-comments', label: 'التعليقات', icon: MessageSquare },
+];
+
 export default function CarDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { user: currentUser, token } = useAuth();
   const { addCar, removeCar, isInCompare } = useCompareStore();
-  
+
   const [car, setCar] = useState<Car | null>(null);
   const [similarCars, setSimilarCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,27 +78,22 @@ export default function CarDetailPage() {
   const [currentImage, setCurrentImage] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [ratingOpen, setRatingOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [carTags, setCarTags] = useState<{ id: string; nameAr: string; slug: string; icon: string; color: string }[]>([]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [hasMoreImages, setHasMoreImages] = useState(false);
-  const [loadingMoreImages, setLoadingMoreImages] = useState(false);
   const [liveFairPrice, setLiveFairPrice] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [activeNav, setActiveNav] = useState<string>('section-valuation');
   const chatSubmittingRef = useRef(false);
+  const touchStartX = useRef<number | null>(null);
 
   const applyCarData = (data: any) => {
     setCar(data);
-    // Ignore legacy stale DB estimate; ValuationReport will provide fresh Section 24 FMV
     setIsSaved(data.isFavorited || false);
-    setHasMoreImages(data.hasMoreImages || false);
     document.title = `${data.brand?.nameAr || ''} ${data.model?.nameAr || ''} ${data.year} | كارس جو JO Cars`;
   };
 
   const loadCar = (carId: string, trackView: boolean) => {
-    // Instant path: serve a fresh cached copy, refresh silently in background.
     const cached = getCachedCarDetail(carId) as any;
     if (cached) {
       setLoadError(false);
@@ -146,14 +139,10 @@ export default function CarDetailPage() {
     loadCar(carId, !alreadyViewed);
   }, [params.id]);
 
-  // Mark when the loader was actually shown, so cached (instant) opens
-  // skip the drive-away animation entirely.
   useEffect(() => {
     if (loading) sawLoader.current = true;
   }, [loading]);
 
-  // Drive-away exit: when the ad finishes loading, jump to the top of the
-  // page and let the loader car speed off-screen before revealing the ad.
   useEffect(() => {
     if (!loading && car) {
       window.scrollTo(0, 0);
@@ -172,14 +161,40 @@ export default function CarDetailPage() {
           .then(r => r.json())
           .then(data => setSimilarCars(data.data || []))
           .catch(() => {});
-        fetch(`/api/car-tags?carId=${car.id}`)
-          .then(r => r.json())
-          .then(data => { if (data.success) setCarTags(data.data || []); })
-          .catch(() => {});
-      }, 1500);
+      }, 1200);
       return () => clearTimeout(t);
     }
   }, [car]);
+
+  const allImages = car?.images?.length ? car.images : (car?.coverImage ? [{ url: car.coverImage }] : []);
+
+  useEffect(() => {
+    if (!lightboxOpen || allImages.length === 0) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+      if (e.key === 'ArrowRight') setLightboxIndex(prev => (prev + 1) % allImages.length);
+      if (e.key === 'ArrowLeft') setLightboxIndex(prev => (prev - 1 + allImages.length) % allImages.length);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxOpen, allImages.length]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleGalleryTouchEnd = (e: React.TouchEvent, isLightbox = false) => {
+    if (touchStartX.current === null || allImages.length <= 1) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    touchStartX.current = null;
+    if (Math.abs(diff) < 40) return;
+    const setter = isLightbox ? setLightboxIndex : setCurrentImage;
+    if (diff > 0) {
+      setter(prev => (prev + 1) % allImages.length);
+    } else {
+      setter(prev => (prev - 1 + allImages.length) % allImages.length);
+    }
+  };
 
   const handleShare = () => {
     if (navigator.share) {
@@ -223,61 +238,20 @@ export default function CarDetailPage() {
       });
       const data = await res.json();
       if (!data.success) setIsSaved(prev);
-    } catch { setIsSaved(prev); }
-  };
-
-  const handleSendMessage = async () => {
-    if (!currentUser) {
-      toast.error('يرجى تسجيل الدخول أولاً لإرسال رسالة للمالك');
-      router.push('/auth/login');
-      return;
-    }
-    if (!car) return;
-    const sellerId = car.user?.id || (car as any).userId;
-    if (!sellerId) {
-      toast.error('معلومات البائع غير متوفرة');
-      return;
-    }
-    if (currentUser.id === sellerId) {
-      toast.error('أنت صاحب هذا الإعلان، لا يمكنك مراسلة نفسك');
-      return;
-    }
-    if (actionLoading || chatSubmittingRef.current) return;
-    chatSubmittingRef.current = true;
-    setActionLoading('message');
-    try {
-      const res = await fetch('/api/conversations', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          carId: car.id,
-          sellerId,
-          content: `مرحباً، أنا مهتم بسيارتك المعروضة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى التواصل لمناقشة التفاصيل.`,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && data.data?.conversation?.id) {
-        toast.success('جاري توجيهك للمحادثة مع البائع...');
-        router.push(`/messages?conversationId=${data.data.conversation.id}`);
-      } else {
-        toast.error(data.error || 'تعذر فتح صفحة المحادثات');
-      }
+      else toast.success(!prev ? 'تمت إضافة السيارة إلى المفضلة' : 'تمت إزالة السيارة من المفضلة');
     } catch {
-      toast.error('حدث خطأ أثناء فتح المحادثة');
-    } finally {
-      chatSubmittingRef.current = false;
-      setActionLoading(null);
+      setIsSaved(prev);
     }
   };
 
-  // Quick negotiation: opens a conversation with a price-aware opener
-  const handleNegotiate = async () => {
+  const startSellerChat = async (mode: 'message' | 'negotiate' | 'testdrive') => {
     if (!currentUser) {
-      toast.error('يرجى تسجيل الدخول أولاً للتفاوض مع البائع');
+      const msgs = {
+        message: 'يرجى تسجيل الدخول أولاً لإرسال رسالة للمالك',
+        negotiate: 'يرجى تسجيل الدخول أولاً للتفاوض مع البائع',
+        testdrive: 'يرجى تسجيل الدخول أولاً لطلب اختبار القيادة',
+      };
+      toast.error(msgs[mode]);
       router.push('/auth/login');
       return;
     }
@@ -288,14 +262,26 @@ export default function CarDetailPage() {
       return;
     }
     if (currentUser.id === sellerId) {
-      toast.error('أنت صاحب هذا الإعلان، لا يمكنك التفاوض مع نفسك');
+      toast.error('أنت صاحب هذا الإعلان');
       return;
     }
     if (actionLoading || chatSubmittingRef.current) return;
     chatSubmittingRef.current = true;
-    setActionLoading('negotiate');
+    setActionLoading(mode);
+
+    const priceTxt = car.price.toLocaleString('ar-JO');
+    const contentMap = {
+      message: `مرحباً، أنا مهتم بسيارتك المعروضة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى التواصل لمناقشة التفاصيل.`,
+      negotiate: `مرحباً، أعجبتني سيارتك (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}) المعروضة بسعر ${priceTxt} د.أ. هل السعر نهائي أم يوجد مجال للتفاوض؟`,
+      testdrive: `طلب حجز موعد اختبار قيادة ومعاينة:\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
+    };
+    const successMap = {
+      message: 'جاري توجيهك للمحادثة مع البائع...',
+      negotiate: 'فتحنا لك محادثة التفاوض مع البائع',
+      testdrive: 'تم إرسال طلب اختبار القيادة للبائع بنجاح!',
+    };
+
     try {
-      const priceTxt = car.price.toLocaleString('ar-JO');
       const res = await fetch('/api/conversations', {
         method: 'POST',
         credentials: 'include',
@@ -303,15 +289,11 @@ export default function CarDetailPage() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          carId: car.id,
-          sellerId,
-          content: `مرحباً، أعجبتني سيارتك (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}) المعروضة بسعر ${priceTxt} د.أ. هل السعر نهائي أم يوجد مجال للتفاوض؟ `,
-        }),
+        body: JSON.stringify({ carId: car.id, sellerId, content: contentMap[mode] }),
       });
       const data = await res.json();
       if (data.success && data.data?.conversation?.id) {
-        toast.success('فتحنا لك محادثة التفاوض مع البائع');
+        toast.success(successMap[mode]);
         router.push(`/messages?conversationId=${data.data.conversation.id}`);
       } else {
         toast.error(data.error || 'تعذر فتح المحادثة');
@@ -324,52 +306,10 @@ export default function CarDetailPage() {
     }
   };
 
-  const handleTestDriveRequest = async () => {
-    if (!currentUser) {
-      toast.error('يرجى تسجيل الدخول أولاً لطلب اختبار القيادة');
-      router.push('/auth/login');
-      return;
-    }
-    if (!car) return;
-    const sellerId = car.user?.id || (car as any).userId;
-    if (!sellerId) {
-      toast.error('معلومات البائع غير متوفرة');
-      return;
-    }
-    if (currentUser.id === sellerId) {
-      toast.error('أنت صاحب هذا الإعلان، لا يمكنك تجربة سيارتك الخاصة');
-      return;
-    }
-    if (actionLoading || chatSubmittingRef.current) return;
-    chatSubmittingRef.current = true;
-    setActionLoading('testdrive');
-    try {
-      const res = await fetch('/api/conversations', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          carId: car.id,
-          sellerId,
-          content: ` **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && data.data?.conversation?.id) {
-        toast.success('تم إرسال طلب اختبار القيادة للبائع بنجاح! جاري التوجيه للمحادثة...');
-        router.push(`/messages?conversationId=${data.data.conversation.id}`);
-      } else {
-        toast.error(data.error || 'تعذر إرسال الطلب');
-      }
-    } catch {
-      toast.error('حدث خطأ أثناء إرسال الطلب');
-    } finally {
-      chatSubmittingRef.current = false;
-      setActionLoading(null);
-    }
+  const scrollToSection = (id: string) => {
+    setActiveNav(id);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   if (loading || (leaving && car)) {
@@ -378,12 +318,12 @@ export default function CarDetailPage() {
 
   if (loadError || !car) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-        <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto text-3xl">
-            
+      <div className="min-h-screen bg-[#0e1013] text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full p-8 rounded-3xl bg-[#14181f] border border-white/[0.08] text-center space-y-4 shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white">تعذر تحميل الإعلان</h2>
+          <h2 className="text-xl font-black text-white">تعذر تحميل الإعلان</h2>
           <p className="text-slate-400 text-xs leading-relaxed">
             قد يكون الإعلان محذوفاً أو تم نقله. تحقق من الاتصال بالشبكة وأعد المحاولة.
           </p>
@@ -401,8 +341,28 @@ export default function CarDetailPage() {
     );
   }
 
-  const allImages = car.images?.length > 0 ? car.images : (car.coverImage ? [{ url: car.coverImage }] : []);
   const inCompare = isInCompare(car.id);
+  const whatsappUrl = car.whatsapp
+    ? `https://wa.me/${(car.whatsapp || '').replace(/^0/, '962')}?text=${encodeURIComponent(`مرحباً، بخصوص إعلان ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year} على كارس جو`)}`
+    : null;
+
+  const toggleCompare = () => {
+    if (inCompare) {
+      removeCar(car.id);
+      toast.success('تمت إزالة السيارة من المقارنة');
+    } else {
+      addCar(car);
+      toast.success('تمت إضافة السيارة للمقارنة');
+    }
+  };
+
+  const quickHighlights = [
+    { icon: Calendar, label: 'السنة', value: car.year },
+    { icon: Gauge, label: 'المسافة', value: formatDistance(car.kilometers) },
+    { icon: Fuel, label: 'الوقود', value: getFuelTypeLabel(car.fuelType) },
+    { icon: Settings, label: 'الجير', value: getTransmissionLabel(car.transmission) },
+    { icon: MapPin, label: 'الموقع', value: car.city?.nameAr || 'الأردن' },
+  ];
 
   const specItems = [
     { icon: Calendar, label: 'سنة الصنع', value: car.year },
@@ -419,15 +379,195 @@ export default function CarDetailPage() {
     { icon: Building2, label: 'الشركة', value: car.brand?.nameAr },
   ];
 
+  const feats = sanitizeFeatures((car as any).features);
+
+  const SellerActionsBlock = ({ compact = false }: { compact?: boolean }) => (
+    <div className="space-y-2.5">
+      <div className={compact ? 'grid grid-cols-2 gap-2' : 'space-y-2.5'}>
+        <Button
+          className="w-full h-11 sm:h-12 text-xs sm:text-sm font-black bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] border-0 shadow-lg shadow-[#ffc640]/15"
+          icon={<Phone className="w-4 h-4" />}
+          onClick={() => (window.location.href = `tel:${car.phone}`)}
+        >
+          {compact ? 'اتصال مباشر' : `اتصال: ${car.phone}`}
+        </Button>
+
+        {whatsappUrl && (
+          <Button
+            variant="secondary"
+            className="w-full h-11 sm:h-12 text-xs sm:text-sm font-black bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300"
+            icon={<MessageCircle className="w-4 h-4 text-emerald-400" />}
+            onClick={() => window.open(whatsappUrl, '_blank')}
+          >
+            {compact ? 'واتساب' : 'مراسلة عبر الواتساب'}
+          </Button>
+        )}
+      </div>
+
+      {!isOwner ? (
+        <div className={compact ? 'grid grid-cols-2 gap-2' : 'space-y-2.5'}>
+          <button
+            type="button"
+            onClick={() => startSellerChat('negotiate')}
+            disabled={!!actionLoading}
+            className="w-full h-11 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-500/20 cursor-pointer disabled:opacity-60"
+          >
+            <Handshake className="w-4 h-4" />
+            <span>{actionLoading === 'negotiate' ? 'جاري الفتح...' : 'تفاوض على السعر'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => startSellerChat('message')}
+            disabled={!!actionLoading}
+            className="w-full h-11 rounded-2xl bg-[#0e1013] border border-white/10 hover:border-[#ffc640]/40 text-slate-200 hover:text-[#ffc640] font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
+          >
+            <MessageSquare className="w-4 h-4 text-[#ffc640]" />
+            <span>{actionLoading === 'message' ? 'جاري التجهيز...' : 'رسالة عبر الموقع'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => startSellerChat('testdrive')}
+            disabled={!!actionLoading}
+            className={`w-full h-11 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60 ${compact ? 'col-span-2' : ''}`}
+          >
+            <CarIcon className="w-4 h-4" />
+            <span>{actionLoading === 'testdrive' ? 'جاري الإرسال...' : 'طلب اختبار قيادة'}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="p-3.5 rounded-2xl bg-[#ffc640]/10 border border-[#ffc640]/25 text-center space-y-2">
+          <p className="text-xs text-[#ffc640] font-bold">هذا إعلانك المعروض في كارس جو</p>
+          <Link
+            href={`/cars/${car.id}/edit`}
+            className="w-full h-10 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] font-black text-xs flex items-center justify-center gap-2 transition-all"
+          >
+            <Pencil className="w-4 h-4" />
+            <span>تعديل بيانات الإعلان</span>
+          </Link>
+        </div>
+      )}
+
+      {car.status === 'APPROVED' && (!currentUser || !isOwner) && (
+        <button
+          type="button"
+          onClick={() => setBookingOpen(true)}
+          className="w-full h-11 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black text-xs hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+        >
+          <CalendarCheck className="w-4 h-4" />
+          <span>طلب معاينة / حجز فحص</span>
+        </button>
+      )}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-28">
-      
-      {/* Photo Gallery Container */}
-      <div className="relative bg-slate-900 border-b border-slate-800">
-        <div className="container-custom max-w-6xl py-4 sm:py-6">
+    <div className="min-h-screen bg-[#0e1013] text-slate-100 pb-36 md:pb-20">
+      {/* SEO: structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'Car',
+            name: `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}`,
+            model: car.model?.nameAr,
+            brand: { '@type': 'Brand', name: car.brand?.nameAr },
+            vehicleModelDate: String(car.year),
+            mileageFromOdometer: { '@type': 'QuantitativeValue', value: car.kilometers, unitCode: 'KMT' },
+            fuelType: car.fuelType,
+            vehicleTransmission: car.transmission,
+            color: car.color,
+            offers: {
+              '@type': 'Offer',
+              price: car.price,
+              priceCurrency: 'JOD',
+              availability: 'https://schema.org/InStock',
+            },
+            image: allImages.map((img: any) => img?.url).filter(Boolean).slice(0, 5),
+          }).replace(/</g, '\\u003c'),
+        }}
+      />
+
+      {/* Top Breadcrumb & Quick Actions */}
+      <div className="border-b border-white/[0.06] bg-[#111419]/80 backdrop-blur-md">
+        <div className="container-custom max-w-6xl py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400 min-w-0">
+            <Link
+              href="/cars"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-200 font-bold transition-colors shrink-0"
+            >
+              <ArrowRight className="w-3.5 h-3.5 text-[#ffc640]" />
+              <span>السيارات</span>
+            </Link>
+            <span className="text-slate-600">/</span>
+            <span className="truncate font-semibold text-slate-300">
+              {car.brand?.nameAr} {car.model?.nameAr} {car.year}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              title={isSaved ? 'إزالة من المفضلة' : 'حفظ في المفضلة'}
+              className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isSaved
+                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:text-white'
+              }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
+              <span className="hidden sm:inline">{isSaved ? 'محفوظة' : 'حفظ'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleCompare}
+              title="مقارنة"
+              className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                inCompare
+                  ? 'bg-[#ffc640]/15 border-[#ffc640]/40 text-[#ffc640]'
+                  : 'bg-white/[0.04] border-white/[0.08] text-slate-300 hover:text-white'
+              }`}
+            >
+              <GitCompare className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{inCompare ? 'في المقارنة' : 'مقارنة'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleShare}
+              title="مشاركة"
+              className="h-9 px-2.5 sm:px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">مشاركة</span>
+            </button>
+
+            {!isOwner && (
+              <button
+                type="button"
+                onClick={() => setReportOpen(true)}
+                title="إبلاغ عن الإعلان"
+                className="h-9 w-9 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all cursor-pointer"
+              >
+                <Flag className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Gallery Section */}
+      <div className="bg-gradient-to-b from-[#111419] to-[#0e1013] border-b border-white/[0.06]">
+        <div className="container-custom max-w-6xl py-3 sm:py-5 space-y-3">
           <div
-            className="relative h-[55vh] sm:h-[65vh] rounded-3xl overflow-hidden cursor-pointer bg-slate-950 border border-slate-800 group shadow-2xl"
+            className="relative aspect-[16/10] sm:aspect-[16/9] lg:h-[540px] w-full rounded-2xl sm:rounded-3xl overflow-hidden cursor-pointer bg-[#0a0c0f] border border-white/[0.08] group shadow-2xl"
             onClick={() => { setLightboxIndex(currentImage); setLightboxOpen(true); }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={(e) => handleGalleryTouchEnd(e, false)}
           >
             {allImages.length > 0 ? (
               <>
@@ -435,133 +575,128 @@ export default function CarDetailPage() {
                   src={allImages[currentImage]?.url || '/images/placeholder-car.svg'}
                   alt={`${car.brand?.nameAr} ${car.model?.nameAr}`}
                   fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                   priority
-                  sizes="100vw"
+                  sizes="(max-width: 768px) 100vw, 1152px"
                 />
-                
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0e1013]/85 via-transparent to-[#0e1013]/35 pointer-events-none" />
 
-                {/* Top Badges Bar */}
-                <div className="absolute top-4 right-4 left-4 flex items-center justify-between pointer-events-none z-10">
-                  <div className="flex items-center gap-2">
+                {/* Top Badges */}
+                <div className="absolute top-3 right-3 left-3 flex items-start justify-between gap-2 pointer-events-none z-10">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {car.featured && (
-                      <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 text-xs font-black shadow-lg">
-                         إعلان مميز
+                      <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-[#ffc640] to-amber-500 text-[#0e1013] text-[11px] font-black shadow-lg">
+                        إعلان مميز
                       </span>
                     )}
                     {car.hasWarranty && (
-                      <span className="px-3 py-1.5 rounded-xl bg-emerald-500/90 text-slate-950 text-xs font-black backdrop-blur-md">
-                         تحت الكفالة
+                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/90 text-slate-950 text-[11px] font-black backdrop-blur-md">
+                        تحت الكفالة
                       </span>
                     )}
                     {(car as any).inspectionVerified && (
-                      <span className="px-3 py-1.5 rounded-xl bg-blue-500/90 text-white text-xs font-black backdrop-blur-md" title={(car as any).inspectionCenter || ''}>
-                         فحص معتمد{(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}
+                      <span
+                        className="px-2.5 py-1 rounded-lg bg-sky-500/90 text-white text-[11px] font-black backdrop-blur-md flex items-center gap-1"
+                        title={(car as any).inspectionCenter || ''}
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>فحص معتمد{(car as any).inspectionCenter ? `: ${(car as any).inspectionCenter}` : ''}</span>
                       </span>
                     )}
                   </div>
 
                   {car.refCode && (
-                    <span className="px-3 py-1.5 rounded-xl bg-slate-950/80 text-white text-xs font-mono font-bold border border-slate-800 backdrop-blur-md">
+                    <span className="px-2.5 py-1 rounded-lg bg-[#0e1013]/80 text-slate-200 text-[11px] font-mono font-bold border border-white/10 backdrop-blur-md shrink-0">
                       #{car.refCode}
                     </span>
                   )}
                 </div>
 
-                {/* SEO: structured data for search engines */}
-                <script
-                  type="application/ld+json"
-                  dangerouslySetInnerHTML={{
-                    __html: JSON.stringify({
-                      '@context': 'https://schema.org',
-                      '@type': 'Car',
-                      name: `${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}`,
-                      model: car.model?.nameAr,
-                      brand: { '@type': 'Brand', name: car.brand?.nameAr },
-                      vehicleModelDate: String(car.year),
-                      mileageFromOdometer: { '@type': 'QuantitativeValue', value: car.kilometers, unitCode: 'KMT' },
-                      fuelType: car.fuelType,
-                      vehicleTransmission: car.transmission,
-                      color: car.color,
-                      offers: {
-                        '@type': 'Offer',
-                        price: car.price,
-                        priceCurrency: 'JOD',
-                        availability: 'https://schema.org/InStock',
-                      },
-                      image: allImages.map((img: any) => img?.url).filter(Boolean).slice(0, 5),
-                    }).replace(/</g, '\\u003c'),
-                  }}
-                />
-
-                {/* Expand Click Badge */}
-                <div className="absolute top-16 right-1/2 translate-x-1/2 z-10">
-                  <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800 text-slate-300 text-xs backdrop-blur-md font-bold">
-                    <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>انقر لتكبير الصور ملء الشاشة </span>
-                  </div>
-                </div>
-
-                {/* Slider Nav Buttons */}
+                {/* Nav Arrows */}
                 {allImages.length > 1 && (
                   <>
                     <button
+                      type="button"
+                      aria-label="الصورة السابقة"
                       onClick={(e) => { e.stopPropagation(); setCurrentImage(prev => (prev - 1 + allImages.length) % allImages.length); }}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-slate-950/80 border border-slate-800 text-white flex items-center justify-center hover:bg-emerald-500 hover:text-slate-950 transition-all z-10"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-[#0e1013]/75 border border-white/15 text-white flex items-center justify-center hover:bg-[#ffc640] hover:text-[#0e1013] transition-all z-10 backdrop-blur-md"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
+                      type="button"
+                      aria-label="الصورة التالية"
                       onClick={(e) => { e.stopPropagation(); setCurrentImage(prev => (prev + 1) % allImages.length); }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-2xl bg-slate-950/80 border border-slate-800 text-white flex items-center justify-center hover:bg-emerald-500 hover:text-slate-950 transition-all z-10"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-[#0e1013]/75 border border-white/15 text-white flex items-center justify-center hover:bg-[#ffc640] hover:text-[#0e1013] transition-all z-10 backdrop-blur-md"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
                   </>
                 )}
 
-                {/* Bottom Image Counter & Thumbnails Slider */}
-                <div className="absolute bottom-4 right-4 left-4 flex items-center justify-between z-10">
-                  <span className="px-3 py-1 rounded-xl bg-slate-950/80 text-xs font-bold text-slate-300 border border-slate-800 backdrop-blur-md">
-                    الصورة {currentImage + 1} من {allImages.length}
+                {/* Bottom Overlay Bar */}
+                <div className="absolute bottom-3 right-3 left-3 flex items-center justify-between z-10">
+                  <span className="px-2.5 py-1 rounded-lg bg-[#0e1013]/80 text-[11px] font-bold text-slate-200 border border-white/10 backdrop-blur-md">
+                    {currentImage + 1} / {allImages.length}
                   </span>
 
-                  {/* Thumbnail Row */}
-                  <div className="hidden sm:flex items-center gap-2 overflow-x-auto">
-                    {allImages.slice(0, 6).map((img, i) => (
-                      <button
-                        key={i}
-                        onClick={(e) => { e.stopPropagation(); setCurrentImage(i); }}
-                        className={`w-14 h-10 rounded-xl overflow-hidden border-2 transition-all shrink-0 ${
-                          i === currentImage ? 'border-emerald-400 scale-105 shadow-md' : 'border-slate-800 opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <Image src={img.url || '/images/placeholder-car.svg'} alt="" width={56} height={40} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
+                  {/* Mobile Dots */}
+                  {allImages.length > 1 && allImages.length <= 10 && (
+                    <div className="flex sm:hidden items-center gap-1.5">
+                      {allImages.map((_, i) => (
+                        <span
+                          key={i}
+                          className={`h-1.5 rounded-full transition-all ${
+                            i === currentImage ? 'w-4 bg-[#ffc640]' : 'w-1.5 bg-white/40'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1013]/80 border border-white/10 text-slate-200 text-[11px] font-bold backdrop-blur-md">
+                    <Maximize2 className="w-3.5 h-3.5 text-[#ffc640]" />
+                    <span className="hidden sm:inline">ملء الشاشة</span>
+                  </span>
                 </div>
               </>
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-slate-600 text-sm font-bold">
-                لا توجد صور لهذه السيارة
+              <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 text-sm font-bold gap-2">
+                <CarIcon className="w-10 h-10 opacity-40" />
+                <span>لا توجد صور لهذه السيارة</span>
               </div>
             )}
           </div>
+
+          {/* Scrollable Thumbnail Strip (Mobile + Desktop) */}
+          {allImages.length > 1 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {allImages.map((img, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setCurrentImage(i)}
+                  className={`relative w-16 h-12 sm:w-20 sm:h-14 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                    i === currentImage
+                      ? 'border-[#ffc640] ring-2 ring-[#ffc640]/25 opacity-100'
+                      : 'border-white/10 opacity-55 hover:opacity-90'
+                  }`}
+                >
+                  <Image src={img.url || '/images/placeholder-car.svg'} alt="" fill className="object-cover" sizes="80px" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Walkaround video attached at publish (car.videoUrl) ──
-              Saved by the publish route and returned in the car payload; shown
-              here as a native player so the attachment is actually visible on
-              the ad instead of silently disappearing. */}
+      {/* Walkaround video attached at publish (car.videoUrl) */}
       {(car as any).videoUrl && (
         <div className="container-custom max-w-6xl pt-4">
-          <div className="rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl">
-            <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-              <Play className="w-5 h-5 text-emerald-400" />
-              <h3 className="font-black text-white text-base">فيديو السيارة</h3>
+          <div className="rounded-2xl sm:rounded-3xl overflow-hidden bg-[#14181f] border border-white/[0.08] shadow-xl">
+            <div className="flex items-center gap-2 px-5 pt-4 pb-3 border-b border-white/[0.06]">
+              <Play className="w-4 h-4 text-[#ffc640]" />
+              <h3 className="font-black text-white text-sm sm:text-base">فيديو السيارة</h3>
             </div>
             <video
               src={(car as any).videoUrl}
@@ -569,7 +704,7 @@ export default function CarDetailPage() {
               preload="metadata"
               playsInline
               poster={allImages[0]?.url}
-              className="w-full max-h-[70vh] bg-black"
+              className="w-full max-h-[65vh] bg-black"
             >
               متصفحك لا يدعم تشغيل الفيديو
             </video>
@@ -577,115 +712,155 @@ export default function CarDetailPage() {
         </div>
       )}
 
-      {/* Main Body Details Grid */}
-      <div className="container-custom max-w-6xl pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Main Left Column (Content) */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Title & Price Header Card */}
-            <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-800/80 pb-4">
-                <div>
-                  <h1 className="text-2xl sm:text-3xl font-black text-white">
+      {/* Main Content */}
+      <div className="container-custom max-w-6xl pt-5 sm:pt-7">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+
+          {/* Main Column */}
+          <div className="lg:col-span-2 space-y-5 sm:space-y-6">
+
+            {/* Hero Header Card: Title, Price & Key Highlights */}
+            <div className="p-5 sm:p-7 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-5 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-white/[0.06] pb-5">
+                <div className="space-y-1.5">
+                  <h1 className="text-xl sm:text-3xl font-black text-white leading-snug">
                     {car.brand?.nameAr} {car.model?.nameAr} {car.year}
                   </h1>
-                  <p className="text-slate-400 text-xs font-semibold mt-1">
+                  <p className="text-slate-400 text-xs sm:text-sm font-semibold">
                     {car.trim || `${car.brand?.nameEn} ${car.model?.nameEn}`}
                   </p>
-
-                  <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-400 font-medium">
-                    <span className="flex items-center gap-1.5"><Eye className="w-4 h-4 text-emerald-400" /> {car.views || 0} مشاهدة</span>
-                    <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-teal-400" /> {formatDate(car.createdAt)}</span>
-                    <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-cyan-400" /> {car.city?.nameAr}</span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-xs text-slate-400 font-medium">
+                    <span className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5 text-[#ffc640]" /> {car.views || 0} مشاهدة</span>
+                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-emerald-400" /> {formatDate(car.createdAt)}</span>
+                    <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-sky-400" /> {car.city?.nameAr}</span>
                   </div>
                 </div>
 
-                <div className="sm:text-left">
-                  <div className="text-3xl font-black text-emerald-400">
+                <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 bg-[#0e1013] sm:bg-transparent p-3.5 sm:p-0 rounded-2xl border border-white/[0.06] sm:border-0">
+                  <div className="text-2xl sm:text-3xl font-black text-[#ffc640] tracking-tight">
                     {formatPrice(car.price)}
                   </div>
-                  <div className="flex items-center justify-start sm:justify-end gap-2 mt-1">
+                  <div className="flex items-center gap-2">
                     <PriceFairnessIndicator price={car.price} fairPriceEstimate={liveFairPrice} size="md" />
                     {car.isNegotiable && (
-                      <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold">
-                        قابل للتفاوض 
+                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[11px] font-bold">
+                        قابل للتفاوض
                       </span>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Desktop Desktop Quick Actions Bar */}
-              <div className="hidden sm:flex flex-wrap items-center gap-2 pt-2">
-                <Button icon={<Phone className="w-4 h-4" />} onClick={() => window.location.href = `tel:${car.phone}`}>
-                  اتصال: {car.phone}
-                </Button>
-                
-                {car.whatsapp && (
-                  <Button variant="secondary" icon={<MessageCircle className="w-4 h-4" />}
-                    onClick={() => window.open(`https://wa.me/${(car.whatsapp || '').replace(/^0/, '962')}`, '_blank')}>
-                    واتساب
-                  </Button>
-                )}
-
-                {!isOwner && (
-                  <>
-                    <Button variant="ghost" icon={<MessageSquare className="w-4 h-4 text-emerald-400" />} onClick={handleSendMessage} disabled={!!actionLoading}>
-                      {actionLoading === 'message' ? 'جاري التجهيز...' : 'إرسال رسالة عبر الموقع'}
-                    </Button>
-
-                    <Button variant="ghost" icon={<CarIcon className="w-4 h-4 text-amber-400" />} onClick={handleTestDriveRequest} disabled={!!actionLoading}>
-                      {actionLoading === 'testdrive' ? 'جاري الطلب...' : 'طلب اختبار قيادة'}
-                    </Button>
-                  </>
-                )}
-
-                <Button variant="ghost" icon={<Heart className={`w-4 h-4 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />} onClick={toggleFavorite}>
-                  {isSaved ? 'محفوظة ' : 'حفظ'}
-                </Button>
-
-                <Button variant="ghost" icon={<Share2 className="w-4 h-4" />} onClick={handleShare}>
-                  مشاركة
-                </Button>
-
-                {isOwner && (
-                  <>
-                    <Link href={`/cars/${car?.id}/edit`}>
-                      <Button variant="ghost" icon={<Pencil className="w-4 h-4 text-blue-400" />}>
-                        تعديل الإعلان
-                      </Button>
-                    </Link>
-                    <HoldButton
-                      onComplete={handleDeleteCar}
-                      holdDuration={2000}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-rose-400 hover:bg-rose-500/10 transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>حذف الإعلان</span>
-                    </HoldButton>
-                  </>
-                )}
+              {/* Key 5 Highlights Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                {quickHighlights.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-2xl bg-[#0e1013] border border-white/[0.06] flex items-center sm:flex-col sm:items-start gap-2.5 sm:gap-1 ${
+                      idx === 4 ? 'col-span-2 sm:col-span-1' : ''
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-[#ffc640]/10 border border-[#ffc640]/20 flex items-center justify-center shrink-0">
+                      <item.icon className="w-4 h-4 text-[#ffc640]" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-500 font-bold">{item.label}</p>
+                      <p className="text-xs font-black text-white truncate">{item.value || 'غير محدد'}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
 
+              {/* Owner Controls on Mobile + Desktop */}
+              {isOwner && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/[0.06]">
+                  <Link href={`/cars/${car.id}/edit`} className="flex-1 sm:flex-none">
+                    <Button className="w-full" variant="ghost" icon={<Pencil className="w-4 h-4 text-sky-400" />}>
+                      تعديل الإعلان
+                    </Button>
+                  </Link>
+                  <HoldButton
+                    onComplete={handleDeleteCar}
+                    holdDuration={2000}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>اضغط مطولاً للحذف</span>
+                  </HoldButton>
+                </div>
+              )}
             </div>
 
-            {/* Unified Fair Market Valuation & AI Analysis Engine */}
-            <ValuationReport carId={car.id} askingPrice={car.price} car={car} onValuationLoaded={setLiveFairPrice} />
+            {/* Mobile-First Seller Contact Card (Visible immediately on Mobile, hidden on Desktop where sticky sidebar lives) */}
+            <div className="lg:hidden p-5 rounded-2xl bg-[#14181f] border border-white/[0.08] space-y-4 shadow-xl">
+              <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-3.5">
+                <Link href={`/profile/${car.user.id}`} className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#ffc640] to-amber-500 flex items-center justify-center text-[#0e1013] font-black text-lg shadow-md shrink-0 overflow-hidden">
+                    {car.user?.image ? (
+                      <img src={car.user.image} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      car.user?.name?.charAt(0) || 'U'
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-black text-white text-sm truncate">
+                      {car.user?.dealerName || car.user?.name}
+                    </h4>
+                    <p className="text-slate-400 text-[11px] font-semibold">بائع موثق في كارس جو</p>
+                  </div>
+                </Link>
+                <Link
+                  href={`/profile/${car.user.id}`}
+                  className="px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-bold text-slate-300 shrink-0"
+                >
+                  الملف الشخصي
+                </Link>
+              </div>
+              <SellerActionsBlock compact />
+            </div>
 
-            {/* Specifications Matrix Grid */}
-            <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-              <h3 className="font-black text-white text-base flex items-center gap-2 border-b border-slate-800 pb-3">
-                <Cpu className="w-5 h-5 text-emerald-400" />
-                المواصفات الفنية الكاملة
+            {/* Sticky Section Jump Bar */}
+            <div className="sticky top-[68px] z-30 -mx-1 px-1 py-2 bg-[#0e1013]/90 backdrop-blur-xl">
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                {QUICK_NAV_SECTIONS.map((sec) => {
+                  const Icon = sec.icon;
+                  const active = activeNav === sec.id;
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => scrollToSection(sec.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-[#ffc640] text-[#0e1013] border-[#ffc640] shadow-md shadow-[#ffc640]/15'
+                          : 'bg-[#14181f] text-slate-300 border-white/[0.08] hover:border-white/20'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{sec.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Valuation & AI Analysis */}
+            <div id="section-valuation" className="scroll-mt-32">
+              <ValuationReport carId={car.id} askingPrice={car.price} car={car} onValuationLoaded={setLiveFairPrice} />
+            </div>
+
+            {/* Specifications Matrix */}
+            <div id="section-specs" className="scroll-mt-32 p-5 sm:p-7 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-4 shadow-xl">
+              <h3 className="font-black text-white text-base flex items-center gap-2 border-b border-white/[0.06] pb-3">
+                <Cpu className="w-5 h-5 text-[#ffc640]" />
+                <span>المواصفات الفنية الكاملة</span>
               </h3>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                 {specItems.map((item, i) => (
-                  <div key={i} className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 space-y-1">
-                    <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold">
-                      <item.icon className="w-4 h-4 text-emerald-400" />
+                  <div key={i} className="p-3.5 rounded-2xl bg-[#0e1013] border border-white/[0.06] space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold">
+                      <item.icon className="w-3.5 h-3.5 text-[#ffc640]" />
                       <span>{item.label}</span>
                     </div>
                     <p className="font-bold text-white text-xs sm:text-sm truncate">
@@ -696,78 +871,91 @@ export default function CarDetailPage() {
               </div>
             </div>
 
-            {/* Jordanian Inspection Report Component */}
-            <JordanianInspectionReport score={resolveInspectionScore(car)} />
-
-{/* ── Official documents & verification ──
-                Documents are stored as authenticated Cloudinary assets and are
-                NOT part of the ad payload. This section shows visitors a
-                verification status; the images themselves are fetched on demand
-                and only for the car's owner or an admin, through
-                /api/cars/[id]/documents. */}
-            <CarDocumentsSection
-              carId={car.id}
-              hasLicenseDoc={!!(car as any).hasLicenseDoc}
-              hasInspectionDoc={!!(car as any).hasInspectionDoc}
-              hasServiceRecordDoc={!!(car as any).hasServiceRecordDoc}
-              extraInspectionCount={Number((car as any).extraInspectionCount) || 0}
-              canViewDocuments={isOwner || currentUser?.role === 'ADMIN'}
-              verificationStatus={
-                (car as any).hasLicenseDoc && (car as any).hasInspectionDoc
-                  ? (car.status === 'APPROVED' ? 'VERIFIED' : 'PENDING')
-                  : (car.status === 'REJECTED' ? 'REJECTED' : 'NONE')
-              }
-            />
+            {/* Inspection & Documents */}
+            <div id="section-inspection" className="scroll-mt-32 space-y-5 sm:space-y-6">
+              <JordanianInspectionReport score={resolveInspectionScore(car)} />
+              <CarDocumentsSection
+                carId={car.id}
+                hasLicenseDoc={!!(car as any).hasLicenseDoc}
+                hasInspectionDoc={!!(car as any).hasInspectionDoc}
+                hasServiceRecordDoc={!!(car as any).hasServiceRecordDoc}
+                extraInspectionCount={Number((car as any).extraInspectionCount) || 0}
+                canViewDocuments={isOwner || currentUser?.role === 'ADMIN'}
+                verificationStatus={
+                  (car as any).hasLicenseDoc && (car as any).hasInspectionDoc
+                    ? (car.status === 'APPROVED' ? 'VERIFIED' : 'PENDING')
+                    : (car.status === 'REJECTED' ? 'REJECTED' : 'NONE')
+                }
+              />
+            </div>
 
             {/* Features */}
-            {(() => {
-              const feats = sanitizeFeatures((car as any).features);
-              if (!feats.length) return null;
-              return (
-                <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-3 shadow-xl">
-                  <h3 className="font-black text-white text-base border-b border-slate-800 pb-3">المواصفات والمزايا ({feats.length})</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {feats.map((f: string) => (
-                      <span key={f} className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-bold">
-                        {CAR_FEATURES_AR[f] || f}
-                      </span>
-                    ))}
-                  </div>
+            {feats.length > 0 && (
+              <div className="p-5 sm:p-7 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-3.5 shadow-xl">
+                <h3 className="font-black text-white text-base border-b border-white/[0.06] pb-3">
+                  المواصفات والمزايا ({feats.length})
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {feats.map((f: string) => (
+                    <span
+                      key={f}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{CAR_FEATURES_AR[f] || f}</span>
+                    </span>
+                  ))}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {/* Customs Calculator */}
-            <CustomsCalculator year={car.year} engineCapacity={car.engineCapacity ?? null} price={car.price} fuelType={car.fuelType} />
+            <div id="section-customs" className="scroll-mt-32">
+              <CustomsCalculator year={car.year} engineCapacity={car.engineCapacity ?? null} price={car.price} fuelType={car.fuelType} />
+            </div>
 
             {/* Vehicle Description */}
-            <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-3 shadow-xl">
-              <h3 className="font-black text-white text-base border-b border-slate-800 pb-3">الوصف التفصيلي للإعلان</h3>
+            <div id="section-description" className="scroll-mt-32 p-5 sm:p-7 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-3 shadow-xl">
+              <h3 className="font-black text-white text-base border-b border-white/[0.06] pb-3">الوصف التفصيلي للإعلان</h3>
               <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line font-medium">
                 {sanitizePlainText(car.aiDescription || car.description)}
               </p>
             </div>
 
+            {/* Mobile Location Map (if available) */}
+            {car.locationLat && car.locationLng && (
+              <div className="lg:hidden p-5 rounded-2xl bg-[#14181f] border border-white/[0.08] space-y-3 shadow-xl">
+                <h3 className="font-black text-white text-sm flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#ffc640]" />
+                  <span>موقع معاينة السيارة</span>
+                </h3>
+                <div className="h-48 rounded-2xl overflow-hidden border border-white/[0.08]">
+                  <iframe
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${car.locationLng - 0.015}%2C${car.locationLat - 0.01}%2C${car.locationLng + 0.015}%2C${car.locationLat + 0.01}&layer=mapnik&marker=${car.locationLat}%2C${car.locationLng}`}
+                    className="w-full h-full border-0"
+                    title="موقع المعاينة"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Comments & Discussion */}
-            <div className="p-6 md:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-              <h3 className="font-black text-white text-base border-b border-slate-800 pb-3">تعليقات واستفسارات المشترين</h3>
+            <div id="section-comments" className="scroll-mt-32 p-5 sm:p-7 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-4 shadow-xl">
+              <h3 className="font-black text-white text-base border-b border-white/[0.06] pb-3">تعليقات واستفسارات المشترين</h3>
               <Suspense fallback={<SectionSpinner />}>
                 <CarComments carId={car.id} currentUser={currentUser} />
               </Suspense>
             </div>
-
           </div>
 
-          {/* Right Sidebar Column (Seller & Location) */}
-          <div className="space-y-6">
-            
-            {/* Seller Contact Card */}
-            <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-5 shadow-xl sticky top-24">
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+          {/* Desktop Right Sticky Sidebar */}
+          <div className="hidden lg:block space-y-6">
+            <div className="p-6 rounded-3xl bg-[#14181f] border border-white/[0.08] space-y-5 shadow-2xl sticky top-24">
+              <div className="flex items-center gap-3 border-b border-white/[0.06] pb-4">
                 <Link href={`/profile/${car.user.id}`} className="shrink-0">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#ffc640] to-amber-500 flex items-center justify-center text-[#0e1013] font-black text-xl shadow-lg overflow-hidden">
                     {car.user?.image ? (
-                      <img src={car.user.image} alt="" className="w-full h-full rounded-2xl object-cover" />
+                      <img src={car.user.image} alt="" className="w-full h-full object-cover" />
                     ) : (
                       car.user?.name?.charAt(0) || 'U'
                     )}
@@ -776,7 +964,7 @@ export default function CarDetailPage() {
 
                 <div className="min-w-0 flex-1">
                   <Link href={`/profile/${car.user.id}`}>
-                    <h4 className="font-black text-white text-base hover:text-emerald-400 transition-colors truncate">
+                    <h4 className="font-black text-white text-base hover:text-[#ffc640] transition-colors truncate">
                       {car.user?.dealerName || car.user?.name}
                     </h4>
                   </Link>
@@ -784,87 +972,12 @@ export default function CarDetailPage() {
                 </div>
               </div>
 
-              {/* Action Buttons inside Seller Card */}
-              <div className="space-y-2.5">
-                <Button className="w-full h-12 text-sm font-black" icon={<Phone className="w-4.5 h-4.5" />} onClick={() => window.location.href = `tel:${car.phone}`}>
-                  اتصال: {car.phone}
-                </Button>
+              <SellerActionsBlock />
 
-                {car.whatsapp && (
-                  <Button variant="secondary" className="w-full h-12 text-sm font-black" icon={<MessageCircle className="w-4.5 h-4.5 text-emerald-400" />}
-                    onClick={() => window.open(`https://wa.me/${(car.whatsapp || '').replace(/^0/, '962')}`, '_blank')}>
-                    مراسلة عبر الواتساب
-                  </Button>
-                )}
-
-                {!isOwner ? (
-                  <>
-                    {/* Quick Negotiation */}
-                    <button
-                      type="button"
-                      onClick={handleNegotiate}
-                      disabled={!!actionLoading}
-                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-purple-500/20 cursor-pointer disabled:opacity-60"
-                    >
-                      <Handshake className="w-4.5 h-4.5" />
-                      <span>{actionLoading === 'negotiate' ? 'جاري فتح المحادثة...' : 'تفاوض على السعر '}</span>
-                    </button>
-
-                    {/* Send Message on Website */}
-                    <button
-                      type="button"
-                      onClick={handleSendMessage}
-                      disabled={!!actionLoading}
-                      className="w-full h-12 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-500/40 text-emerald-400 font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-60"
-                    >
-                      <MessageSquare className="w-4.5 h-4.5" />
-                      <span>{actionLoading === 'message' ? 'جاري تجهيز المحادثة...' : 'إرسال رسالة عبر الموقع '}</span>
-                    </button>
-
-                    {/* Request Test Drive */}
-                    <button
-                      type="button"
-                      onClick={handleTestDriveRequest}
-                      disabled={!!actionLoading}
-                      className="w-full h-12 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-60"
-                    >
-                      <CarIcon className="w-4.5 h-4.5" />
-                      <span>{actionLoading === 'testdrive' ? 'جاري إرسال الطلب...' : 'طلب اختبار قيادة '}</span>
-                    </button>
-                  </>
-                ) : (
-                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
-                    <p className="text-xs text-amber-400 font-bold flex items-center justify-center gap-1.5">
-                      
-                      <span>هذا إعلانك المعروض في كارس جو</span>
-                    </p>
-                    <Link
-                      href={`/cars/${car?.id}/edit`}
-                      className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
-                    >
-                      <Pencil className="w-4 h-4" />
-                      <span>تعديل بيانات الإعلان</span>
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* Inspection / Booking Request */}
-              {car.status === 'APPROVED' && (!currentUser || !isOwner) && (
-                <button
-                  onClick={() => setBookingOpen(true)}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black text-xs hover:from-emerald-400 hover:to-teal-500 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
-                >
-                  <CalendarCheck className="w-4 h-4" />
-                  <span>طلب معاينة / حجز فحص </span>
-                </button>
-              )}
-
-              {/* Location Map */}
               {car.locationLat && car.locationLng && (
-                <div className="space-y-2 pt-2 border-t border-slate-800">
+                <div className="space-y-2 pt-3 border-t border-white/[0.06]">
                   <label className="block text-xs font-bold text-slate-300">موقع معاينة السيارة</label>
-                  <div className="h-44 rounded-2xl overflow-hidden border border-slate-800 relative">
+                  <div className="h-44 rounded-2xl overflow-hidden border border-white/[0.08] relative">
                     <iframe
                       src={`https://www.openstreetmap.org/export/embed.html?bbox=${car.locationLng - 0.015}%2C${car.locationLat - 0.01}%2C${car.locationLng + 0.015}%2C${car.locationLat + 0.01}&layer=mapnik&marker=${car.locationLat}%2C${car.locationLng}`}
                       className="w-full h-full border-0"
@@ -873,77 +986,105 @@ export default function CarDetailPage() {
                   </div>
                 </div>
               )}
-
             </div>
-
           </div>
-
         </div>
 
-        {/* Similar Cars Section */}
+        {/* Similar Cars */}
         {similarCars.length > 0 && (
-          <section className="mt-16 space-y-6">
-            <h2 className="text-2xl font-black text-white">سيارات مشابهة قد تهمك </h2>
+          <section className="mt-12 sm:mt-16 space-y-5">
+            <h2 className="text-xl sm:text-2xl font-black text-white">سيارات مشابهة قد تهمك</h2>
             <CarGrid cars={similarCars} columns={4} />
           </section>
         )}
       </div>
 
-      {/*  Sticky Mobile Bottom Floating Contact Bar (فقط للهواتف — فوق شريط التنقل السفلي) */}
-      <div className="fixed bottom-[82px] left-0 right-0 z-40 p-2.5 bg-slate-950/95 backdrop-blur-2xl border-t border-slate-800 md:hidden shadow-2xl">
-        <div className="grid grid-cols-4 gap-1.5">
-          
-          <a
-            href={`tel:${car.phone}`}
-            className="h-11 rounded-xl bg-emerald-500 text-slate-950 font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
-          >
-            <Phone className="w-3.5 h-3.5" />
-            <span>اتصال</span>
-          </a>
-
-          {car.whatsapp && (
-            <a
-              href={`https://wa.me/${(car.whatsapp || '').replace(/^0/, '962')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="h-11 rounded-xl bg-teal-600 text-white font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
+      {/* Floating Mobile Contact Bar */}
+      <div className="fixed bottom-[78px] left-3 right-3 z-40 p-2 rounded-2xl bg-[#14181f]/95 backdrop-blur-2xl border border-white/15 md:hidden shadow-2xl">
+        {isOwner ? (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/cars/${car.id}/edit`}
+              className="flex-1 h-11 rounded-xl bg-[#ffc640] text-[#0e1013] font-black text-xs flex items-center justify-center gap-1.5"
             >
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span>واتساب</span>
+              <Pencil className="w-4 h-4" />
+              <span>تعديل الإعلان</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="h-11 px-4 rounded-xl bg-white/[0.06] border border-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>مشاركة</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`tel:${car.phone}`}
+              className="flex-1 h-11 rounded-xl bg-[#ffc640] text-[#0e1013] font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>اتصال</span>
             </a>
-          )}
 
-          <button
-            onClick={handleSendMessage}
-            className="h-11 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 font-extrabold text-[11px] flex flex-col items-center justify-center gap-0.5"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>رسالة</span>
-          </button>
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 h-11 rounded-xl bg-emerald-500 text-slate-950 font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>واتساب</span>
+              </a>
+            )}
 
-          <button
-            onClick={handleTestDriveRequest}
-            className="h-11 rounded-xl bg-amber-500 text-slate-950 font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
-          >
-            <CarIcon className="w-3.5 h-3.5" />
-            <span>تجربة</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => startSellerChat('message')}
+              disabled={!!actionLoading}
+              className="flex-1 h-11 rounded-xl bg-white/[0.06] border border-white/10 text-slate-200 font-extrabold text-[11px] flex flex-col items-center justify-center gap-0.5"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#ffc640]" />
+              <span>رسالة</span>
+            </button>
 
-        </div>
+            <button
+              type="button"
+              onClick={() => startSellerChat('negotiate')}
+              disabled={!!actionLoading}
+              className="flex-1 h-11 rounded-xl bg-violet-500/20 border border-violet-500/35 text-violet-200 font-black text-[11px] flex flex-col items-center justify-center gap-0.5"
+            >
+              <Handshake className="w-3.5 h-3.5 text-violet-300" />
+              <span>تفاوض</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
       <ReportModal carId={car.id} carTitle={`${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}`} isOpen={reportOpen} onClose={() => setReportOpen(false)} />
       <BookingModal carId={car.id} carTitle={`${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}`} askingPrice={car.price} dealerName={car.user?.dealerName || car.user?.name} isOpen={bookingOpen} onClose={() => setBookingOpen(false)} />
 
-      {/* Lightbox Viewer */}
+      {/* Enhanced Lightbox Viewer */}
       {lightboxOpen && allImages.length > 0 && (
-        <div className="fixed inset-0 z-[200] bg-slate-950/95 flex flex-col" onClick={() => setLightboxOpen(false)}>
-          <div className="flex items-center justify-between p-4 text-white">
-            <button onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }} className="p-2 rounded-xl bg-slate-900 text-slate-300">
-              <X className="w-6 h-6" />
+        <div
+          className="fixed inset-0 z-[200] bg-[#0a0c0f]/98 flex flex-col select-none"
+          onClick={() => setLightboxOpen(false)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={(e) => handleGalleryTouchEnd(e, true)}
+        >
+          <div className="flex items-center justify-between p-4 text-white border-b border-white/[0.06]">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setLightboxOpen(false); }}
+              className="p-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
             </button>
-            <span className="text-sm font-bold">{lightboxIndex + 1} / {allImages.length}</span>
+            <span className="text-sm font-bold text-slate-200">{lightboxIndex + 1} / {allImages.length}</span>
             <div className="w-10" />
           </div>
 
@@ -953,11 +1094,46 @@ export default function CarDetailPage() {
               alt=""
               fill
               className="object-contain"
+              sizes="100vw"
             />
+            {allImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(prev => (prev - 1 + allImages.length) % allImages.length)}
+                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 border border-white/15 text-white flex items-center justify-center hover:bg-[#ffc640] hover:text-[#0e1013] transition-all cursor-pointer"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightboxIndex(prev => (prev + 1) % allImages.length)}
+                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 border border-white/15 text-white flex items-center justify-center hover:bg-[#ffc640] hover:text-[#0e1013] transition-all cursor-pointer"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
           </div>
+
+          {allImages.length > 1 && (
+            <div className="p-3 border-t border-white/[0.06] flex items-center justify-center gap-2 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+              {allImages.map((img, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setLightboxIndex(i)}
+                  className={`relative w-14 h-10 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                    i === lightboxIndex ? 'border-[#ffc640]' : 'border-white/10 opacity-50 hover:opacity-90'
+                  }`}
+                >
+                  <Image src={img.url || '/images/placeholder-car.svg'} alt="" fill className="object-cover" sizes="56px" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
     </div>
   );
 }
