@@ -92,6 +92,26 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+// Edge DDoS / DoS sliding-window burst limiter (per IP, zero external latency)
+const edgeRateMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkEdgeRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  // Periodic cleanup to prevent memory growth under distributed floods
+  if (edgeRateMap.size > 5000) {
+    for (const [k, v] of edgeRateMap.entries()) {
+      if (v.resetAt <= now) edgeRateMap.delete(k);
+    }
+  }
+  const entry = edgeRateMap.get(key);
+  if (!entry || entry.resetAt <= now) {
+    edgeRateMap.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= maxRequests;
+}
+
 // Next.js 16 convention: `proxy.ts` + `export proxy` replaces the
 // deprecated `middleware.ts` + `export middleware`.
 export async function proxy(request: NextRequest) {
@@ -99,6 +119,26 @@ export async function proxy(request: NextRequest) {
   const search = request.nextUrl.search || '';
   const fullTarget = (pathname + ' ' + search).toLowerCase();
   const userAgent = (request.headers.get('user-agent') || '').toLowerCase();
+  const clientIp = getIp(request);
+
+  // ── 0. Oversized URL / ReDoS & Edge DDoS/DoS Burst Guard ──
+  if (fullTarget.length > 4096) {
+    return applySecurityHeaders(NextResponse.json({ error: 'Request URI too long' }, { status: 414 }));
+  }
+
+  if (pathname.startsWith('/api/')) {
+    const isAuthRoute = pathname.startsWith('/api/auth/');
+    const allowedGeneral = checkEdgeRateLimit(`api:${clientIp}`, 150, 60 * 1000);
+    const allowedAuth = !isAuthRoute || checkEdgeRateLimit(`auth:${clientIp}`, 25, 60 * 1000);
+    if (!allowedGeneral || !allowedAuth) {
+      return applySecurityHeaders(
+        NextResponse.json(
+          { success: false, error: 'تم تجاوز الحد المسموح للطلبات. يرجى المحاولة بعد دقيقة.' },
+          { status: 429, headers: { 'Retry-After': '60' } }
+        )
+      );
+    }
+  }
 
   // ── Sentinel Deep Intrusion Detection ──
   // 1. Malicious Scanner User Agents

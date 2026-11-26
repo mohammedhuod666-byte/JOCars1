@@ -491,7 +491,7 @@ export default function CarDetailPage() {
                         availability: 'https://schema.org/InStock',
                       },
                       image: allImages.map((img: any) => img?.url).filter(Boolean).slice(0, 5),
-                    }),
+                    }).replace(/</g, '\\u003c'),
                   }}
                 />
 

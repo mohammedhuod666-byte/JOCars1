@@ -95,6 +95,8 @@ app.prepare().then(() => {
             'Content-Type': mimeTypes[ext] || 'application/octet-stream',
             'Cache-Control': getCacheDuration(ext),
             'Accept-Ranges': 'bytes',
+            'X-Content-Type-Options': 'nosniff',
+            ...(ext === '.svg' ? { 'Content-Security-Policy': 'sandbox' } : {}),
           });
           fs.createReadStream(filePath).pipe(res);
           return;
@@ -125,6 +127,11 @@ app.prepare().then(() => {
       if (!res.headersSent) { res.writeHead(500); res.end('Internal Server Error'); }
     });
   });
+
+  // Slowloris & socket-exhaustion DoS protection
+  httpServer.headersTimeout = 20000;
+  httpServer.keepAliveTimeout = 15000;
+  httpServer.maxRequestsPerSocket = 100;
 
   httpServer.on('error', (err) => {
     log('ERROR', 'HTTP server error', err.message);
