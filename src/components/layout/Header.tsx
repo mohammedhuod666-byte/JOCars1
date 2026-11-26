@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useUIStore, useNotificationStore, useCompareStore } from '@/store';
 import { cn } from '@/lib/utils';
@@ -28,6 +28,7 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [hoveredNav, setHoveredNav] = useState<string | null>(null);
+  const [hoveredMegaItem, setHoveredMegaItem] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const userBtnRef = useRef<HTMLButtonElement>(null);
@@ -57,7 +58,14 @@ export function Header() {
       if (!clickedUser) setUserMenuOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setMoreOpen(false); setUserMenuOpen(false); }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, []);
 
   const openUserMenu = useCallback(() => {
@@ -389,107 +397,142 @@ export function Header() {
         </div>
       </header>
 
-      {/* Modern Mega Menu Panel ("المزيد") */}
-      {moreOpen && (
-        <div
-          ref={moreMenuRef}
-          className="fixed top-[4.75rem] left-1/2 -translate-x-1/2 z-[70] w-[95vw] max-w-5xl rounded-3xl border border-white/[0.1] bg-[#0c0f17]/95 backdrop-blur-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.85),0_0_40px_rgba(245,158,11,0.06)] p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-200"
-        >
-          {/* Subtle Ambient Glow */}
-          <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
-          <div className="absolute top-0 left-1/4 w-96 h-32 bg-sky-500/10 rounded-full blur-[90px] pointer-events-none" />
+      {/* Modern Luxury Mega Menu Panel ("المزيد") */}
+      <AnimatePresence>
+        {moreOpen && (
+          <motion.div
+            ref={moreMenuRef}
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            className="fixed top-[6.25rem] left-1/2 -translate-x-1/2 z-[70] w-[min(94vw,1120px)] max-h-[calc(100vh-7.5rem)] overflow-y-auto rounded-3xl border border-white/[0.12] bg-[#0b0e16]/95 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.08)] p-5 sm:p-7"
+          >
+            {/* Subtle Ambient Glow */}
+            <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
+            <div className="absolute top-0 left-1/4 w-96 h-32 bg-cyan-500/10 rounded-full blur-[90px] pointer-events-none" />
 
-          {/* Header of the Mega Menu */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-white/[0.08] gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <h3 className="text-base font-black text-white">دليل خدمات ومنصة JO Cars الشاملة</h3>
-              </div>
-              <p className="text-xs text-slate-400 mt-1">تصفح كافة الأدوات، الحاسبات، الخدمات، ومجتمع السيارات في المملكة</p>
-            </div>
-            <Link
-              href="/cars"
-              onClick={() => setMoreOpen(false)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors w-fit"
-            >
-              <span>تصفح كافة السيارات المعروضة</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* 4 Categorized Columns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {megaMenuCategories.map((cat, idx) => (
-              <div key={idx} className="space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-                  <h4 className="text-xs font-black text-slate-200 tracking-wider uppercase">{cat.title}</h4>
-                  <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border', cat.badgeColor)}>
-                    {cat.badge}
-                  </span>
+            {/* Header of the Mega Menu */}
+            <div className="relative flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-5 border-b border-white/[0.08] gap-3">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.8)] animate-pulse" />
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                    دليل خدمات ومنصة JO Cars الشاملة
+                  </h3>
                 </div>
-
-                <div className="space-y-1">
-                  {cat.items.map((item) => {
-                    const Icon = item.icon;
-                    const active = pathname === item.href;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMoreOpen(false)}
-                        className={cn(
-                          'group flex items-start gap-3 p-2.5 rounded-xl transition-all duration-200 border border-transparent',
-                          active
-                            ? 'bg-amber-400/10 border-amber-400/20 text-amber-300'
-                            : 'hover:bg-white/[0.04] hover:border-white/[0.06] text-slate-300 hover:text-white'
-                        )}
-                      >
-                        <div className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors mt-0.5',
-                          active
-                            ? 'bg-amber-400/20 text-amber-400'
-                            : 'bg-white/[0.04] text-slate-400 group-hover:text-amber-400 group-hover:bg-amber-400/10'
-                        )}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-slate-100 group-hover:text-amber-300 transition-colors truncate">
-                            {item.label}
-                          </p>
-                          <p className="text-[11px] text-slate-400 leading-snug line-clamp-1 mt-0.5">
-                            {item.desc}
-                          </p>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  تصفح كافة الأدوات الذكية، الحاسبات الجمركية، خدمات الفحص، ومجتمع السيارات في الأردن
+                </p>
               </div>
-            ))}
-          </div>
-
-          {/* Quick Footer Banner */}
-          <div className="mt-6 pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-white/[0.02] -mx-6 -mb-6 p-4 rounded-b-3xl">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                فحص موثوق 100%
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <Bot className="w-4 h-4 text-cyan-400" />
-                مدعوم بالذكاء الاصطناعي
-              </span>
+              <Link
+                href="/cars"
+                onClick={() => setMoreOpen(false)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 text-xs font-bold text-amber-300 hover:text-amber-200 transition-all w-fit shrink-0"
+              >
+                <span>تصفح كافة السيارات المعروضة</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-            <button
-              onClick={() => setMoreOpen(false)}
-              className="text-xs font-bold text-slate-400 hover:text-white transition-colors"
+
+            {/* 4 Categorized Glass Cards */}
+            <div
+              onMouseLeave={() => setHoveredMegaItem(null)}
+              className="relative grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
             >
-              إغلاق القائمة (Esc)
-            </button>
-          </div>
-        </div>
-      )}
+              {megaMenuCategories.map((cat, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-2xl bg-white/[0.025] border border-white/[0.06] p-3.5 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-white/[0.06]">
+                    <h4 className="text-xs font-black text-slate-100">{cat.title}</h4>
+                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0', cat.badgeColor)}>
+                      {cat.badge}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    {cat.items.map((item) => {
+                      const Icon = item.icon;
+                      const active = pathname === item.href;
+                      const isHovered = hoveredMegaItem === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onMouseEnter={() => setHoveredMegaItem(item.href)}
+                          onClick={() => setMoreOpen(false)}
+                          className={cn(
+                            'group relative flex items-start gap-2.5 p-2.5 rounded-xl transition-colors duration-200 z-10',
+                            active
+                              ? 'text-amber-300'
+                              : isHovered
+                              ? 'text-white'
+                              : 'text-slate-300 hover:text-white'
+                          )}
+                        >
+                          {isHovered && (
+                            <motion.span
+                              layoutId="mega-menu-hover-box"
+                              transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                              className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/[0.10] to-white/[0.03] border border-amber-400/40 shadow-[0_0_18px_rgba(245,158,11,0.14),inset_0_1px_0_rgba(255,255,255,0.12)] -z-10"
+                            />
+                          )}
+                          {active && !isHovered && (
+                            <span className="absolute inset-0 rounded-xl bg-amber-400/10 border border-amber-400/25 -z-20" />
+                          )}
+                          <div
+                            className={cn(
+                              'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 mt-0.5',
+                              active || isHovered
+                                ? 'bg-amber-400/15 text-amber-400 scale-105'
+                                : 'bg-white/[0.04] text-slate-400'
+                            )}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn(
+                              'text-xs font-bold leading-snug transition-colors',
+                              active || isHovered ? 'text-amber-300' : 'text-slate-100'
+                            )}>
+                              {item.label}
+                            </p>
+                            <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2 mt-0.5">
+                              {item.desc}
+                            </p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Footer Banner */}
+            <div className="mt-5 pt-3.5 px-4 py-3 rounded-2xl border border-white/[0.07] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-white/[0.025]">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="flex items-center gap-1.5 text-slate-200 font-semibold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  فحص موثوق 100%
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-200 font-semibold">
+                  <Bot className="w-4 h-4 text-cyan-400" />
+                  مدعوم بالذكاء الاصطناعي
+                </span>
+              </div>
+              <button
+                onClick={() => setMoreOpen(false)}
+                className="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer"
+              >
+                إغلاق القائمة (Esc)
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* User Dropdown */}
       {userMenuOpen && isAuthenticated && (
