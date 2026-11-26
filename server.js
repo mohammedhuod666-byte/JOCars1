@@ -1,5 +1,4 @@
 const { createServer } = require('http');
-const { parse } = require('url');
 const path = require('path');
 const fs = require('fs');
 const next = require('next');
@@ -73,7 +72,7 @@ app.prepare().then(() => {
     // (أطول بكثير وأكثر رحابة بالشبكات الخلوية).
     // أنظر git log لمحاولات سابقة عكسية على نفس المشكلة.
 
-    const parsedUrl = parse(req.url, true);
+    const parsedUrl = new URL(req.url || '/', 'http://localhost');
 
     if (parsedUrl.pathname.startsWith('/uploads/')) {
       const safeName = path.basename(parsedUrl.pathname);
@@ -121,7 +120,7 @@ app.prepare().then(() => {
       // Node.js http server handles gzip for us via compression middleware
     }
 
-    handle(req, res, parsedUrl).catch((err) => {
+    handle(req, res).catch((err) => {
       log('ERROR', 'Request error', `${req.url} - ${err.message}`);
       if (!res.headersSent) { res.writeHead(500); res.end('Internal Server Error'); }
     });
