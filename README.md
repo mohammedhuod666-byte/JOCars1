@@ -1,6 +1,6 @@
 # JO Cars (كارس جو) — المنصة الأردنية الذكية لتجارة وتقييم السيارات
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.3.8%20(Turbopack)-black?logo=next.js)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4.6%20(Turbopack)-black?logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-PostgreSQL%20(Neon)-2D3748?logo=prisma)](https://www.prisma.io/)
 [![AI Valuation](https://img.shields.io/badge/AI%20Engine-21--Stage%20FMV-10B981)](#)
@@ -76,6 +76,8 @@ npx tsx --test src/ai/valuation/__tests__/features.test.ts
 npm run build
 npm run start
 ```
+
+عند تحديث الموقع المحلي المنشور عبر ngrok، اتبع [سجل حوادث النشر والتحقق](DEPLOYMENT_INCIDENTS.md). تشغيل `server.js` القديم بعد البناء قد يُبقي التعديل مخفيًا ويسبب `ChunkLoadError`.
 
 ---
 
