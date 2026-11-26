@@ -406,14 +406,14 @@ export function Header() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="fixed top-[6.25rem] left-1/2 -translate-x-1/2 z-[70] w-[min(94vw,1120px)] max-h-[calc(100vh-7.5rem)] overflow-y-auto rounded-3xl border border-white/[0.12] bg-[#0b0e16]/95 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.08)] p-5 sm:p-7"
+            className="fixed top-[5.75rem] inset-x-0 mx-auto z-[70] w-[min(94vw,1120px)] max-h-[calc(100vh-6.5rem)] overflow-y-auto rounded-3xl border border-white/[0.12] bg-[#0b0e16]/95 backdrop-blur-3xl shadow-[0_30px_70px_-15px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.08)] p-4 sm:p-5"
           >
             {/* Subtle Ambient Glow */}
             <div className="absolute top-0 right-1/4 w-96 h-32 bg-amber-500/10 rounded-full blur-[90px] pointer-events-none" />
             <div className="absolute top-0 left-1/4 w-96 h-32 bg-cyan-500/10 rounded-full blur-[90px] pointer-events-none" />
 
             {/* Header of the Mega Menu */}
-            <div className="relative flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-5 border-b border-white/[0.08] gap-3">
+            <div className="relative flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-white/[0.08] gap-2">
               <div>
                 <div className="flex items-center gap-2.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.8)] animate-pulse" />
@@ -464,7 +464,7 @@ export function Header() {
                           onMouseEnter={() => setHoveredMegaItem(item.href)}
                           onClick={() => setMoreOpen(false)}
                           className={cn(
-                            'group relative flex items-start gap-2.5 p-2.5 rounded-xl transition-colors duration-200 z-10',
+                            'group relative flex items-start gap-2.5 p-2 rounded-xl transition-colors duration-200 z-10',
                             active
                               ? 'text-amber-300'
                               : isHovered
@@ -512,7 +512,7 @@ export function Header() {
             </div>
 
             {/* Quick Footer Banner */}
-            <div className="mt-5 pt-3.5 px-4 py-3 rounded-2xl border border-white/[0.07] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-white/[0.025]">
+            <div className="mt-4 px-4 py-2.5 rounded-2xl border border-white/[0.07] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 bg-white/[0.025]">
               <div className="flex flex-wrap items-center gap-4">
                 <span className="flex items-center gap-1.5 text-slate-200 font-semibold">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
