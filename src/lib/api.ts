@@ -32,7 +32,7 @@ export function notFoundResponse(resource: string = 'البيانات') {
 }
 
 export function validationErrorResponse(error: ZodError) {
-  const messages = error.errors.map((e) => ({
+  const messages = error.issues.map((e) => ({
     field: e.path.join('.'),
     message: e.message,
   }));

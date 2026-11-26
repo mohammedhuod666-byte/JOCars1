@@ -49,8 +49,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 const roleBanSchema = z.object({
-  role: z.enum(['USER', 'DEALER', 'TRADER', 'ADMIN'], { errorMap: () => ({ message: 'الدور غير صالح' }) }).optional(),
-  banStatus: z.enum(['PERMANENT', 'TEMPORARY'], { errorMap: () => ({ message: 'حالة الحظر غير صالحة' }) }).nullable().optional(),
+  role: z.enum(['USER', 'DEALER', 'TRADER', 'ADMIN'], { error: 'الدور غير صالح' }).optional(),
+  banStatus: z.enum(['PERMANENT', 'TEMPORARY'], { error: 'حالة الحظر غير صالحة' }).nullable().optional(),
   banReason: z.string().max(500, 'سبب الحظر طويل جدا').nullable().optional(),
   banUntil: z.union([z.coerce.date(), z.null()]).optional(),
 }).passthrough();

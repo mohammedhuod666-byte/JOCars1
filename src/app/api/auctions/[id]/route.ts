@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (auction.sellerId !== user.id && user.role !== 'ADMIN') return Response.json({ error: 'لا تملك صلاحية' }, { status: 403 });
 
   const statusSchema = z.object({
-    status: z.enum(['ACTIVE', 'ENDED', 'CANCELLED'], { errorMap: () => ({ message: 'حالة المزاد غير صالحة' }) }),
+    status: z.enum(['ACTIVE', 'ENDED', 'CANCELLED'], { error: 'حالة المزاد غير صالحة' }),
   });
   const parsedBody = statusSchema.safeParse(await request.json());
   if (!parsedBody.success) return Response.json({ success: false, error: 'حالة المزاد غير صالحة' }, { status: 422 });

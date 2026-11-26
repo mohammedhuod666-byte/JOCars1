@@ -46,7 +46,6 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
       if (cancelled || !mapContainerRef.current) return;
 
       // Fix default marker icon paths for bundled builds
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (leaflet.Icon.Default.prototype as any)._getIconUrl;
       leaflet.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -151,7 +150,6 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
         onChange(newLat, newLng);
         if (mapRef.current) {
           mapRef.current.setView([newLat, newLng], 14);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const L = require('leaflet') as any;
           if (markerRef.current) {
             markerRef.current.setLatLng([newLat, newLng]);
@@ -190,7 +188,6 @@ export function MapPicker({ lat, lng, onChange, className }: MapPickerProps) {
         onChange(newLat, newLng);
         if (mapRef.current) {
           mapRef.current.setView([newLat, newLng], 14);
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const L = require('leaflet') as any;
           if (markerRef.current) {
             markerRef.current.setLatLng([newLat, newLng]);
