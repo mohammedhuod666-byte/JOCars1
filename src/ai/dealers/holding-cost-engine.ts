@@ -64,7 +64,7 @@ export function calculateHoldingCost(input: HoldingCostInput): HoldingCostResult
   let liquidationBadgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
 
   if (days > 60) {
-    liquidationStatusLabelAr = '⚠️ ركود حرج (تآكل كامل للأرباح)';
+    liquidationStatusLabelAr = 'ركود حرج (تآكل كامل للأرباح)';
     liquidationBadgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
   } else if (days >= 35) {
     liquidationStatusLabelAr = 'تنبيه بطء تداول (اقتراب حد التسييل)';

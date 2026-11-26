@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is required for password reset links');
       const token = signPasswordResetToken(user);
       const resetUrl = `${appUrl}/auth/reset-password?token=${encodeURIComponent(token)}`;
-      const message = `🔒 *إعادة تعيين كلمة المرور في JO Cars*\\n\\nافتح الرابط التالي لإنشاء كلمة مرور جديدة. الرابط صالح لمدة 15 دقيقة:\\n${resetUrl}\\n\\nلا تشارك الرابط مع أي شخص.`;
+      const message = ` *إعادة تعيين كلمة المرور في JO Cars*\\n\\nافتح الرابط التالي لإنشاء كلمة مرور جديدة. الرابط صالح لمدة 15 دقيقة:\\n${resetUrl}\\n\\nلا تشارك الرابط مع أي شخص.`;
       const result = await sendWhatsApp(user.whatsapp, message);
       if (result.success) {
         sentVia = 'whatsapp';

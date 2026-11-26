@@ -142,7 +142,7 @@ export function ValuationReport({
       }
       setLegacyReport(null); // CRITICAL: Section 24 is sole source of truth; never allow old report to pollute it
       setInsufficient(null);
-      // FMV exists ONLY when valuationMode === 'FMV' AND fairMarketValue !== null.
+      // FMV exists ONLY when valuationMode === 'FMV'AND fairMarketValue !== null.
       if (
         onValuationLoaded &&
         data.section24.valuationMode === 'FMV' &&
@@ -1094,7 +1094,7 @@ export function ValuationReport({
                         }`}
                       >
                         <MessageSquareText className="w-4 h-4 text-indigo-400 shrink-0" />
-                        <span>المستشار المباشر 🎙️</span>
+                        <span>المستشار المباشر </span>
                       </button>
 
                       <button
@@ -1317,7 +1317,7 @@ export function ValuationReport({
                         <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800 space-y-1.5 text-xs text-slate-300">
                           <p className="leading-relaxed">{customs.adviceForBuyerAr}</p>
                           <p className="text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800/60">
-                            ⚖️ المستند القانوني: {customs.regulationsSummaryAr}.
+                             المستند القانوني: {customs.regulationsSummaryAr}.
                           </p>
                         </div>
                       </div>
@@ -1477,7 +1477,7 @@ export function ValuationReport({
                         <div className="p-3.5 rounded-xl bg-teal-950/20 border border-teal-500/30 text-xs text-teal-200 space-y-1">
                           <p className="leading-relaxed font-medium">{liveForecast.summaryInsightAr}</p>
                           <p className="text-[10px] text-slate-400 pt-1 border-t border-teal-500/20">
-                            💡 تحليل سيولة العلامة: {liveForecast.marketVeracityAr}
+                             تحليل سيولة العلامة: {liveForecast.marketVeracityAr}
                           </p>
                         </div>
                       </div>
@@ -1904,8 +1904,8 @@ export function ValuationReport({
                                 </div>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-cyan-500/15 text-[11px] text-slate-300">
-                                <p>⚡ <strong>فوق 85%:</strong> بطارية ممتازة تعطي كامل المدى والتوفير في البنزين دون أي خصم.</p>
-                                <p>📉 <strong>دون 75%:</strong> تبدأ علامات هبوط المدى، ويحق لك تفاوض وخصم مالي يغطي صيانة الخلايا (Recell).</p>
+                                <p> <strong>فوق 85%:</strong> بطارية ممتازة تعطي كامل المدى والتوفير في البنزين دون أي خصم.</p>
+                                <p> <strong>دون 75%:</strong> تبدأ علامات هبوط المدى، ويحق لك تفاوض وخصم مالي يغطي صيانة الخلايا (Recell).</p>
                               </div>
                             </div>
 
@@ -1973,7 +1973,7 @@ export function ValuationReport({
 
                             {liveBattery?.explanationAr && (
                               <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                                💡 {liveBattery.explanationAr}
+                                 {liveBattery.explanationAr}
                               </p>
                             )}
 
@@ -2078,7 +2078,7 @@ export function ValuationReport({
                                       </div>
                                       {c.powertrainNote && (
                                         <div className="text-[11px] text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                                          ⚠️ {c.powertrainNote}
+                                           {c.powertrainNote}
                                         </div>
                                       )}
                                     </div>

@@ -124,7 +124,7 @@ export async function notifyDealersOfSniperDeal(deal: {
 }): Promise<number> {
   const diffJod = Math.round(deal.fmv - deal.price);
   return sendPushToDealers({
-    title: `🔥 صيد لقطة جديد: ${deal.title}`,
+    title: ` صيد لقطة جديد: ${deal.title}`,
     body: `معروضة بسعر ${deal.price.toLocaleString()} د.أ (أقل بـ ${deal.discountPct}% عن السوق — وفر ${diffJod.toLocaleString()} د.أ). اضغط للمعاينة الفورية!`,
     url: `/cars/${deal.id}`,
   });

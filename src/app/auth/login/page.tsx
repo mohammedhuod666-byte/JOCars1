@@ -161,9 +161,9 @@ export default function LoginPage() {
             className="mt-12 grid grid-cols-3 gap-3"
           >
             {[
-              { icon: '🚗', label: 'إعلانات مباشرة', sub: 'تواصل فوري مع المالك' },
-              { icon: '🛡️', label: 'أمان وشفافية', sub: 'بيانات فحص واضحة' },
-              { icon: '⚡', label: 'تقييم ذكي', sub: 'تحليل دقيق للأسعار' },
+              { icon: '', label: 'إعلانات مباشرة', sub: 'تواصل فوري مع المالك' },
+              { icon: '', label: 'أمان وشفافية', sub: 'بيانات فحص واضحة' },
+              { icon: '', label: 'تقييم ذكي', sub: 'تحليل دقيق للأسعار' },
             ].map((feat, i) => (
               <div key={i} className="text-center p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
                 <div className="text-xl mb-1">{feat.icon}</div>

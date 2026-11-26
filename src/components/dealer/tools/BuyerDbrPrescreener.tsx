@@ -215,7 +215,7 @@ export function BuyerDbrPrescreener({ dealerCars, onShowToast }: Props) {
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-            💡 <strong>نصيحة المعرض للتعامل مع الزبون:</strong>{' '}
+             <strong>نصيحة المعرض للتعامل مع الزبون:</strong>{' '}
             {isApproved
               ? 'الزبون يمتلك سجلاً ائتمانياً ممتازاً، يمكنك البدء بمعاملة البنك فوراً دون خوف من الرفض.'
               : `لتمرير المعاملة بنجاح، اطلب من الزبون زيادة الدفعة الأولى إلى ${Math.round(downPaymentAmount + (requiredMonthlyPayment - maxAllowedCarInstallment) * 40).toLocaleString()} د.أ أو إدخال كفيل من الدرجة الأولى.`}

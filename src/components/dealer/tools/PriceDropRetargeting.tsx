@@ -175,7 +175,7 @@ export function PriceDropRetargeting({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>إطلاق إشعار التخفيض لـ {totalAudience.toLocaleString()} زبون 🚀</span>
+                <span>إطلاق إشعار التخفيض لـ {totalAudience.toLocaleString()} زبون </span>
               </>
             )}
           </button>
@@ -229,7 +229,7 @@ export function PriceDropRetargeting({
               </div>
               <div className="space-y-1">
                 <span className="text-xs font-black text-white block">
-                  🔥 تخفيض سعر حصري! {selectedCar.brand?.nameAr} {selectedCar.model?.nameAr} {selectedCar.year}
+                   تخفيض سعر حصري! {selectedCar.brand?.nameAr} {selectedCar.model?.nameAr} {selectedCar.year}
                 </span>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
                   السيارة التي تتابعها بقائمتك انخفض سعرها بمقدار <strong>{discountAmount} د.أ</strong>! السعر الجديد الآن: <strong className="text-emerald-400">{newPrice.toLocaleString()} د.أ</strong> لدى {dealerName}. انقر هنا لمعاينة الفحص والتواصل المباشر مع المعرض.

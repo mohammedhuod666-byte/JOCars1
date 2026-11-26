@@ -160,13 +160,13 @@ export function DealerIntelligenceSuite({
 
   // Check notification permission
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (typeof window !== 'undefined' && 'Notification'in window) {
       setPushEnabled(Notification.permission === 'granted');
     }
   }, []);
 
   const handleEnablePush = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (typeof window === 'undefined' || !('Notification'in window)) {
       onShowToast('المتصفح لا يدعم إشعارات الدفع المباشرة');
       return;
     }
@@ -176,7 +176,7 @@ export function DealerIntelligenceSuite({
       if (permission === 'granted') {
         setPushEnabled(true);
         // Register service worker subscription if available
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker'in navigator) {
           const reg = await navigator.serviceWorker.ready;
           if (reg && reg.pushManager) {
             const sub = await reg.pushManager.subscribe({
@@ -212,7 +212,7 @@ export function DealerIntelligenceSuite({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: '🔥 رادار كارس جو: لقطة جديدة تم رصدها!',
+          title: 'رادار كارس جو: لقطة جديدة تم رصدها!',
           message: 'تويوتا كامري 2021 معروضة بسعر 14,800 د.أ (أقل بـ 16% عن تقييم السوق). اضغط لمعاينتها قبل الجميع!',
         }),
       });
@@ -221,7 +221,7 @@ export function DealerIntelligenceSuite({
         onShowToast('تم إرسال إشعار فوري تجريبي لشاشة هاتفك!');
         // Also trigger browser notification if allowed
         if (typeof window !== 'undefined' && Notification.permission === 'granted') {
-          new Notification('🔥 رادار كارس جو: لقطة جديدة تم رصدها!', {
+          new Notification('رادار كارس جو: لقطة جديدة تم رصدها!', {
             body: 'تويوتا كامري 2021 معروضة بسعر 14,800 د.أ (أقل بـ 16% عن تقييم السوق). اضغط لمعاينتها قبل الجميع!',
           });
         }
@@ -317,20 +317,20 @@ export function DealerIntelligenceSuite({
       {/* Navigation Tabs Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 my-4">
         {[
-          { id: 'sniper', label: '🔥 رادار اللقطات', icon: Flame },
-          { id: 'reverse', label: '🎯 الطلبات المعكوسة', icon: Target },
-          { id: 'sticker', label: '🏷️ ملصق الزجاج QR', icon: QrCode },
-          { id: 'deposit', label: '💳 عربون كليك', icon: CreditCard },
-          { id: 'retarget', label: '📉 تخفيض السعر', icon: TrendingDown },
-          { id: 'wholesale', label: '🏬 سوق الجملة B2B', icon: Lock },
-          { id: 'warranty', label: '🛡️ أرباح الكفالة', icon: ShieldCheck },
-          { id: 'syndication', label: '📲 النشر السريع', icon: Share2 },
-          { id: 'prescreen', label: '🏦 فاحص DBR', icon: Landmark },
-          { id: 'watchdog', label: '🔍 مؤشر المنافسين', icon: Compass },
-          { id: 'scorecard', label: '📊 التقرير المالي', icon: TrendingUp },
-          { id: 'tradein', label: '🔄 حاسبة البدل', icon: RefreshCw },
-          { id: 'import', label: '🚢 استيراد الحرة', icon: Ship },
-          { id: 'demand', label: '📈 مؤشر الطلب', icon: TrendingUp },
+          { id: 'sniper', label: 'رادار اللقطات', icon: Flame },
+          { id: 'reverse', label: 'الطلبات المعكوسة', icon: Target },
+          { id: 'sticker', label: 'ملصق الزجاج QR', icon: QrCode },
+          { id: 'deposit', label: 'عربون كليك', icon: CreditCard },
+          { id: 'retarget', label: 'تخفيض السعر', icon: TrendingDown },
+          { id: 'wholesale', label: 'سوق الجملة B2B', icon: Lock },
+          { id: 'warranty', label: 'أرباح الكفالة', icon: ShieldCheck },
+          { id: 'syndication', label: 'النشر السريع', icon: Share2 },
+          { id: 'prescreen', label: 'فاحص DBR', icon: Landmark },
+          { id: 'watchdog', label: 'مؤشر المنافسين', icon: Compass },
+          { id: 'scorecard', label: 'التقرير المالي', icon: TrendingUp },
+          { id: 'tradein', label: 'حاسبة البدل', icon: RefreshCw },
+          { id: 'import', label: 'استيراد الحرة', icon: Ship },
+          { id: 'demand', label: 'مؤشر الطلب', icon: TrendingUp },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
 
     // Test notification dispatch
-    const title = body.title || '🔥 رادار كارس جو: لقطة جديدة تم رصدها!';
+    const title = body.title || 'رادار كارس جو: لقطة جديدة تم رصدها!';
     const message = body.message || 'سيارة تويوتا كامري 2021 معروضة بأقل بـ 15% عن سعر السوق. اضغط لمعاينتها قبل الجميع.';
     const carId = body.carId || 'cmw22gh0s004f68pp192lzvah';
 

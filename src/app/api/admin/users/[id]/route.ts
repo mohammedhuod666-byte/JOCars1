@@ -172,7 +172,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     if (body.isActive === false && oldUser.isActive !== false) {
-      sendWhatsAppToUser(id, '🚫 *JO Cars - تعطيل الحساب*\n\nتم تعطيل حسابك. للتواصل مع الإدارة: ' + (process.env.NEXT_PUBLIC_APP_URL || 'https://jocars.com') + '/tickets');
+      sendWhatsAppToUser(id, ' *JO Cars - تعطيل الحساب*\n\nتم تعطيل حسابك. للتواصل مع الإدارة: ' + (process.env.NEXT_PUBLIC_APP_URL || 'https://jocars.com') + '/tickets');
     }
 
     return successResponse(updated);

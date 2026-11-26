@@ -79,7 +79,7 @@ export function AIPriceEstimator({
         if (result.data.fairPrice !== null && result.data.fairPrice > 0) {
           toast.success(`السعر المقترح: ${result.data.fairPrice.toLocaleString()} د.أ`);
         } else {
-          toast('لا تتوفر أدلة كافية لتقدير سعر عادل', { icon: '⚠️' });
+          toast('لا تتوفر أدلة كافية لتقدير سعر عادل', { icon: '' });
         }
       } else {
         toast.error(result.error || 'فشل التقدير');

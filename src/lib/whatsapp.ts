@@ -86,10 +86,10 @@ export function buildCarMessage(
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://jocars.com';
 
   const templates: Record<string, string> = {
-    new_message: `🔔 *JO Cars - رسالة جديدة*\n\nمن: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالرسالة: ${data.messagePreview || ''}\n\n👇 للرد:\n${siteUrl}/messages`,
-    new_conversation: `💬 *JO Cars - استفسار عن سيارة*\n\nالمشتري: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالسعر: ${data.carPrice?.toLocaleString() || ''} د.أ\nالرسالة: ${data.messagePreview || ''}\n\n👇 للرد:\n${siteUrl}/messages`,
-    seller_reply: `📩 *JO Cars - رد على استفسارك*\n\nالبائع: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالرد: ${data.messagePreview || ''}\n\n👇 للمتابعة:\n${siteUrl}/messages`,
-    price_alert: `💰 *JO Cars - تنبيه سعر*\n\n${data.carTitle || 'سيارة'} مطابقة لبحثك!\nالسعر: ${data.carPrice?.toLocaleString() || ''} د.أ\n\n👇 للمشاهدة:\n${siteUrl}/cars`,
+    new_message: ` *JO Cars - رسالة جديدة*\n\nمن: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالرسالة: ${data.messagePreview || ''}\n\n للرد:\n${siteUrl}/messages`,
+    new_conversation: ` *JO Cars - استفسار عن سيارة*\n\nالمشتري: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالسعر: ${data.carPrice?.toLocaleString() || ''} د.أ\nالرسالة: ${data.messagePreview || ''}\n\n للرد:\n${siteUrl}/messages`,
+    seller_reply: ` *JO Cars - رد على استفسارك*\n\nالبائع: ${data.senderName || 'مستخدم'}\nالسيارة: ${data.carTitle || ''}\nالرد: ${data.messagePreview || ''}\n\n للمتابعة:\n${siteUrl}/messages`,
+    price_alert: ` *JO Cars - تنبيه سعر*\n\n${data.carTitle || 'سيارة'} مطابقة لبحثك!\nالسعر: ${data.carPrice?.toLocaleString() || ''} د.أ\n\n للمشاهدة:\n${siteUrl}/cars`,
   };
 
   return templates[type] || '';
@@ -149,8 +149,8 @@ export async function sendWhatsAppToAllUsers(message: string): Promise<void> {
 export function buildAdminMessage(type: string, data: Record<string, string | undefined>): string {
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://jocars.com';
   const templates: Record<string, string> = {
-    new_report: `🚩 *JO Cars - بلاغ جديد*\n\nمن: ${data.reporterName || 'مستخدم'}\nالسبب: ${data.reason || ''}\nالسيارة: ${data.carTitle || ''}\n\n👇 للمشاهدة:\n${siteUrl}/admin/reports`,
-    new_ticket: `🎫 *JO Cars - تذكرة دعم جديدة*\n\nمن: ${data.userName || 'مستخدم'}\nالعنوان: ${data.subject || ''}\nالقسم: ${data.category || ''}\nالأولوية: ${data.priority || ''}\n\n👇 للمشاهدة:\n${siteUrl}/admin/tickets`,
+    new_report: ` *JO Cars - بلاغ جديد*\n\nمن: ${data.reporterName || 'مستخدم'}\nالسبب: ${data.reason || ''}\nالسيارة: ${data.carTitle || ''}\n\n للمشاهدة:\n${siteUrl}/admin/reports`,
+    new_ticket: ` *JO Cars - تذكرة دعم جديدة*\n\nمن: ${data.userName || 'مستخدم'}\nالعنوان: ${data.subject || ''}\nالقسم: ${data.category || ''}\nالأولوية: ${data.priority || ''}\n\n للمشاهدة:\n${siteUrl}/admin/tickets`,
   };
   return templates[type] || '';
 }
@@ -158,15 +158,15 @@ export function buildAdminMessage(type: string, data: Record<string, string | un
 export function buildUserMessage(type: string, data: Record<string, string | number | undefined>): string {
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://jocars.com';
   const templates: Record<string, string> = {
-    ticket_reply: `📩 *JO Cars - رد على التذكرة*\n\nتذكرة: ${data.subject || ''}\nالرد: ${data.replyPreview || ''}\n\n👇 للمتابعة:\n${siteUrl}/tickets/${data.ticketId || ''}`,
-    car_featured: `⭐ *JO Cars - إعلان مميز*\n\nتم تمييز إعلانك:\n${data.carTitle || ''}\n\n👇 للمشاهدة:\n${siteUrl}/cars/${data.carSlug || ''}`,
-    badge_assigned: `🏅 *JO Cars - شارة جديدة*\n\nتم إضافة شارة لك:\n${data.badgeName || ''}\n\nمن قبل إدارة JO Cars 🎉`,
-    user_banned: `🚫 *JO Cars - تعليق الحساب*\n\nتم تعليق حسابك.\nالسبب: ${data.reason || 'مخالفة الشروط'}\nتاريخ انتهاء التعليق: ${data.banUntil || 'غير محدد'}\n\nللتواصل مع الإدارة: ${siteUrl}/tickets`,
-    user_unbanned: `✅ *JO Cars - إعادة تفعيل الحساب*\n\nتم إعادة تفعيل حسابك. يمكنك استخدام الموقع كالمعتاد 🎉`,
-    user_suspended: `⛔ *JO Cars - إيقاف النشر*\n\nتم إيقاف صلاحية النشر لحسابك.\nللتواصل مع الإدارة: ${siteUrl}/tickets`,
-    user_activated: `✅ *JO Cars - تفعيل النشر*\n\nتم تفعيل صلاحية النشر لحسابك. يمكنك إضافة إعلانات جديدة 🚗`,
-    user_deleted: `🗑️ *JO Cars - حذف الحساب*\n\nتم حذف حسابك من الموقع.\nإذا كان هناك خطأ، تواصل مع الإدارة: ${siteUrl}/tickets`,
-    new_forum_category: `📢 *JO Cars - منتدى جديد*\n\nتم إضافة قسم جديد في المنتدى:\n${data.categoryName || ''}\n\n👇 للمشاهدة:\n${siteUrl}/forum`,
+    ticket_reply: ` *JO Cars - رد على التذكرة*\n\nتذكرة: ${data.subject || ''}\nالرد: ${data.replyPreview || ''}\n\n للمتابعة:\n${siteUrl}/tickets/${data.ticketId || ''}`,
+    car_featured: ` *JO Cars - إعلان مميز*\n\nتم تمييز إعلانك:\n${data.carTitle || ''}\n\n للمشاهدة:\n${siteUrl}/cars/${data.carSlug || ''}`,
+    badge_assigned: ` *JO Cars - شارة جديدة*\n\nتم إضافة شارة لك:\n${data.badgeName || ''}\n\nمن قبل إدارة JO Cars `,
+    user_banned: ` *JO Cars - تعليق الحساب*\n\nتم تعليق حسابك.\nالسبب: ${data.reason || 'مخالفة الشروط'}\nتاريخ انتهاء التعليق: ${data.banUntil || 'غير محدد'}\n\nللتواصل مع الإدارة: ${siteUrl}/tickets`,
+    user_unbanned: ` *JO Cars - إعادة تفعيل الحساب*\n\nتم إعادة تفعيل حسابك. يمكنك استخدام الموقع كالمعتاد `,
+    user_suspended: ` *JO Cars - إيقاف النشر*\n\nتم إيقاف صلاحية النشر لحسابك.\nللتواصل مع الإدارة: ${siteUrl}/tickets`,
+    user_activated: ` *JO Cars - تفعيل النشر*\n\nتم تفعيل صلاحية النشر لحسابك. يمكنك إضافة إعلانات جديدة `,
+    user_deleted: ` *JO Cars - حذف الحساب*\n\nتم حذف حسابك من الموقع.\nإذا كان هناك خطأ، تواصل مع الإدارة: ${siteUrl}/tickets`,
+    new_forum_category: ` *JO Cars - منتدى جديد*\n\nتم إضافة قسم جديد في المنتدى:\n${data.categoryName || ''}\n\n للمشاهدة:\n${siteUrl}/forum`,
   };
   return templates[type] || '';
 }

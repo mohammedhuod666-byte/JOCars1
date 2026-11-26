@@ -45,38 +45,38 @@ export function SocialMediaSyndication({
     ? `${window.location.origin}/cars/${selectedCar.id}`
     : `https://cars-jo.com/cars/${selectedCar.id}`;
 
-  const facebookPost = `🔥 فرصة اليوم لدى ${dealerName} 🔥
-✨ ${selectedCar.brand?.nameAr} ${selectedCar.model?.nameAr} موديل ${selectedCar.year} بحالة الوكالة!
+  const facebookPost = ` فرصة اليوم لدى ${dealerName} 
+ ${selectedCar.brand?.nameAr} ${selectedCar.model?.nameAr} موديل ${selectedCar.year} بحالة الوكالة!
 ━━━━━━━━━━━━━━━━━━━━
-📌 المواصفات الفنية:
+ المواصفات الفنية:
 • المحرك ونوع الوقود: هايبرد اقتصادي جداً فائق الاعتمادية
 • عداد المسافة الحقيقي: ${selectedCar.kilometers?.toLocaleString()} كم فقط (مفحوص ومطابق)
 • الفحص الفني: فحص 4 جيد كامل كرت أبيض معتمد
 • الموقع: ${dealerName} - ${selectedCar.city?.nameAr || 'عمان'}
 
-💰 السعر المطلوب نقداً: ${selectedCar.price?.toLocaleString()} دينار أردني
-🏦 إمكانية التمويل البنكي حتى 80% بأقساط ميسرة!
+ السعر المطلوب نقداً: ${selectedCar.price?.toLocaleString()} دينار أردني
+ إمكانية التمويل البنكي حتى 80% بأقساط ميسرة!
 
-📲 للمعاينة والاستفسار المباشر:
+ للمعاينة والاستفسار المباشر:
 هاتف المعرض: ${dealerPhone}
 معاينة الفحص الكامل وتفاصيل السيارة بالرابط: ${carUrl}
 
 #سيارات_الأردن #حرة_الزرقاء #${selectedCar.brand?.nameAr}_الأردن #عمان #سيارات_للبيع`;
 
-  const instagramCaption = `الجمال والاعتمادية في مكان واحد ✨
-${selectedCar.brand?.nameAr} ${selectedCar.model?.nameAr} ${selectedCar.year} 🚘
-عداد ${selectedCar.kilometers?.toLocaleString()} كم فقط | فحص 4 جيد كامل كرت أبيض 💎
+  const instagramCaption = `الجمال والاعتمادية في مكان واحد 
+${selectedCar.brand?.nameAr} ${selectedCar.model?.nameAr} ${selectedCar.year} 
+عداد ${selectedCar.kilometers?.toLocaleString()} كم فقط | فحص 4 جيد كامل كرت أبيض 
 
-📍 متوفرة الآن في صالة عرض ${dealerName}
+ متوفرة الآن في صالة عرض ${dealerName}
 السعر: ${selectedCar.price?.toLocaleString()} د.أ 
 (مع إمكانية البدل وتسهيلات التمويل البنكي)
 
-📞 للتواصل السريع: ${dealerPhone}
+ للتواصل السريع: ${dealerPhone}
 رابط تقرير الفحص والتقييم العادل في البايو أو تفضلوا بزيارتنا!
 
 #سيارات #عمان #الاردن #cars_jo #${selectedCar.brand?.nameAr}`;
 
-  const tiktokScript = `🎬 سكريبت فيديو تيك توك / ريلز مدته 30 ثانية لـ (${dealerName})
+  const tiktokScript = ` سكريبت فيديو تيك توك / ريلز مدته 30 ثانية لـ (${dealerName})
 
 [00:00 - 00:05] الكاميرا: تصوير بانورامي سريع من مقدمة السيارة مع تشغيل الإضاءة النهارية.
 الصوت: "يا هلا والله! إذا بتدوّر على سيارة تويوتا كامري هايبرد نظيفة من الآخر وما بدك تدفع عليها قرش صيانة، هاي اللقطة إلك اليوم!"

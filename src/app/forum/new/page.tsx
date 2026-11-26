@@ -7,7 +7,7 @@ import { Loader2, Send, ChevronLeft, Camera, X, Sparkles, MessageSquare, Tag, Ch
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
-const EMOJI_LIST = ['👍', '❤️', '🔥', '👏', '😂', '🚗', '🔧', '⚡', '💡', '🛠️', '✅', '🙏'];
+const EMOJI_LIST = ['', '', '', '', '', '', '', '', '', '', '', ''];
 
 export default function NewTopicPage() {
   return (
@@ -143,7 +143,7 @@ function NewTopicForm() {
 
       const data = await res.json().catch(() => null);
       if (res.ok && data?.success && data?.data) {
-        toast.success('تم نشر الموضوع في المنتدى بنجاح 🎉');
+        toast.success('تم نشر الموضوع في المنتدى بنجاح ');
         router.push(`/forum/t/${data.data.slug}`);
       } else if (res.status === 401) {
         toast.error('يرجى تسجيل الدخول أولاً لتتمكن من إنشاء موضوع');

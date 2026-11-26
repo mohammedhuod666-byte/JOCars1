@@ -157,7 +157,7 @@ export function B2BWholesaleFloor({
                 </div>
 
                 <p className="text-xs text-slate-600 dark:text-slate-300">
-                  📋 حالة الفحص والملاحظات: <strong>{lot.condition}</strong>
+                   حالة الفحص والملاحظات: <strong>{lot.condition}</strong>
                 </p>
 
                 {/* Price Matrix */}

@@ -147,7 +147,7 @@ async function applyBan(
     newValue: opts.permanent ? 'PERMANENT' : 'TEMPORARY',
   }).catch(() => {});
   await notifyAdmins(
-    `🛡️ *Sentinel — حظر تلقائي ${opts.permanent ? 'دائم' : 'مؤقت'}*\n\n` +
+    ` *Sentinel — حظر تلقائي ${opts.permanent ? 'دائم' : 'مؤقت'}*\n\n` +
     `المستخدم: ${user.name} (${userId})\n` +
     `السبب: ${opts.reason}\n` +
     (opts.permanent ? `المدة: دائم` : `حتى: ${opts.until.toLocaleString('ar-JO')}`) +
@@ -186,7 +186,7 @@ async function evaluateUser(userId: string): Promise<void> {
       newValue: String(total),
     }).catch(() => {});
     await notifyAdmins(
-      `👁️ *Sentinel (مراقبة): تجاوز عتبة*\n\nالمستخدم: ${user?.name || userId}\nمجموع النقاط: ${total}\nالإجراء لو كان التفعيل يعمل: حظر ${permanent ? 'دائم' : 'مؤقت 24 ساعة'}\nراجع: لوحة الإدارة ← سجل الحماية`,
+      ` *Sentinel (مراقبة): تجاوز عتبة*\n\nالمستخدم: ${user?.name || userId}\nمجموع النقاط: ${total}\nالإجراء لو كان التفعيل يعمل: حظر ${permanent ? 'دائم' : 'مؤقت 24 ساعة'}\nراجع: لوحة الإدارة ← سجل الحماية`,
     );
     return;
   }
@@ -245,7 +245,7 @@ export async function enforceProbeBan(userId: string, userName: string, path: st
       ip: ip || undefined,
     }).catch(() => {});
     await notifyAdmins(
-      `🚨 *Sentinel — محاولة اختراق لوحة الإدارة*\n\nالمستخدم: ${userName} (${userId})\nالمسار: ${path}\nIP: ${ip || 'غير معروف'}\nالإجراء: حظر تلقائي 7 أيام`,
+      ` *Sentinel — محاولة اختراق لوحة الإدارة*\n\nالمستخدم: ${userName} (${userId})\nالمسار: ${path}\nIP: ${ip || 'غير معروف'}\nالإجراء: حظر تلقائي 7 أيام`,
     );
   } catch { /* never break the request */ }
 }
@@ -316,7 +316,7 @@ export async function handleBreachAttempt(input: {
       }
 
       await notifyAdmins(
-        `🛡️ *Sentinel — تم الحظر التلقائي الفوري لمخترق*\n\n` +
+        ` *Sentinel — تم الحظر التلقائي الفوري لمخترق*\n\n` +
         `النوع: ${input.type}\n` +
         `المستخدم: ${input.userName || input.userId || 'زائر غير مسجل'}\n` +
         `IP: ${input.ip || 'غير معروف'}\n` +
@@ -337,12 +337,12 @@ export async function handleBreachAttempt(input: {
       }).catch(() => {});
 
       await notifyAdmins(
-        `⚠️ *Sentinel — رصد محاولة اختراق بحاجة لقرارك!*\n\n` +
+        ` *Sentinel — رصد محاولة اختراق بحاجة لقرارك!*\n\n` +
         `النوع: ${input.type}\n` +
         `المستخدم: ${input.userName || input.userId || 'زائر'}\n` +
         `IP: ${input.ip || 'غير معروف'}\n` +
         `التفاصيل: ${input.detail}\n\n` +
-        `❓ *السؤال للمدير: هل أحظره أم أتركه؟*\n` +
+        ` *السؤال للمدير: هل أحظره أم أتركه؟*\n` +
         `لاتخاذ القرار تفضل بزيارة: لوحة الإدارة ← الحارس الأمني (Sentinel)`,
       );
     }

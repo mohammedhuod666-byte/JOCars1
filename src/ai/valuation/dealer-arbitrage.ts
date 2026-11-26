@@ -4,10 +4,10 @@
  */
 
 export type DealOpportunityRating =
-  | 'EXCELLENT_DEAL'          // 💎 صيد ثمين وفرصة ربح عالية
-  | 'GOOD_MARGIN'             // 🟢 هامش ربح تجاري جيد
-  | 'TIGHT_MARGIN'            // 🟡 هامش ضيق / مخاطرة
-  | 'OVERPRICED_NO_MARGIN';   // 🔴 غير مجدية تجارياً
+  | 'EXCELLENT_DEAL'          //  صيد ثمين وفرصة ربح عالية
+  | 'GOOD_MARGIN'             //  هامش ربح تجاري جيد
+  | 'TIGHT_MARGIN'            //  هامش ضيق / مخاطرة
+  | 'OVERPRICED_NO_MARGIN';   //  غير مجدية تجارياً
 
 export interface DealerArbitrageResult {
   purchasePriceJod: number;
@@ -73,17 +73,17 @@ export function calculateDealerArbitrage(params: {
 
   if (netProfit >= 1400 && netRoi >= 6.5) {
     rating = 'EXCELLENT_DEAL';
-    ratingLabelAr = '💎 صيد ثمين وفرصة ربح تاجر ممتازة';
+    ratingLabelAr = 'صيد ثمين وفرصة ربح تاجر ممتازة';
     ratingBadgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
     dealerAdviceAr = `السيارة معروضة بأقل من قيمتها السوقية بفارق مجزٍ (${grossSpread.toLocaleString()} د.أ). بعد التجهيز ونقل الملكية يبقى صافي ربح مقدر بنحو (${netProfit.toLocaleString()} د.أ) بعائد (${netRoi}%). فرصة مناسبة للشراء السريع.`;
   } else if (netProfit >= 650 && netRoi >= 3.5) {
     rating = 'GOOD_MARGIN';
-    ratingLabelAr = '🟢 هامش ربح تجاري جيد ومجزٍ';
+    ratingLabelAr = 'هامش ربح تجاري جيد ومجزٍ';
     ratingBadgeColor = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
     dealerAdviceAr = `هامش تجاري مقبول يترك ربحاً صافياً يقارب (${netProfit.toLocaleString()} د.أ). يُنصح بالتفاوض على السعر المطلوب لتوسيع الهامش قبل إتمام الشراء.`;
   } else if (netProfit <= 0) {
     rating = 'OVERPRICED_NO_MARGIN';
-    ratingLabelAr = '🔴 غير مجدية للتجارة (السعر أعلى من القيمة العادلة)';
+    ratingLabelAr = 'غير مجدية للتجارة (السعر أعلى من القيمة العادلة)';
     ratingBadgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
     dealerAdviceAr = 'السعر المطلوب لا يترك أي هامش ربح تجاري، بل يضع التاجر في منطقة خسارة بعد احتساب مصاريف التجهيز والترخيص.';
   }

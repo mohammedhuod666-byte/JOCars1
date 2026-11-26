@@ -62,17 +62,17 @@ export async function POST(request: NextRequest) {
     }).format(new Date());
 
     const msg =
-      `📊 *JO Cars — التقرير الأسبوعي* (${when})\n\n` +
+      ` *JO Cars — التقرير الأسبوعي* (${when})\n\n` +
       `🆕 خلال 7 أيام:\n` +
       `• مستخدمون جدد: ${newUsers}\n` +
       `• إعلانات جديدة: ${newCars}\n` +
       `• محادثات: ${newConversations} | رسائل: ${newMessages}\n` +
       `• سيارات مباعة: ${soldCars}\n\n` +
-      `⏳ بانتظار المراجعة:\n` +
+      ` بانتظار المراجعة:\n` +
       `• إعلانات معلقة: ${pendingCars}\n` +
       `• بلاغات: ${pendingReports}\n` +
       `• طلبات توثيق تجار: ${pendingTraders}\n\n` +
-      `📈 الإجمالي: ${totalUsers} مستخدم (${totalDealers} تاجر) | ${totalCars} إعلان نشط`;
+      ` الإجمالي: ${totalUsers} مستخدم (${totalDealers} تاجر) | ${totalCars} إعلان نشط`;
 
     let sent = false;
     if (isWhatsAppConfigured()) {

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       if (!phone) continue;
 
       const carInfo = reminder.carBrand ? `${reminder.carBrand} ${reminder.carModel || ''} ${reminder.carYear || ''}`.trim() : '';
-      const message = `🚗 تذكير.by JO Cars\n\nمرحباً ${reminder.user.name}!\n\n${reminder.title}\n${carInfo ? `السيارة: ${carInfo}\n` : ''}${reminder.plateNumber ? `رقم اللوحة: ${reminder.plateNumber}\n` : ''}التاريخ: ${reminder.dueDate.toLocaleDateString('ar-JO')}\n\n${reminder.description || ''}\n\nلا تنسَ تسجيل الموعد!`;
+      const message = ` تذكير.by JO Cars\n\nمرحباً ${reminder.user.name}!\n\n${reminder.title}\n${carInfo ? `السيارة: ${carInfo}\n` : ''}${reminder.plateNumber ? `رقم اللوحة: ${reminder.plateNumber}\n` : ''}التاريخ: ${reminder.dueDate.toLocaleDateString('ar-JO')}\n\n${reminder.description || ''}\n\nلا تنسَ تسجيل الموعد!`;
 
       const sent = await sendWhatsApp(phone, message);
       if (sent) {

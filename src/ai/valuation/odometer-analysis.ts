@@ -97,7 +97,7 @@ export function analyzeOdometerIntegrity(params: {
       expectedKmRange: { min: minExpectedKm, max: maxExpectedKm },
       actualAnnualKm,
       status: 'SUSPECTED_ROLLBACK',
-      statusLabelAr: '⚠️ اشتباه تلاعب بالعداد (ممشى غير منطقي)',
+      statusLabelAr: 'اشتباه تلاعب بالعداد (ممشى غير منطقي)',
       riskLevel: isSevereRollbackSuspect ? 'CRITICAL' : 'HIGH',
       anomalyScore,
       verdictAr: 'الممشى المسجل منخفض جداً بشكل غير طبيعي نسبة لعمر السيارة في الأردن.',
@@ -157,7 +157,7 @@ export function analyzeOdometerIntegrity(params: {
       recommendations: [
         'فحص شامل لنظام التعليق، العكوس، وعلبة التروس (الجير)',
         'فحص كفاءة المحرك وضغط السلندرات (Compression Test)',
-        'التفاوض على تخفيض السعر بما لا يقل عن ' + financialImpact.toLocaleString() + ' د.أ لتعويض الاستهلاك المرتفع',
+        'التفاوض على تخفيض السعر بما لا يقل عن ' + financialImpact.toLocaleString() + 'د.أ لتعويض الاستهلاك المرتفع',
       ],
       financialRiskImpactJod: financialImpact,
     };

@@ -129,7 +129,7 @@ export function evaluateBatteryHealthImpact(params: {
     financialAdjustmentJod = isEV ? -950 : isPHEV ? -550 : -350;
   } else {
     healthGrade = 'DEGRADED_CRITICAL';
-    healthGradeLabelAr = '⚠️ متدني (تتطلب تبديل خلايا أو صيانة حتمية)';
+    healthGradeLabelAr = 'متدني (تتطلب تبديل خلايا أو صيانة حتمية)';
     badgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/30';
     financialAdjustmentJod = isEV ? -2200 : isPHEV ? -1100 : -650;
   }

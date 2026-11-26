@@ -354,7 +354,7 @@ export default function CarDetailPage() {
         body: JSON.stringify({
           carId: car.id,
           sellerId,
-          content: `🚗 **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
+          content: ` **طلب حجز موعد اختبار قيادة ومعاينة:**\nمرحباً، أرغب في حجز موعد لتجربة واختبار قيادة السيارة (${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} موديل ${car.year}). يرجى تحديد الوقت والمكان المناسبين للمعاينة. شكراً!`,
         }),
       });
       const data = await res.json();
@@ -835,7 +835,7 @@ export default function CarDetailPage() {
                 ) : (
                   <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
                     <p className="text-xs text-amber-400 font-bold flex items-center justify-center gap-1.5">
-                      <span>⭐</span>
+                      
                       <span>هذا إعلانك المعروض في كارس جو</span>
                     </p>
                     <Link

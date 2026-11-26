@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Send Push Notification + In-App notification directly to dealer's phone
-        const notifTitle = '🎉 مبروك! تم توثيق معرضك ومنحك الشارة الرسمية';
+        const notifTitle = 'مبروك! تم توثيق معرضك ومنحك الشارة الرسمية';
         const notifBody = `وافقت إدارة كارس جو على اعتماد معرضك (${verification.dealerName}) ومنحك الشارة الذهبية الموثقة!`;
 
         await prisma.notification.create({

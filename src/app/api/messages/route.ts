@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Notification — detect image messages (IMG: prefix) or legacy emoji prefix
-    const msgPreview = validation.data.content.startsWith('IMG:') || validation.data.content.startsWith('📷')
+    const msgPreview = validation.data.content.startsWith('IMG:') || validation.data.content.startsWith('')
       ? 'صورة مرفقة'
       : validation.data.content.slice(0, 100);
 

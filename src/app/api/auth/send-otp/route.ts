@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     setOtp(formattedPhone, code);
 
-    const message = `🔒 *رمز التحقق الخاص بك في منصة JO Cars*\n\nالرمز: *${code}*\n\nينتهي خلال 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
+    const message = ` *رمز التحقق الخاص بك في منصة JO Cars*\n\nالرمز: *${code}*\n\nينتهي خلال 5 دقائق. لا تشارك هذا الرمز مع أي شخص.`;
     await sendWhatsApp(formattedPhone, message);
 
     // Never log the OTP code itself — server logs must not contain secrets

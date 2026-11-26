@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     if (!body.nameAr?.trim()) return errorResponse('الاسم مطلوب', 400);
-    const badge = await prisma.badge.create({ data: { nameAr: body.nameAr, nameEn: body.nameEn || null, icon: body.icon || '🏆', color: body.color || '#f59e0b' } });
+    const badge = await prisma.badge.create({ data: { nameAr: body.nameAr, nameEn: body.nameEn || null, icon: body.icon || '', color: body.color || '#f59e0b' } });
     return successResponse(badge);
   } catch { return errorResponse('فشل إنشاء الشارة', 500); }
 }

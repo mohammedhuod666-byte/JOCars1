@@ -59,7 +59,7 @@ interface ForumTopic {
   posts: ForumPost[];
 }
 
-const EMOJI_LIST = ['👍', '❤️', '🔥', '👏', '😂', '🚗', '🔧', '⚡', '💡', '🛠️', '✅', '🙏'];
+const EMOJI_LIST = ['', '', '', '', '', '', '', '', '', '', '', ''];
 
 export default function TopicDetailPage() {
   const params = useParams();
@@ -419,7 +419,7 @@ export default function TopicDetailPage() {
       });
       const d = await res.json().catch(() => null);
       if (res.ok && d?.success) {
-        toast.success(d.data.isPinned ? 'تم تثبيت الرد في بداية الموضوع 📌' : 'تم إلغاء تثبيت الرد');
+        toast.success(d.data.isPinned ? 'تم تثبيت الرد في بداية الموضوع ' : 'تم إلغاء تثبيت الرد');
         loadTopic(true);
       } else {
         toast.error(d?.error || 'فشل تحديث التثبيت');

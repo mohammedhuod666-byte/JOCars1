@@ -46,39 +46,39 @@ const carFlowStore = new Map<string, CarFlowState>();
 
 const CAR_FLOW_QUESTIONS: Record<CarFlowStep, { text: string; hint?: string }> = {
   brand: {
-    text: '🚗 ممتاز! يلا نبدأ نسوي لك إعلان.\n\n**ما هي ماركة السيارة؟**\n\nأمثلة: تويوتا، هوندا، بي ام دبليو، مرسيدس، كيا، هيونداي',
+    text: 'ممتاز! يلا نبدأ نسوي لك إعلان.\n\n**ما هي ماركة السيارة؟**\n\nأمثلة: تويوتا، هوندا، بي ام دبليو، مرسيدس، كيا، هيونداي',
     hint: 'ماركة السيارة (مثل: Toyota, Honda, BMW)',
   },
   model: {
-    text: '✅ حلو!\n\n**ما هو موديل السيارة؟**\n\nأمثلة: كامري، كورولا، سنترا، X5، C200',
+    text: 'حلو!\n\n**ما هو موديل السيارة؟**\n\nأمثلة: كامري، كورولا، سنترا، X5، C200',
     hint: 'موديل السيارة (مثل: Camry, Corolla, X5)',
   },
   year_km: {
-    text: '👍 تمام!\n\n**ما هي سنة الصنع؟**\n\n(مثل: 2020)',
+    text: 'تمام!\n\n**ما هي سنة الصنع؟**\n\n(مثل: 2020)',
     hint: 'سنة الصنع (مثل: 2020)',
   },
   fuel_trans: {
-    text: '⛽ **ما نوع الوقود؟**\n\n1️⃣ بنزين\n2️⃣ ديزل\n3️⃣ هايبرد\n4️⃣ كهربائي\n5️⃣ PHEV',
+    text: ' **ما نوع الوقود؟**\n\n1⃣ بنزين\n2⃣ ديزل\n3⃣ هايبرد\n4⃣ كهربائي\n5⃣ PHEV',
     hint: 'اختر رقم: 1=بنزين, 2=ديزل, 3=هايبرد, 4=كهربائي, 5=PHEV',
   },
   color_drivetrain: {
-    text: '🎨 **ما لون السيارة؟**',
+    text: ' **ما لون السيارة؟**',
     hint: 'لون السيارة (مثل: أبيض، أسود، فضي)',
   },
   condition_price: {
-    text: '⭐ **ما حالة السيارة؟**\n\n1️⃣ ممتازة\n2️⃣ جيدة جداً\n3️⃣ جيدة\n4️⃣ مقبولة\n5️⃣ تحتاج صيانة\n6️⃣ تحتاج فحص',
+    text: ' **ما حالة السيارة؟**\n\n1⃣ ممتازة\n2⃣ جيدة جداً\n3⃣ جيدة\n4⃣ مقبولة\n5⃣ تحتاج صيانة\n6⃣ تحتاج فحص',
     hint: 'حالة السيارة (1-6)',
   },
   city_desc: {
-    text: '🏙️ **ما هي المحافظة؟**\n\nأمثلة: عمان، الزرقاء، إربد، السلط، العقبة',
+    text: ' **ما هي المحافظة؟**\n\nأمثلة: عمان، الزرقاء، إربد، السلط، العقبة',
     hint: 'اسم المحافظة',
   },
   phone: {
-    text: '📞 **ما هو رقم الهاتف للتواصل؟**\n\n(رقم أردني يبدأ بـ 07)',
+    text: ' **ما هو رقم الهاتف للتواصل؟**\n\n(رقم أردني يبدأ بـ 07)',
     hint: 'رقم الهاتف (مثل: 0791234567)',
   },
   images: {
-    text: '📸 **أرسل صور السيارة** (اختياري)\n\nارسل الصور في الرسالة التالية، أو اكتب "تخطي" للاستمرار بدون صور.\n\n💡 يمكنك إرسال صورة واحدة أو أكثر.',
+    text: ' **أرسل صور السيارة** (اختياري)\n\nارسل الصور في الرسالة التالية، أو اكتب "تخطي"للاستمرار بدون صور.\n\n يمكنك إرسال صورة واحدة أو أكثر.',
     hint: 'صور السيارة (base64) أو "تخطي"',
   },
   done: {
@@ -97,25 +97,25 @@ function getCarFlowNextStep(current: CarFlowStep): CarFlowStep | null {
 }
 
 function buildCarFlowSummary(data: Record<string, string>): string {
-  const fuelMap: Record<string, string> = { '1': 'بنزين ⛽', '2': 'ديزل 🛢️', '3': 'هايبرد 🔋', '4': 'كهربائية ⚡', '5': 'PHEV' };
-  const condMap: Record<string, string> = { '1': 'ممتازة ✨', '2': 'جيدة جداً 👍', '3': 'جيدة 👌', '4': 'مقبولة 🤏', '5': 'تحتاج صيانة 🔧', '6': 'تحتاج فحص ⚠️' };
+  const fuelMap: Record<string, string> = { '1': 'بنزين ', '2': 'ديزل ', '3': 'هايبرد ', '4': 'كهربائية ', '5': 'PHEV' };
+  const condMap: Record<string, string> = { '1': 'ممتازة ', '2': 'جيدة جداً ', '3': 'جيدة ', '4': 'مقبولة ', '5': 'تحتاج صيانة ', '6': 'تحتاج فحص ' };
 
-  return `📋 **ملخص الإعلان:**\n\n` +
-    `🚗 الماركة: ${data.brand || ''}\n` +
-    `📦 الموديل: ${data.model || ''}\n` +
-    `📅 السنة: ${data.year || ''}\n` +
-    `🛣️ الممشى: ${data.kilometers || ''} كم\n` +
-    `⛽ الوقود: ${fuelMap[data.fuelType] || data.fuelType || ''}\n` +
-    `🔄 الناقل: ${data.transmission || ''}\n` +
-    `🎨 اللون: ${data.color || ''}\n` +
-    `🏗️ الدفع: ${data.drivetrain || ''}\n` +
-    `⭐ الحالة: ${condMap[data.condition] || data.condition || ''}\n` +
-    `💰 السعر: ${data.price || ''} د.أ\n` +
-    `🏙️ المحافظة: ${data.city || ''}\n` +
-    `📝 الوصف: ${data.description || ''}\n` +
-    `📞 الهاتف: ${data.phone || ''}\n` +
-    (data.whatsapp ? `💬 واتساب: ${data.whatsapp}\n` : '') +
-    `\n💡 **اكتب "تأكيد" لإنشاء الإعلان، أو "إلغاء" للإلغاء.**`;
+  return ` **ملخص الإعلان:**\n\n` +
+    ` الماركة: ${data.brand || ''}\n` +
+    ` الموديل: ${data.model || ''}\n` +
+    ` السنة: ${data.year || ''}\n` +
+    ` الممشى: ${data.kilometers || ''} كم\n` +
+    ` الوقود: ${fuelMap[data.fuelType] || data.fuelType || ''}\n` +
+    ` الناقل: ${data.transmission || ''}\n` +
+    ` اللون: ${data.color || ''}\n` +
+    ` الدفع: ${data.drivetrain || ''}\n` +
+    ` الحالة: ${condMap[data.condition] || data.condition || ''}\n` +
+    ` السعر: ${data.price || ''} د.أ\n` +
+    ` المحافظة: ${data.city || ''}\n` +
+    ` الوصف: ${data.description || ''}\n` +
+    ` الهاتف: ${data.phone || ''}\n` +
+    (data.whatsapp ? ` واتساب: ${data.whatsapp}\n` : '') +
+    `\n **اكتب "تأكيد"لإنشاء الإعلان، أو "إلغاء"للإلغاء.**`;
 }
 
 // ── Intent Detection ──
@@ -290,7 +290,7 @@ async function fetchCarByRefCode(refCode: string) {
       brand: { select: { nameAr: true, nameEn: true } },
       model: { select: { nameAr: true, nameEn: true } },
       city: { select: { nameAr: true } },
-      images: { orderBy: { order: 'asc' as const }, select: { url: true, order: true }, take: 5 },
+      images: { orderBy: { order: 'asc'as const }, select: { url: true, order: true }, take: 5 },
       user: { select: { name: true, image: true, _count: { select: { cars: true } } } },
       carReviews: { select: { rating: true, comment: true }, take: 3 },
     },
@@ -339,13 +339,13 @@ async function fetchMarketListings(query: string) {
 // ── Build Car Report ──
 function buildCarReport(car: any, similarCars: any[], marketListings: any[], marketStats?: { avg: number; min: number; max: number; count: number } | null): string {
   const conditionMap: Record<string, string> = {
-    EXCELLENT: 'ممتازة ✨', VERY_GOOD: 'جيدة جداً 👍', GOOD: 'جيدة 👌', FAIR: 'مقبولة 🤏',
+    EXCELLENT: 'ممتازة ', VERY_GOOD: 'جيدة جداً ', GOOD: 'جيدة ', FAIR: 'مقبولة ',
   };
   const fuelMap: Record<string, string> = {
-    PETROL: 'بنزين ⛽', DIESEL: 'ديزل 🛢️', HYBRID: 'هايبرد 🔋', ELECTRIC: 'كهربائية ⚡',
+    PETROL: 'بنزين ', DIESEL: 'ديزل ', HYBRID: 'هايبرد ', ELECTRIC: 'كهربائية ',
   };
   const transMap: Record<string, string> = {
-    AUTOMATIC: 'أوتوماتيك 🔄', MANUAL: 'يدوي ✋',
+    AUTOMATIC: 'أوتوماتيك ', MANUAL: 'يدوي ',
   };
 
   // ── Listing age analysis ──
@@ -356,16 +356,16 @@ function buildCarReport(car: any, similarCars: any[], marketListings: any[], mar
   if (listingAge !== null) {
     if (listingAge > 60) {
       listingAgeAnalysis = 'الإعلان قديم جداً — البائع يائس من البيع ويقبل أي عرض';
-      negotiationLeverage = '💰 **نقطة تفاوض قوية:** الإعلان منشور من **' + listingAge + ' يوم** — البائع ينتظر طول الوقت، يعني ممكن ينزل السعر بشكل كبير';
+      negotiationLeverage = ' **نقطة تفاوض قوية:** الإعلان منشور من **' + listingAge + 'يوم** — البائع ينتظر طول الوقت، يعني ممكن ينزل السعر بشكل كبير';
     } else if (listingAge > 30) {
       listingAgeAnalysis = 'الإعلان قديم — السيارة ما انبععت من فترة، البائع ممكن يقبل تفاوض';
-      negotiationLeverage = '💰 **نقطة تفاوض:** الإعلان عمره **' + listingAge + ' يوم** — لو السيارة كانت مناسبة للسوق، كان انبععت من زمان';
+      negotiationLeverage = ' **نقطة تفاوض:** الإعلان عمره **' + listingAge + 'يوم** — لو السيارة كانت مناسبة للسوق، كان انبععت من زمان';
     } else if (listingAge > 14) {
       listingAgeAnalysis = 'الإعلان موجود منذ أسبوعين — لا توجد استعجال';
-      negotiationLeverage = '💡 الإعلان عمره **' + listingAge + ' يوم** — يمكن تبدأ تفاوض بسيط';
+      negotiationLeverage = 'الإعلان عمره **' + listingAge + 'يوم** — يمكن تبدأ تفاوض بسيط';
     } else {
       listingAgeAnalysis = 'الإعلان جديد — البائع ينتظر عروض';
-      negotiationLeverage = '⚠️ الإعلان جديد (**' + listingAge + ' يوم**) — البائع ما بحتاج يبيع بسرعة';
+      negotiationLeverage = 'الإعلان جديد (**' + listingAge + 'يوم**) — البائع ما بحتاج يبيع بسرعة';
     }
   }
 
@@ -388,51 +388,51 @@ function buildCarReport(car: any, similarCars: any[], marketListings: any[], mar
   let priceDiffPercent = 0;
   if (avgPrice > 0) {
     priceDiffPercent = Math.round(((car.price - avgPrice) / avgPrice) * 100);
-    if (priceDiffPercent < -15) { priceVerdict = 'ممتاز — أقل بكثير من السوق'; priceVerdictEmoji = '🟢🟢'; }
-    else if (priceDiffPercent < -10) { priceVerdict = 'منخفض — المتوسط'; priceVerdictEmoji = '🟢'; }
-    else if (priceDiffPercent > 15) { priceVerdict = 'مرتفع جداً — يُنصح بالتفاوض أو التخلي'; priceVerdictEmoji = '🔴🔴'; }
-    else if (priceDiffPercent > 10) { priceVerdict = 'مرتفع — يُنصح بالتفاوض'; priceVerdictEmoji = '🔴'; }
-    else { priceVerdict = 'عادل — مناسب للسوق'; priceVerdictEmoji = '🟡'; }
+    if (priceDiffPercent < -15) { priceVerdict = 'ممتاز — أقل بكثير من السوق'; priceVerdictEmoji = ''; }
+    else if (priceDiffPercent < -10) { priceVerdict = 'منخفض — المتوسط'; priceVerdictEmoji = ''; }
+    else if (priceDiffPercent > 15) { priceVerdict = 'مرتفع جداً — يُنصح بالتفاوض أو التخلي'; priceVerdictEmoji = ''; }
+    else if (priceDiffPercent > 10) { priceVerdict = 'مرتفع — يُنصح بالتفاوض'; priceVerdictEmoji = ''; }
+    else { priceVerdict = 'عادل — مناسب للسوق'; priceVerdictEmoji = ''; }
   }
 
   const aiScore = car.aiScore || null;
   let scoreEmoji = '';
   if (aiScore) {
-    if (aiScore >= 80) scoreEmoji = '🟢';
-    else if (aiScore >= 60) scoreEmoji = '🟡';
-    else scoreEmoji = '🔴';
+    if (aiScore >= 80) scoreEmoji = '';
+    else if (aiScore >= 60) scoreEmoji = '';
+    else scoreEmoji = '';
   }
 
   const features: string[] = [];
-  if (car.isNegotiable) features.push('💰 قابل للتفاوض');
-  if (car.hasWarranty) features.push('🛡️ يوجد ضمان');
-  if (car.hasServiceHistory) features.push('📄 تاريخ صيانة');
-  if (car.isPaintOriginal) features.push('🎨 طلاء أصلي');
-  if (!car.isDamaged) features.push('✅ بدون أضرار');
+  if (car.isNegotiable) features.push('قابل للتفاوض');
+  if (car.hasWarranty) features.push('يوجد ضمان');
+  if (car.hasServiceHistory) features.push('تاريخ صيانة');
+  if (car.isPaintOriginal) features.push('طلاء أصلي');
+  if (!car.isDamaged) features.push('بدون أضرار');
 
   // ── Build the report ──
-  let report = `🚗 **تقرير سيارة كامل: ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**
+  let report = ` **تقرير سيارة كامل: ${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 **المواصفات:**
-- 💵 السعر: ${car.price.toLocaleString()} د.أ ${car.isNegotiable ? '(قابل للتفاوض)' : ''}
-- 📅 السنة: ${car.year}
-- 🛣️ الممشى: ${car.kilometers.toLocaleString()} كم
-- ⛽ الوقود: ${fuelMap[car.fuelType] || car.fuelType}
-- 🔄 الناقل: ${transMap[car.transmission] || car.transmission}
-- ⭐ الحالة: ${conditionMap[car.condition] || car.condition}
-- 🏙️ المدينة: ${car.city?.nameAr || ''}
-${car.ownerCount ? `- 👤 عدد المالكين: ${car.ownerCount}` : ''}
-${aiScore ? `- 📊 تقييم AI: ${aiScore}/100 ${scoreEmoji}` : ''}
+ **المواصفات:**
+-  السعر: ${car.price.toLocaleString()} د.أ ${car.isNegotiable ? '(قابل للتفاوض)' : ''}
+-  السنة: ${car.year}
+-  الممشى: ${car.kilometers.toLocaleString()} كم
+-  الوقود: ${fuelMap[car.fuelType] || car.fuelType}
+-  الناقل: ${transMap[car.transmission] || car.transmission}
+-  الحالة: ${conditionMap[car.condition] || car.condition}
+-  المدينة: ${car.city?.nameAr || ''}
+${car.ownerCount ? `-  عدد المالكين: ${car.ownerCount}` : ''}
+${aiScore ? `-  تقييم AI: ${aiScore}/100 ${scoreEmoji}` : ''}
 
-${features.length > 0 ? `✨ **المميزات:**\n${features.join('\n')}` : ''}
+${features.length > 0 ? ` **المميزات:**\n${features.join('\n')}` : ''}
 
-${listingAge !== null ? `📅 **تحليل الإعلان:**
+${listingAge !== null ? ` **تحليل الإعلان:**
 - عمر الإعلان: **${listingAge} يوم**
 - التحليل: ${listingAgeAnalysis}
 ${negotiationLeverage}` : ''}
 
-📊 **تحليل السعر بالبيانات الحقيقية:**
+ **تحليل السعر بالبيانات الحقيقية:**
 ${avgPrice > 0 ? `- متوسط السوق: **${avgPrice.toLocaleString()} د.أ**
 - أدنى سعر بالسوق: ${minPrice.toLocaleString()} د.أ
 - أعلى سعر بالسوق: ${maxPrice.toLocaleString()} د.أ
@@ -441,9 +441,9 @@ ${avgPrice > 0 ? `- متوسط السوق: **${avgPrice.toLocaleString()} د.أ*
 - الفرق عن المتوسط: **${priceDiffPercent > 0 ? '+' : ''}${priceDiffPercent}%**
 ${marketStats ? `- مصدر البيانات: سوق السيارات الأردني المحلي + منصة كارس جو` : '- مصدر البيانات: منصة كارس جو فقط (بيانات الإعلانات المسجلة)'}` : '- لا توجد بيانات كافية لتحليل السعر'}
 
-${similarCars.length > 0 ? `\n🔄 **سيارات مشابهة في الموقع:**\n${similarCars.map((s, i) => `${i + 1}. ${s.brand?.nameAr || ''} ${s.model?.nameAr || ''} ${s.year} — ${s.price?.toLocaleString() || 'غير محدد'} د.أ | ${s.city?.nameAr || ''}`).join('\n')}` : ''}
+${similarCars.length > 0 ? `\n **سيارات مشابهة في الموقع:**\n${similarCars.map((s, i) => `${i + 1}. ${s.brand?.nameAr || ''} ${s.model?.nameAr || ''} ${s.year} — ${s.price?.toLocaleString() || 'غير محدد'} د.أ | ${s.city?.nameAr || ''}`).join('\n')}` : ''}
 
-💡 **نصيحة:** انسخ الرمز المرجعي **${car.refCode || 'N/A'}** واحتفظ به للرجوع السريع.`;
+ **نصيحة:** انسخ الرمز المرجعي **${car.refCode || 'N/A'}** واحتفظ به للرجوع السريع.`;
 
   return report;
 }
@@ -535,7 +535,7 @@ ${nlSection}
 معلومات المستخدم:
 ${userName ? `- اسم المستخدم: ${userName}` : '- المستخدم غير مسجل الدخول'}
 ${userRole ? `- دور المستخدم: ${userRole}` : ''}
-- الميزانية: ${budget ? budget.toLocaleString() + ' د.أ' : 'غير محددة'}
+- الميزانية: ${budget ? budget.toLocaleString() + 'د.أ' : 'غير محددة'}
 - المدينة: ${city || 'غير محددة'}
 - الماركة المفضلة: ${brand ? BRAND_PRICE_RANGES[brand]?.nameAr || brand : 'غير محددة'}
 - النية المكتشفة: ${intent}
@@ -557,11 +557,11 @@ ${conversationContext}
 10. **شرح الموقع** — إذا سأل المستخدم عن أي ميزة أو صفحة، أجب بشكل شامل مع روابط مباشرة.
 11. **أمثلة عملية** — عند شرح أي ميزة، أعطِ مثالاً عملياً كيف يستخدمها.
 12. **البحث باللغة الطبيعية** — إذا فهمت البحث من كلام المستخدم الطبيعي، استخدم النتائج المفلترة واعرضها بوضوح.
-13. **البحث في سوق السيارات الأردني** — **أنت تبحث في سوق السيارات الأردني العام والمنصات المحلية** — البيانات تأتي تلقائياً. لا تقل "لا أستطيع البحث" أو "لا أملك إمكانية البحث الخارجي". إذا لم تتوفر البيانات، قل: "بيانات سوق السيارات المحلي غير متوفرة حالياً".
+13. **البحث في سوق السيارات الأردني** — **أنت تبحث في سوق السيارات الأردني العام والمنصات المحلية** — البيانات تأتي تلقائياً. لا تقل "لا أستطيع البحث"أو "لا أملك إمكانية البحث الخارجي". إذا لم تتوفر البيانات، قل: "بيانات سوق السيارات المحلي غير متوفرة حالياً".
 16. **تستطيع البحث مواقع اردنية واعلانات لسيارات في الفيس بوك او اي موقع يعرض سيارات من اجل ان يكون لديك اعلان كثيرة من سيارات وتقدر تفيد المستخدم قدر الامكان ابحث قارن عبر الانترنت بين السيارات من اجل ان تكون  لديك معلومات وسيارات كثيرة ليحصل المستخدم اكبر قدر ممكن من الاسفادة**
 17. **إذا ما لقيت سيارة نفس موديل ونوع سياة يلي طلبها مستخدم لكن ما قدرت توجد بنفس عدد كيلومترات ومواصفات عامة لسيارة تقدر تعطي مستخدم متوسط سعر سيارة العام في السوق بغضي النظر عن كم ماشيه كيلوميترات والمواصفات العامة الاخرى**
-14. **اسم المستخدم — مطلوب في كل رد** — **إلزامي**: إذا كان اسم المستخدم معروضاً في معلومات المستخدم، **يجب** استخدام اسمه في كل رد. مثال: "أهلاً [الاسم]!" أو "حسناً [الاسم]، إليك الإجابة...". لا تكرر الاسم أكثر من مرة واحدة في كل رد.
-15. **تحية المدير — خاصة ومحترمة** — إذا كان دور المستخدم ADMIN: ابدأ الرد بـ "أهلاً وسهلاً بلمدير الموقع [الاسم]!" أو "مرحباً بك يا مدير". تعامل مع المدير باحترام وراحة أكبر وقدم معلومات إضافية.`;
+14. **اسم المستخدم — مطلوب في كل رد** — **إلزامي**: إذا كان اسم المستخدم معروضاً في معلومات المستخدم، **يجب** استخدام اسمه في كل رد. مثال: "أهلاً [الاسم]!"أو "حسناً [الاسم]، إليك الإجابة...". لا تكرر الاسم أكثر من مرة واحدة في كل رد.
+15. **تحية المدير — خاصة ومحترمة** — إذا كان دور المستخدم ADMIN: ابدأ الرد بـ "أهلاً وسهلاً بلمدير الموقع [الاسم]!"أو "مرحباً بك يا مدير". تعامل مع المدير باحترام وراحة أكبر وقدم معلومات إضافية.`;
 }
 
 // ── SSE POST Handler ──
@@ -632,7 +632,7 @@ export async function POST(request: NextRequest) {
 
       if (isCancellation) {
         carFlowStore.delete(sid);
-        const cancelMsg = '❌ تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت، كيف أقدر أساعدك اليوم؟';
+        const cancelMsg = 'تم إلغاء إنشاء الإعلان. يمكنك البدء مرة أخرى في أي وقت، كيف أقدر أساعدك اليوم؟';
         conversation.push({ role: 'assistant', content: cancelMsg });
         conversationStore.set(sid, conversation);
         return Response.json({
@@ -669,7 +669,7 @@ export async function POST(request: NextRequest) {
         if (!kmMatch && yearMatch) {
           // Stay on same step but update the question
           const encoder = new TextEncoder();
-          const kmMsg = '🛣️ **كم ممشى السيارة بالكيلومتر؟**\n\n(مثل: 90000)';
+          const kmMsg = ' **كم ممشى السيارة بالكيلومتر؟**\n\n(مثل: 90000)';
           conversation.push({ role: 'assistant', content: kmMsg });
           conversationStore.set(sid, conversation);
           const stream = new ReadableStream({
@@ -698,7 +698,7 @@ export async function POST(request: NextRequest) {
         // If only fuel given, ask for transmission next
         if (!transMatch && !manualMatch && fuelMatch) {
           const encoder = new TextEncoder();
-          const transMsg = '🔄 **ما نوع الناقل (الجير)؟**\n\n1️⃣ يدوي\n2️⃣ أوتوماتيك\n3️⃣ CVT\n4️⃣ DCT\n5️⃣ نصف أوتوماتيك';
+          const transMsg = ' **ما نوع الناقل (الجير)؟**\n\n1⃣ يدوي\n2⃣ أوتوماتيك\n3⃣ CVT\n4⃣ DCT\n5⃣ نصف أوتوماتيك';
           conversation.push({ role: 'assistant', content: transMsg });
           conversationStore.set(sid, conversation);
           const stream = new ReadableStream({
@@ -740,7 +740,7 @@ export async function POST(request: NextRequest) {
         if (!priceMatch || parseInt(priceMatch[1].replace(/,/g, '')) <= 100) {
           // Ask for price
           const encoder = new TextEncoder();
-          const priceMsg = '💰 **كم سعر البيع بالدينار الأردني؟**\n\n(مثل: 15000)';
+          const priceMsg = ' **كم سعر البيع بالدينار الأردني؟**\n\n(مثل: 15000)';
           conversation.push({ role: 'assistant', content: priceMsg });
           conversationStore.set(sid, conversation);
           const stream = new ReadableStream({
@@ -824,7 +824,7 @@ export async function POST(request: NextRequest) {
     if (intent === 'ref_code' && refCode) {
       const car = await fetchCarByRefCode(refCode);
       if (!car) {
-        const notFoundMsg = `لم أجد سيارة بالرمز المرجعي **${refCode}** في الموقع.\n\n💡 تأكد من صحة الرمز أو جرّب البحث بالاسم مثل: "كامري 2020" أو "toyota"`;
+        const notFoundMsg = `لم أجد سيارة بالرمز المرجعي **${refCode}** في الموقع.\n\n تأكد من صحة الرمز أو جرّب البحث بالاسم مثل: "كامري 2020"أو "toyota"`;
         conversation.push({ role: 'assistant', content: notFoundMsg });
         conversationStore.set(sid, conversation);
         const mappedCar = null;
@@ -876,7 +876,7 @@ export async function POST(request: NextRequest) {
       const targetPage = detectTargetPage(normalizedQuery);
       if (targetPage) {
         if (targetPage.requiresAuth && !userName) {
-          const authMsg = `🔒 هذه الصفحة "${targetPage.labelAr}" تتطلب تسجيل دخول.\n\nسأنقلك الآن لصفحة تسجيل الدخول...`;
+          const authMsg = ` هذه الصفحة "${targetPage.labelAr}"تتطلب تسجيل دخول.\n\nسأنقلك الآن لصفحة تسجيل الدخول...`;
           conversation.push({ role: 'assistant', content: authMsg });
           conversationStore.set(sid, conversation);
           const encoder = new TextEncoder();
@@ -892,7 +892,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (targetPage.requiresAdmin && userRole !== 'ADMIN') {
-          const adminMsg = `⛔ صفحة "${targetPage.labelAr}" متاحة فقط لمدير الموقع.`;
+          const adminMsg = ` صفحة "${targetPage.labelAr}"متاحة فقط لمدير الموقع.`;
           conversation.push({ role: 'assistant', content: adminMsg });
           conversationStore.set(sid, conversation);
           const encoder = new TextEncoder();
@@ -907,7 +907,7 @@ export async function POST(request: NextRequest) {
           return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
         }
 
-        const successMsg = `✅ سأنقلك الآن إلى صفحة "${targetPage.labelAr}"...`;
+        const successMsg = ` سأنقلك الآن إلى صفحة "${targetPage.labelAr}"...`;
         conversation.push({ role: 'assistant', content: successMsg });
         conversationStore.set(sid, conversation);
         const encoder = new TextEncoder();
@@ -922,7 +922,7 @@ export async function POST(request: NextRequest) {
         return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
       }
 
-      const fallbackNavMsg = `🤔 أي صفحة تريد أن أخذك إليها؟\n\nأمثلة:\n- المفضلة\n- إعلاناتي\n- الجراج\n- ورش العمل\n- قطع الغيار\n- المنتدى\n- الملف الشخصي\n\nاكتب اسم الصفحة وسأنقلك لها مباشرة!`;
+      const fallbackNavMsg = ` أي صفحة تريد أن أخذك إليها؟\n\nأمثلة:\n- المفضلة\n- إعلاناتي\n- الجراج\n- ورش العمل\n- قطع الغيار\n- المنتدى\n- الملف الشخصي\n\nاكتب اسم الصفحة وسأنقلك لها مباشرة!`;
       conversation.push({ role: 'assistant', content: fallbackNavMsg });
       conversationStore.set(sid, conversation);
       const encoder = new TextEncoder();
@@ -942,7 +942,7 @@ export async function POST(request: NextRequest) {
       // Check if user is logged in — accept userName OR clientToken
       const isLoggedIn = userName || clientToken;
       if (!isLoggedIn) {
-        const authMsg = '🔒 لإنشاء إعلان سيارة، تحتاج تسجيل دخول أولاً.\n\nسأنقلك الآن لصفحة تسجيل الدخول...';
+        const authMsg = 'لإنشاء إعلان سيارة، تحتاج تسجيل دخول أولاً.\n\nسأنقلك الآن لصفحة تسجيل الدخول...';
         conversation.push({ role: 'assistant', content: authMsg });
         conversationStore.set(sid, conversation);
         const encoder = new TextEncoder();
@@ -1021,7 +1021,7 @@ export async function POST(request: NextRequest) {
 
     const marketContext = marketListings.length > 0
       ? marketListings.slice(0, 8).map((l: any, i: number) =>
-        `${i + 1}. ${l.title} — ${l.price?.toLocaleString() || 'غير محدد'} د.أ | ${l.year || ''} | ${l.km ? l.km.toLocaleString() + ' كم' : ''} | ${l.city || 'الاردن'}`
+        `${i + 1}. ${l.title} — ${l.price?.toLocaleString() || 'غير محدد'} د.أ | ${l.year || ''} | ${l.km ? l.km.toLocaleString() + 'كم' : ''} | ${l.city || 'الاردن'}`
       ).join('\n') : 'لا تتوفر بيانات من السوق الخارجي حالياً.';
 
     const marketPrices = marketListings.filter((l: any) => l.price > 0).map((l: any) => l.price);
@@ -1132,18 +1132,18 @@ export async function POST(request: NextRequest) {
           if (intent === 'car_search' && cars.length > 0) {
             fallback = `وجدت ${cars.length} سيارة مناسبة لك:\n\n` +
               cars.slice(0, 6).map((car: any, i: number) =>
-                `${i + 1}. **${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**\n   💵 ${car.price.toLocaleString()} د.أ | 📍 ${car.city?.nameAr || ''} | 🏷️ ${car.refCode || ''}`
+                `${i + 1}. **${car.brand?.nameAr || ''} ${car.model?.nameAr || ''} ${car.year}**\n    ${car.price.toLocaleString()} د.أ |  ${car.city?.nameAr || ''} |  ${car.refCode || ''}`
               ).join('\n\n') +
               `\n\nانسخ **رقم المرجع (refCode)** من أي سيارة وضعه في البحث للوصول السريع.`;
           } else if (intent === 'workshop' && workshops.length > 0) {
             fallback = `وجدت ${workshops.length} ورشة:\n\n` +
               workshops.slice(0, 5).map((w: any, i: number) =>
-                `${i + 1}. **${w.name}** — ${w.address || ''} | ⭐ ${w.rating || 0}/5 | ${w.services?.map((s: any) => s.category).filter(Boolean).join('، ') || 'متنوعة'}`
+                `${i + 1}. **${w.name}** — ${w.address || ''} |  ${w.rating || 0}/5 | ${w.services?.map((s: any) => s.category).filter(Boolean).join('، ') || 'متنوعة'}`
               ).join('\n\n');
           } else if (intent === 'parts' && parts.length > 0) {
             fallback = `وجدت ${parts.length} قطعة غيار:\n\n` +
               parts.slice(0, 5).map((p: any, i: number) =>
-                `${i + 1}. **${p.title}** — ${p.brand?.nameAr || ''} | 💵 ${p.price?.toLocaleString() || 'غير محدد'} د.أ | 📍 ${p.city?.nameAr || ''}`
+                `${i + 1}. **${p.title}** — ${p.brand?.nameAr || ''} |  ${p.price?.toLocaleString() || 'غير محدد'} د.أ |  ${p.city?.nameAr || ''}`
               ).join('\n\n');
           } else {
             fallback = 'عذراً، ما لقيت نتائج متطابقة مع طلبك. جرب تغيير الكلمات أو اسأل عن شيء آخر.';

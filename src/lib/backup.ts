@@ -25,7 +25,7 @@ export function backupEncryptionStatus(): { enabled: boolean; hint: string } {
     enabled,
     hint: enabled
       ? 'مفعّل — المرفقات مشفرة بـ AES-256-GCM'
-      : 'غير مفعّل — ولّد مفتاحاً بـ: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))" وضعه في BACKUP_ENCRYPTION_KEY',
+      : 'غير مفعّل — ولّد مفتاحاً بـ: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"وضعه في BACKUP_ENCRYPTION_KEY',
   };
 }
 
@@ -171,14 +171,14 @@ export async function runBackup(opts: { type: 'AUTO' | 'MANUAL'; createdBy?: str
         await transporter.sendMail({
           from: `"JO Cars Backup" <${cfg.auth.user}>`,
           to: BACKUP_RECIPIENT,
-          subject: `📦 نسخة احتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'}) - ${name}`,
+          subject: ` نسخة احتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'}) - ${name}`,
           html: `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
             <div style="background:linear-gradient(135deg,#059669,#0d9488);padding:20px;text-align:center;border-radius:12px 12px 0 0">
               <h1 style="color:white;margin:0;font-size:24px">JO Cars</h1>
               <p style="color:rgba(255,255,255,0.85);margin:5px 0 0">نسخة احتياطية ${opts.type === 'AUTO' ? 'تلقائية (كل 5 ساعات)' : 'يدوية'}</p>
             </div>
             <div style="padding:20px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;background:#f9fafb">
-              <p style="font-size:16px;color:#374151">تم إنشاء نسخة احتياطية لقاعدة البيانات بنجاح ✅</p>
+              <p style="font-size:16px;color:#374151">تم إنشاء نسخة احتياطية لقاعدة البيانات بنجاح </p>
               <table style="width:100%;border-collapse:collapse;margin:15px 0">
                 <tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:14px">اسم الملف</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;font-weight:bold" dir="ltr">${name}</td></tr>
                 <tr><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:14px">الحجم</td><td style="padding:10px;border-bottom:1px solid #e5e7eb;color:#111827;font-size:14px;font-weight:bold">${formatSize(size)}</td></tr>
@@ -186,8 +186,8 @@ export async function runBackup(opts: { type: 'AUTO' | 'MANUAL'; createdBy?: str
                 <tr><td style="padding:10px;color:#6b7280;font-size:14px">الوقت (عمّان)</td><td style="padding:10px;color:#111827;font-size:14px;font-weight:bold">${formatBackupTime(now)}</td></tr>
               </table>
               ${attach
-                ? `<p style="font-size:14px;color:#374151">📎 ملف النسخة مرفق مع هذه الرسالة${attachName.endsWith('.enc') ? ' (مشفر AES-256 — يحتاج مفتاح السيرفر لفك التشفير)' : ' (غير مشفر — فعّل BACKUP_ENCRYPTION_KEY)'}</p>`
-                : '<p style="font-size:14px;color:#b45309">⚠️ حجم الملف يتجاوز حد المرفقات — النسخة محفوظة على السيرفر ويمكن تنزيلها من لوحة الإدارة</p>'}
+                ? `<p style="font-size:14px;color:#374151"> ملف النسخة مرفق مع هذه الرسالة${attachName.endsWith('.enc') ? ' (مشفر AES-256 — يحتاج مفتاح السيرفر لفك التشفير)' : ' (غير مشفر — فعّل BACKUP_ENCRYPTION_KEY)'}</p>`
+                : '<p style="font-size:14px;color:#b45309"> حجم الملف يتجاوز حد المرفقات — النسخة محفوظة على السيرفر ويمكن تنزيلها من لوحة الإدارة</p>'}
             </div></div>`,
           attachments: attach ? [{ filename: attachName, path: attachPath }] : [],
         });
@@ -245,12 +245,12 @@ export async function runBackup(opts: { type: 'AUTO' | 'MANUAL'; createdBy?: str
     try {
       if (isWhatsAppConfigured()) {
         await sendWhatsAppToAdmins(
-          `📦 *JO Cars — نسخة احتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'})*\n\n` +
-          `✅ تم إنشاء النسخة وإرسالها إلى البريد\n` +
-          `📁 الملف: ${name}\n` +
-          `💾 الحجم: ${formatSize(size)} — ${tables} جدول / ${rows.toLocaleString('ar-EG')} سجل\n` +
-          `🕐 الساعة: ${formatBackupTime(now)}\n` +
-          `📧 الإيميل: ${emailSent ? 'تم الإرسال ✅' : 'تعذّر (' + (emailError || 'غير معدّ') + ')'}`
+          ` *JO Cars — نسخة احتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'})*\n\n` +
+          ` تم إنشاء النسخة وإرسالها إلى البريد\n` +
+          ` الملف: ${name}\n` +
+          ` الحجم: ${formatSize(size)} — ${tables} جدول / ${rows.toLocaleString('ar-EG')} سجل\n` +
+          ` الساعة: ${formatBackupTime(now)}\n` +
+          ` الإيميل: ${emailSent ? 'تم الإرسال ' : 'تعذّر (' + (emailError || 'غير معدّ') + ')'}`
         );
         summary.whatsappSent = true;
         // HTTP adapter لا يدعم updateMany — UPDATE شرطي واحد (name فريد).
@@ -269,7 +269,7 @@ export async function runBackup(opts: { type: 'AUTO' | 'MANUAL'; createdBy?: str
     try {
       if (isWhatsAppConfigured()) {
         await sendWhatsAppToAdmins(
-          `🚨 *JO Cars — فشل النسخة الاحتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'})*\n\n` +
+          ` *JO Cars — فشل النسخة الاحتياطية (${opts.type === 'AUTO' ? 'تلقائية' : 'يدوية'})*\n\n` +
           `الملف: ${name}\n` +
           `الخطأ: ${message}\n` +
           `الوقت: ${formatBackupTime(now)}`
