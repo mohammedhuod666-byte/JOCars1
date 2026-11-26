@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { CarCard } from '@/components/cars/CarCard';
 import { BadgeDisplay } from '@/components/badges/BadgeDisplay';
 import { FollowButton } from '@/components/users/FollowButton';
+import { FollowersModal } from '@/components/users/FollowersModal';
 import { useAuth } from '@/hooks/useAuth';
 
 interface UserProfile {
@@ -42,6 +43,11 @@ export default function PublicProfilePage() {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollower, setIsFollower] = useState(false);
+  const [followModal, setFollowModal] = useState<{ open: boolean; tab: 'followers' | 'following' }>({
+    open: false,
+    tab: 'followers',
+  });
   const [accuracy, setAccuracy] = useState<{ count: number; avgOverPct: number | null; score: number | null; label: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -68,6 +74,35 @@ export default function PublicProfilePage() {
       .then(r => r.json())
       .then(data => { if (data.success) setAccuracy(data.data); })
       .catch(() => {});
+
+    // Live sync follow status & counts (no manual refresh needed)
+    const syncFollow = () => {
+      const token = useAuth.getState().token;
+      fetch(`/api/users/${params.id}/follow`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data) {
+            setIsFollowing(!!d.data.following);
+            setIsFollower(!!d.data.isFollower);
+            setFollowersCount(d.data.followersCount || 0);
+            setFollowingCount(d.data.followingCount || 0);
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncFollow();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') syncFollow();
+    }, 6000);
+    const onFollowChange = () => syncFollow();
+    window.addEventListener('jocars:follow-changed', onFollowChange);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('jocars:follow-changed', onFollowChange);
+    };
   }, [params.id]);
 
   if (loading) {
@@ -160,8 +195,20 @@ export default function PublicProfilePage() {
                   <BadgeDisplay badges={profile.badges} />
                 </div>
                 <div className="flex items-center gap-4 justify-center sm:justify-start mt-2 text-sm">
-                  <span className="text-gray-600 dark:text-gray-300"><strong className="font-bold text-gray-900 dark:text-white">{followersCount}</strong> متابِع</span>
-                  <span className="text-gray-600 dark:text-gray-300"><strong className="font-bold text-gray-900 dark:text-white">{followingCount}</strong> يتابع</span>
+                  <button
+                    type="button"
+                    onClick={() => setFollowModal({ open: true, tab: 'followers' })}
+                    className="text-gray-600 dark:text-gray-300 hover:text-[#ffc640] transition-colors cursor-pointer"
+                  >
+                    <strong className="font-bold text-gray-900 dark:text-white">{followersCount}</strong> متابِع
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowModal({ open: true, tab: 'following' })}
+                    className="text-gray-600 dark:text-gray-300 hover:text-[#ffc640] transition-colors cursor-pointer"
+                  >
+                    <strong className="font-bold text-gray-900 dark:text-white">{followingCount}</strong> يتابع
+                  </button>
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap justify-center sm:justify-start">
@@ -187,6 +234,7 @@ export default function PublicProfilePage() {
                   <FollowButton
                     userId={profile.id}
                     initialFollowing={isFollowing}
+                    followsViewer={isFollower}
                     onChange={(d) => {
                       setIsFollowing(d.following);
                       setFollowersCount(d.followersCount);
@@ -194,6 +242,18 @@ export default function PublicProfilePage() {
                     }}
                   />
                 )}
+                <FollowersModal
+                  open={followModal.open}
+                  userId={profile.id}
+                  initialTab={followModal.tab}
+                  followersCount={followersCount}
+                  followingCount={followingCount}
+                  onClose={() => setFollowModal((m) => ({ ...m, open: false }))}
+                  onCountsChange={(c) => {
+                    setFollowersCount(c.followersCount);
+                    setFollowingCount(c.followingCount);
+                  }}
+                />
                 <button
                   onClick={() => {
                     if (navigator.share) {

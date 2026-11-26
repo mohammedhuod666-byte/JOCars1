@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { CarGrid } from '@/components/cars/CarGrid';
 import { User, Mail, Phone, Store, MapPin, Save, Camera, LogOut, Trash2, Edit, Bell, MessageCircle, Eye, Star, FileText } from 'lucide-react';
 import { ImageCropModal } from '@/components/ui/ImageCropModal';
+import { FollowersModal } from '@/components/users/FollowersModal';
 import toast from 'react-hot-toast';
 import type { Car } from '@/types';
 
@@ -21,6 +22,11 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'profile' | 'cars'>('profile');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
+  const [followCounts, setFollowCounts] = useState({ followersCount: 0, followingCount: 0 });
+  const [followModal, setFollowModal] = useState<{ open: boolean; tab: 'followers' | 'following' }>({
+    open: false,
+    tab: 'followers',
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -45,6 +51,35 @@ export default function ProfilePage() {
       router.push('/auth/login');
     }
   }, [_hydrated, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const syncFollow = () => {
+      const token = useAuth.getState().token;
+      fetch(`/api/users/${user.id}/follow`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && d.data) {
+            setFollowCounts({
+              followersCount: d.data.followersCount || 0,
+              followingCount: d.data.followingCount || 0,
+            });
+          }
+        })
+        .catch(() => {});
+    };
+    syncFollow();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') syncFollow();
+    }, 6000);
+    window.addEventListener('jocars:follow-changed', syncFollow);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('jocars:follow-changed', syncFollow);
+    };
+  }, [user?.id]);
 
   if (!_hydrated || !isAuthenticated) return null;
 
@@ -117,6 +152,17 @@ export default function ProfilePage() {
         onCancel={() => setCropFile(null)}
         onConfirm={handleCroppedImageConfirm}
       />
+      {user?.id && (
+        <FollowersModal
+          open={followModal.open}
+          userId={user.id}
+          initialTab={followModal.tab}
+          followersCount={followCounts.followersCount}
+          followingCount={followCounts.followingCount}
+          onClose={() => setFollowModal((m) => ({ ...m, open: false }))}
+          onCountsChange={setFollowCounts}
+        />
+      )}
       <div className="container-custom">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1">
@@ -142,6 +188,22 @@ export default function ProfilePage() {
                 </div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{user?.name}</h2>
                 <p className="text-sm text-gray-500">{user?.email}</p>
+                <div className="flex items-center justify-center gap-4 mt-3 text-xs sm:text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setFollowModal({ open: true, tab: 'followers' })}
+                    className="px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-white/[0.05] hover:text-[#ffc640] transition-colors cursor-pointer"
+                  >
+                    <strong className="font-bold">{followCounts.followersCount}</strong> متابِع
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowModal({ open: true, tab: 'following' })}
+                    className="px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-white/[0.05] hover:text-[#ffc640] transition-colors cursor-pointer"
+                  >
+                    <strong className="font-bold">{followCounts.followingCount}</strong> يتابع
+                  </button>
+                </div>
                 {user?.role === 'ADMIN' && (
                   <span className="inline-block mt-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-semibold">
                     مدير الموقع

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import { useUIStore, useNotificationStore, useCompareStore } from '@/store';
 import { cn } from '@/lib/utils';
 import {
@@ -346,6 +347,7 @@ export function Header() {
               {/* User Account / Auth */}
               {isAuthenticated ? (
                 <>
+                  <NotificationBell />
                   <button
                     ref={userBtnRef}
                     onClick={() => {

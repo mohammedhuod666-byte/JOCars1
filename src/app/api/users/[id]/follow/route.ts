@@ -13,24 +13,105 @@ async function getCounts(userId: string) {
   return { followersCount, followingCount };
 }
 
-// GET /api/users/[id]/follow → { following, followersCount, followingCount }
+// GET /api/users/[id]/follow
+//   default: → { following, isFollower, followersCount, followingCount }
+//   ?list=followers|following → { users, followersCount, followingCount }
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const listType = request.nextUrl.searchParams.get('list');
+
   try {
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true } });
     if (!target) return notFoundResponse('المستخدم');
 
     const viewer = await authenticateRequest(request).catch(() => null);
-    let following = false;
-    if (viewer && viewer.id !== id) {
-      const rel = await prisma.follow.findUnique({
-        where: { followerId_followingId: { followerId: viewer.id, followingId: id } },
-      });
-      following = !!rel;
+
+    if (listType === 'followers' || listType === 'following') {
+      const relations =
+        listType === 'followers'
+          ? await prisma.follow.findMany({
+              where: { followingId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 100,
+              include: {
+                follower: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    dealerName: true,
+                    role: true,
+                    phoneVerified: true,
+                  },
+                },
+              },
+            })
+          : await prisma.follow.findMany({
+              where: { followerId: id },
+              orderBy: { createdAt: 'desc' },
+              take: 100,
+              include: {
+                following: {
+                  select: {
+                    id: true,
+                    name: true,
+                    image: true,
+                    dealerName: true,
+                    role: true,
+                    phoneVerified: true,
+                  },
+                },
+              },
+            });
+
+      const rawUsers = relations.map((r: any) => (listType === 'followers' ? r.follower : r.following));
+      const userIds = rawUsers.map((u: any) => u.id);
+
+      let viewerFollowingSet = new Set<string>();
+      let viewerFollowersSet = new Set<string>();
+
+      if (viewer && userIds.length > 0) {
+        const [vFollowing, vFollowers] = await Promise.all([
+          prisma.follow.findMany({
+            where: { followerId: viewer.id, followingId: { in: userIds } },
+            select: { followingId: true },
+          }),
+          prisma.follow.findMany({
+            where: { followingId: viewer.id, followerId: { in: userIds } },
+            select: { followerId: true },
+          }),
+        ]);
+        viewerFollowingSet = new Set(vFollowing.map((x) => x.followingId));
+        viewerFollowersSet = new Set(vFollowers.map((x) => x.followerId));
+      }
+
+      const users = rawUsers.map((u: any) => ({
+        ...u,
+        isFollowing: viewerFollowingSet.has(u.id),
+        followsViewer: viewerFollowersSet.has(u.id),
+      }));
+
+      return successResponse({ users, ...(await getCounts(id)) });
     }
-    return successResponse({ following, ...(await getCounts(id)) });
+
+    let following = false;
+    let isFollower = false;
+    if (viewer && viewer.id !== id) {
+      const [relOut, relIn] = await Promise.all([
+        prisma.follow.findUnique({
+          where: { followerId_followingId: { followerId: viewer.id, followingId: id } },
+        }),
+        prisma.follow.findUnique({
+          where: { followerId_followingId: { followerId: id, followingId: viewer.id } },
+        }),
+      ]);
+      following = !!relOut;
+      isFollower = !!relIn;
+    }
+
+    return successResponse({ following, isFollower, ...(await getCounts(id)) });
   } catch {
-    return errorResponse('فشل تحميل حالة المتابعة', 500);
+    return errorResponse('فشل تحميل بيانات المتابعة', 500);
   }
 }
 
@@ -61,22 +142,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       await prisma.follow.create({ data: { followerId: viewer.id, followingId: id } });
       following = true;
     }
+
     await createAuditLog({
-      action: following ? 'FOLLOW_USER' : 'UNFOLLOW_USER', actorId: viewer.id,
-      entityType: 'USER', entityId: id,
+      action: following ? 'FOLLOW_USER' : 'UNFOLLOW_USER',
+      actorId: viewer.id,
+      entityType: 'USER',
+      entityId: id,
       description: `${following ? 'متابعة' : 'إلغاء متابعة'} المستخدم ${id}`,
     });
+
     if (following) {
-      // Notify the followed user (best-effort)
-      await prisma.notification.create({
-        data: {
-          type: 'NEW_FOLLOWER',
-          title: 'متابع جديد',
-          message: `${viewer.name} بدأ بمتابعتك`,
-          userId: id,
-          link: `/profile/${viewer.id}`,
-        },
-      }).catch(() => {});
+      await prisma.notification
+        .create({
+          data: {
+            type: 'NEW_FOLLOWER',
+            title: 'متابع جديد',
+            message: `${viewer.name} بدأ بمتابعتك`,
+            userId: id,
+            link: `/profile/${viewer.id}`,
+          },
+        })
+        .catch(() => {});
     }
 
     return successResponse({ following, ...(await getCounts(id)) });
