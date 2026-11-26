@@ -198,16 +198,15 @@ export function HeroSection() {
             </div>
 
             {/* Display Headline */}
-            <div className="space-y-3">
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.2]">
-                بيع، اشترِ، وتملّك
-                <br />
-                <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent">
+            <div className="space-y-5 sm:space-y-6">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-[1.5] sm:leading-[1.4]">
+                <span className="block mb-1 sm:mb-2">بيع، اشترِ، وتملّك</span>
+                <span className="inline-block py-1 bg-gradient-to-l from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent">
                   سيارة {word}
                 </span>
-                <span className="inline-block w-1 h-[0.8em] bg-amber-400 mr-2 align-middle animate-pulse shadow-[0_0_10px_#f59e0b]" />
+                <span className="inline-block w-1 h-[0.75em] bg-amber-400 mr-2 align-middle animate-pulse shadow-[0_0_10px_#f59e0b]" />
               </h1>
-              <p className="text-slate-400 text-xs sm:text-sm md:text-base leading-relaxed max-w-xl">
+              <p className="text-slate-400 text-xs sm:text-sm md:text-base leading-7 sm:leading-relaxed max-w-xl pt-1">
                 حراج سيارات متكامل، فحص كروت الشواصي، ورش صيانة متخصصة، وسوق قطع غيار أصلية — تجربة شراء وبيع موثوقة في الأردن.
               </p>
             </div>
