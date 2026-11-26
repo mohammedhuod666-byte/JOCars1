@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 export function downloadRecoveryKeyFile(key: string, email?: string) {
   const content = [
-    'JO Cars - مفتاح الاسترداد السري (Argon2id)',
+    'JO Cars - مفتاح الاسترداد السري',
     '==========================================',
     email ? `الحساب: ${email}` : '',
     `المفتاح: ${key}`,
@@ -112,7 +112,7 @@ export function RecoveryKeyCard() {
           </div>
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">
-              مفتاح الاسترداد السري (Argon2id)
+              مفتاح الاسترداد السري
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               يُحفظ مشفراً بشكل أحادي الاتجاه لاستعادة حسابك فوراً بدون أي وسيط
@@ -133,7 +133,7 @@ export function RecoveryKeyCard() {
           <div className="flex items-start gap-2 text-xs text-amber-200 leading-relaxed">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <span>
-              <strong className="text-white">احفظ هذا المفتاح الآن:</strong> يظهر مرة واحدة فقط ولن نتمكن من عرضه مجدداً لأنه مشفر بـ Argon2id.
+              <strong className="text-white">احفظ هذا المفتاح الآن:</strong> يظهر مرة واحدة فقط ولن نتمكن من عرضه مجدداً لأنه محفوظ بتشفير أحادي الاتجاه.
             </span>
           </div>
           <div

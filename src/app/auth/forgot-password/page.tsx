@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
           </Link>
           <h1 className="text-2xl sm:text-3xl font-black text-white mb-1.5">استعادة كلمة المرور</h1>
           <p className="text-xs sm:text-sm text-[#9ca3af]">
-            استعادة فورية مشفرة بـ Argon2id داخل الموقع دون الحاجة لأي وسيط
+            استعادة فورية وآمنة داخل الموقع دون الحاجة لأي وسيط
           </p>
         </div>
 

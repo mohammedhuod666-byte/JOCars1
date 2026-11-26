@@ -127,7 +127,7 @@ export default function RegisterPage() {
             </div>
             <h3 className="text-xl font-black text-white">احفظ مفتاح الاسترداد السري</h3>
             <p className="text-xs text-[#9ca3af] leading-relaxed">
-              هذا المفتاح مشفر بـ <strong className="text-white">Argon2id</strong> ويظهر <strong className="text-[#ffc640]">مرة واحدة فقط</strong>. احتفظ به لاستعادة حسابك فوراً إذا نسيت كلمة المرور:
+              هذا المفتاح محمي بتشفير أحادي الاتجاه ويظهر <strong className="text-[#ffc640]">مرة واحدة فقط</strong>. احتفظ به لاستعادة حسابك فوراً إذا نسيت كلمة المرور:
             </p>
             <div className="p-3.5 rounded-xl bg-[#090b10] border border-white/10 font-mono text-sm sm:text-base font-bold tracking-wider text-[#ffc640] select-all" dir="ltr">
               {issuedKey}
