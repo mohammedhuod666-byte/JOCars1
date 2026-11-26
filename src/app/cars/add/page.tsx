@@ -618,7 +618,7 @@ export default function AddCarPage() {
       const e: Record<string, string> = {};
       if (!form.brandId) e.brandId = 'اختر الشركة المصنعة';
       if (!form.modelId) e.modelId = 'اختر الموديل';
-      if (!form.year || form.year < 1990 || form.year > 2030) e.year = 'أدخل سنة صنع صحيحة';
+      if (!form.year || form.year < 1930 || form.year > 2030) e.year = 'أدخل سنة صنع صحيحة (1930 - 2030)';
       if (form.kilometers === null || form.kilometers === undefined || isNaN(Number(form.kilometers)) || Number(form.kilometers) < 0) {
         e.kilometers = 'أدخل عدد الكيلومترات';
       }
@@ -1028,7 +1028,7 @@ export default function AddCarPage() {
     const pre: Record<string, string> = {};
     if (!form.brandId) pre.brandId = 'الشركة مطلوبة';
     if (!form.modelId) pre.modelId = 'الموديل مطلوب';
-    if (!form.year || form.year < 1990 || form.year > 2030) pre.year = 'سنة الصنع يجب أن تكون بين 1990 و 2030';
+    if (!form.year || form.year < 1930 || form.year > 2030) pre.year = 'سنة الصنع يجب أن تكون بين 1930 و 2030';
     if (!form.price || form.price <= 0) pre.price = 'السعر المطلوب مطلوب ويجب أن يكون أكبر من صفر';
     if (!form.phone || !form.phone.trim()) pre.phone = 'رقم الهاتف مطلوب';
     if (!form.cityId) pre.cityId = 'المحافظة مطلوبة';
