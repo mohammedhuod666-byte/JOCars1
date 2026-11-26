@@ -49,7 +49,9 @@ export async function POST(request: NextRequest) {
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
     if (!ticket) return errorResponse('التذكرة غير موجودة', 404);
 
-    if (action === 'ASSIGN') {
+    const normalizedAction = String(action).trim().toUpperCase();
+
+    if (normalizedAction === 'ASSIGN') {
       if (!body.assigneeId) return errorResponse('اختر المسؤول');
       await prisma.ticket.update({
         where: { id: ticketId },
@@ -63,7 +65,51 @@ export async function POST(request: NextRequest) {
       return successResponse({ success: true });
     }
 
-    if (action === 'CLOSE') {
+    if (normalizedAction === 'PROGRESS' || normalizedAction === 'IN_PROGRESS') {
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status: 'IN_PROGRESS', closedAt: null },
+      });
+      await createAuditLog({
+        action: 'TICKET_PROGRESS', actorId: user.id,
+        entityType: 'TICKET', entityId: ticketId,
+        description: `تحويل التذكرة "${ticket.subject}" إلى قيد المعالجة`,
+      });
+      await prisma.notification.create({
+        data: {
+          type: 'TICKET_UPDATE',
+          title: 'تحديث على تذكرتك',
+          message: `تذكرتك "${ticket.subject}" أصبحت قيد المعالجة من قِبل فريق الدعم`,
+          userId: ticket.userId,
+          link: `/tickets/${ticketId}`,
+        },
+      }).catch(() => {});
+      return successResponse({ success: true, status: 'IN_PROGRESS' });
+    }
+
+    if (normalizedAction === 'RESOLVE' || normalizedAction === 'RESOLVED') {
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status: 'RESOLVED' },
+      });
+      await createAuditLog({
+        action: 'TICKET_RESOLVE', actorId: user.id,
+        entityType: 'TICKET', entityId: ticketId,
+        description: `تم حل تذكرة "${ticket.subject}"`,
+      });
+      await prisma.notification.create({
+        data: {
+          type: 'TICKET_UPDATE',
+          title: 'تم حل تذكرتك',
+          message: `تم حل تذكرتك "${ticket.subject}" بنجاح`,
+          userId: ticket.userId,
+          link: `/tickets/${ticketId}`,
+        },
+      }).catch(() => {});
+      return successResponse({ success: true, status: 'RESOLVED' });
+    }
+
+    if (normalizedAction === 'CLOSE' || normalizedAction === 'CLOSED') {
       await prisma.ticket.update({
         where: { id: ticketId },
         data: { status: 'CLOSED', closedAt: new Date() },
@@ -73,10 +119,32 @@ export async function POST(request: NextRequest) {
         entityType: 'TICKET', entityId: ticketId,
         description: `إغلاق تذكرة "${ticket.subject}"`,
       });
-      return successResponse({ success: true });
+      await prisma.notification.create({
+        data: {
+          type: 'TICKET_UPDATE',
+          title: 'تم إغلاق تذكرتك',
+          message: `تم إغلاق تذكرتك "${ticket.subject}"`,
+          userId: ticket.userId,
+          link: `/tickets/${ticketId}`,
+        },
+      }).catch(() => {});
+      return successResponse({ success: true, status: 'CLOSED' });
     }
 
-    if (action === 'DELETE') {
+    if (normalizedAction === 'REOPEN') {
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status: 'OPEN', closedAt: null },
+      });
+      await createAuditLog({
+        action: 'TICKET_REOPEN', actorId: user.id,
+        entityType: 'TICKET', entityId: ticketId,
+        description: `إعادة فتح تذكرة "${ticket.subject}"`,
+      });
+      return successResponse({ success: true, status: 'OPEN' });
+    }
+
+    if (normalizedAction === 'DELETE') {
       await prisma.ticketMessage.deleteMany({ where: { ticketId } });
       await prisma.ticket.delete({ where: { id: ticketId } });
       await createAuditLog({
