@@ -13,6 +13,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { fitGalleryToBudget } from '@/lib/image-compress-client';
 import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge, galleryBudget } from '@/lib/upload-limits';
+import { LocationSelector, ProvinceItem, CityItem } from '@/components/cars/LocationSelector';
 
 // Comprehensive Auto Parts Taxonomy matching major international & Jordanian spare parts platforms
 const PART_CATEGORIES = [
@@ -215,7 +216,8 @@ export default function AddPartPage() {
 
   const [loading, setLoading] = useState(false);
   const [brands, setBrands] = useState<{ id: string; nameAr: string }[]>([]);
-  const [cities, setCities] = useState<{ id: string; nameAr: string }[]>([]);
+  const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
+  const [cities, setCities] = useState<CityItem[]>([]);
   
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
@@ -267,6 +269,7 @@ export default function AddPartPage() {
     if (isAuthenticated) {
       if (user?.phone) setForm((f) => ({ ...f, phone: user.phone || '', whatsapp: user.whatsapp || user.phone || '' }));
       fetch('/api/cars/brands').then((r) => r.json()).then((d) => setBrands(d.data || [])).catch(() => {});
+      fetch('/api/cars/provinces').then((r) => r.json()).then((d) => setProvinces(d.data || [])).catch(() => {});
       fetch('/api/cars/cities').then((r) => r.json()).then((d) => setCities(d.data || [])).catch(() => {});
     }
   }, [isAuthenticated, _hydrated, router, user]);
@@ -340,7 +343,10 @@ export default function AddPartPage() {
 
     try {
       const fd = new FormData();
-      const locationFull = `${selectedGov} - ${selectedDistrict}`;
+      const chosenCity = cities.find((c) => c.id === form.cityId);
+      const locationFull = chosenCity
+        ? `${chosenCity.province?.nameAr ? chosenCity.province.nameAr + ' - ' : ''}${chosenCity.nameAr}`
+        : `${selectedGov} - ${selectedDistrict}`;
       
       const payload = {
         ...form,
@@ -634,43 +640,12 @@ export default function AddPartPage() {
                 <span>3. موقع تواجد القطعة في الأردن *</span>
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Governorate */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-300">المحافظة *</label>
-                  <select
-                    value={selectedGov}
-                    onChange={(e) => {
-                      setSelectedGov(e.target.value);
-                      const targetGov = JORDAN_GOVERNORATES.find((g) => g.name === e.target.value);
-                      if (targetGov) setSelectedDistrict(targetGov.districts[0]);
-                    }}
-                    className="w-full h-12 px-4 rounded-xl border border-white/[0.08] bg-[#121622] text-white text-xs sm:text-sm outline-none focus:border-amber-400"
-                  >
-                    {JORDAN_GOVERNORATES.map((g) => (
-                      <option key={g.name} value={g.name} className="bg-[#121622]">
-                        {g.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Industrial Area / District */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-slate-300">المنطقة الصناعية / الحي *</label>
-                  <select
-                    value={selectedDistrict}
-                    onChange={(e) => setSelectedDistrict(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl border border-white/[0.08] bg-[#121622] text-white text-xs sm:text-sm outline-none focus:border-amber-400"
-                  >
-                    {filteredDistricts.map((d) => (
-                      <option key={d} value={d} className="bg-[#121622]">
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <LocationSelector
+                provinces={provinces}
+                cities={cities}
+                selectedCityId={form.cityId}
+                onCityChange={(cityId) => setForm((f) => ({ ...f, cityId }))}
+              />
             </div>
 
             {/* STEP 4: Strict Anti-Fraud Photo Rules & Upload */}
