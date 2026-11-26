@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       model: String(body.model).trim(),
       modelEn: body.modelEn ? String(body.modelEn).trim() : null,
       year: parseInt(String(body.year), 10),
-      kilometers: body.kilometers != null ? parseInt(String(body.kilometers), 10) : null,
+      kilometers: body.kilometers != null ? parseInt(String(body.kilometers), 10) : 0,
       trim: body.trim ? String(body.trim).trim() : null,
       fuelType: body.fuelType ? String(body.fuelType).trim() : null,
       transmission: body.transmission ? String(body.transmission).trim() : 'AUTOMATIC',

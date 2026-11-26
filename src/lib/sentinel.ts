@@ -326,15 +326,19 @@ export async function handleBreachAttempt(input: {
       );
     } else {
       // Mode is 'monitor' (Alert admin & Ask: هل أحظره أم أتركه؟):
-      await createAuditLog({
-        action: 'SENTINEL_PENDING_THREAT',
-        actorId: input.userId || undefined,
-        entityType: 'SYSTEM',
-        entityId: input.userId || input.ip || 'threat',
-        description: `تنبيه اختراق بانتظار قرار الأدمن: ${input.type} من ${input.userName || input.userId || input.ip} — ${input.detail}`,
-        newValue: 'PENDING_DECISION',
-        ip: input.ip || undefined,
-      }).catch(() => {});
+      // AuditLog.actorId is a required User FK; anonymous probes are recorded
+      // by the signal above and still reported to admins below.
+      if (input.userId) {
+        await createAuditLog({
+          action: 'SENTINEL_PENDING_THREAT',
+          actorId: input.userId,
+          entityType: 'SYSTEM',
+          entityId: input.userId,
+          description: `تنبيه اختراق بانتظار قرار الأدمن: ${input.type} من ${input.userName || input.userId || input.ip} — ${input.detail}`,
+          newValue: 'PENDING_DECISION',
+          ip: input.ip || undefined,
+        }).catch(() => {});
+      }
 
       await notifyAdmins(
         ` *Sentinel — رصد محاولة اختراق بحاجة لقرارك!*\n\n` +

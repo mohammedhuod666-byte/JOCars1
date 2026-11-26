@@ -8,16 +8,11 @@ import { getTuning } from '@/ai/valuation/tuning';
 export async function POST(request: NextRequest) {
   try {
     // Import the tuning module to initialize it
-    const tuning = await getTuning().catch(() => ({ dailyQuota: 5 }));
+    const tuning = await getTuning();
     
     // Pre-warm the Prisma client
     const { default: prisma } = await import('@/lib/prisma');
     await prisma.$queryRaw`SELECT 1`.catch(() => {});
-    
-    // Pre-warm the Neon adapter
-    const { PrismaNeonHTTP } = await import('@prisma/adapter-neon');
-    const adapter = new PrismaNeonHTTP(process.env.DATABASE_URL || '', { arrayMode: true });
-    await adapter.$queryRaw`SELECT 1`.catch(() => {});
     
     return successResponse({
       success: true,
@@ -34,7 +29,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const tuning = await getTuning().catch(() => ({ dailyQuota: 5 }));
+    const tuning = await getTuning();
     
     // Pre-warm the Prisma client
     const { default: prisma } = await import('@/lib/prisma');

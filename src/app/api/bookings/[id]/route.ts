@@ -40,7 +40,7 @@ const bookingInclude = {
   buyer: { select: { id: true, name: true, image: true, phone: true } },
   dealer: { select: { id: true, name: true, image: true, dealerName: true, phone: true, whatsapp: true } },
   conversation: { select: { id: true } },
-};
+} as const;
 
 export async function GET(
   request: NextRequest,

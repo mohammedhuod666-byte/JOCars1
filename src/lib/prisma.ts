@@ -77,7 +77,6 @@ function buildClient() {
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PrismaNeonHTTP } = require('@prisma/adapter-neon');
 
   // fetch-based transport, NOT the WebSocket pool `PrismaNeon` opens. See the note
@@ -127,7 +126,7 @@ export function getPrisma(): PrismaClient {
 }
 
 // For backward compatibility - export a proxy that calls getPrisma() on each access
-const prismaProxy = new Proxy({} as PrismaClient, {
+const prismaProxy: PrismaClient = new Proxy({} as PrismaClient, {
   get(_target: any, prop: string | symbol) {
     const client = getPrismaClient();
     const value = (client as any)[prop];
