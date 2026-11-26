@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import {
   LayoutDashboard,
   Settings,
@@ -170,6 +171,7 @@ export default function WorkshopDashboard() {
   const [replyText, setReplyText] = useState('');
   const [adForm, setAdForm] = useState({ title: '', description: '', startDate: '', endDate: '', images: [] as File[] });
   const [saving, setSaving] = useState(false);
+  const [cropTarget, setCropTarget] = useState<{ file: File; type: 'logo' | 'cover' } | null>(null);
   const [priceApptId, setPriceApptId] = useState<string | null>(null);
   const [finalPriceInput, setFinalPriceInput] = useState('');
   const [rejectApptId, setRejectApptId] = useState<string | null>(null);
@@ -329,6 +331,29 @@ export default function WorkshopDashboard() {
 
   return (
     <div className="min-h-screen" style={{ background: '#1a1a2e' }}>
+      <ImageCropModal
+        file={cropTarget?.file || null}
+        aspect={cropTarget?.type === 'cover' ? 16 / 9 : 1}
+        shape={cropTarget?.type === 'cover' ? 'rect' : 'rounded'}
+        title={cropTarget?.type === 'cover' ? 'ضبط صورة غلاف الورشة' : 'ضبط شعار الورشة'}
+        onCancel={() => setCropTarget(null)}
+        onConfirm={async (croppedFile) => {
+          const targetType = cropTarget?.type;
+          setCropTarget(null);
+          const fd = new FormData();
+          fd.append('file', croppedFile);
+          const res = await fetch('/api/upload', { method: 'POST', body: fd });
+          const data = await res.json();
+          const url = data.data?.url || data.url;
+          if (url) {
+            if (targetType === 'logo') {
+              setWorkshopInfo((prev) => ({ ...prev, logo: url }));
+            } else {
+              setWorkshopInfo((prev) => ({ ...prev, coverImage: url }));
+            }
+          }
+        }}
+      />
       <div className="container mx-auto px-4 max-w-7xl py-8">
         <h1 className="text-2xl font-bold text-white mb-6">لوحة التحكم</h1>
 
@@ -455,14 +480,10 @@ export default function WorkshopDashboard() {
                         <Upload className="w-5 h-5 text-gray-400" />
                         <span className="text-gray-400 text-sm">اختر شعاراً</span>
                         <input type="file" accept="image/*" className="absolute w-0 h-0 opacity-0 overflow-hidden"
-                          onChange={async (e) => {
+                          onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (!file) return;
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            const res = await fetch('/api/upload', { method: 'POST', body: fd });
-                            const data = await res.json();
-                            if (data.url) setWorkshopInfo({ ...workshopInfo, logo: data.url });
+                            e.target.value = '';
+                            if (file) setCropTarget({ file, type: 'logo' });
                           }} />
                       </label>
                       {workshopInfo.logo && (
@@ -477,14 +498,10 @@ export default function WorkshopDashboard() {
                         <Upload className="w-5 h-5 text-gray-400" />
                         <span className="text-gray-400 text-sm">اختر صورة غلاف</span>
                         <input type="file" accept="image/*" className="absolute w-0 h-0 opacity-0 overflow-hidden"
-                          onChange={async (e) => {
+                          onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (!file) return;
-                            const fd = new FormData();
-                            fd.append('file', file);
-                            const res = await fetch('/api/upload', { method: 'POST', body: fd });
-                            const data = await res.json();
-                            if (data.url) setWorkshopInfo({ ...workshopInfo, coverImage: data.url });
+                            e.target.value = '';
+                            if (file) setCropTarget({ file, type: 'cover' });
                           }} />
                       </label>
                       {workshopInfo.coverImage && (

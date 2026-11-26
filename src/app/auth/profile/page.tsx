@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CarGrid } from '@/components/cars/CarGrid';
 import { User, Mail, Phone, Store, MapPin, Save, Camera, LogOut, Trash2, Edit, Bell, MessageCircle, Eye, Star, FileText } from 'lucide-react';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import toast from 'react-hot-toast';
 import type { Car } from '@/types';
 
@@ -19,6 +20,7 @@ export default function ProfilePage() {
   const [myCars, setMyCars] = useState<Car[]>([]);
   const [activeTab, setActiveTab] = useState<'profile' | 'cars'>('profile');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: user?.name || '',
@@ -46,15 +48,20 @@ export default function ProfilePage() {
 
   if (!_hydrated || !isAuthenticated) return null;
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) { toast.error('الحجم الأقصى 5 ميجا'); return; }
+    setCropFile(file);
+  };
 
+  const handleCroppedImageConfirm = async (croppedFile: File) => {
+    setCropFile(null);
     setUploadingImage(true);
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', croppedFile);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (data.success && data.data?.url) {
@@ -102,6 +109,14 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen py-8">
+      <ImageCropModal
+        file={cropFile}
+        aspect={1}
+        shape="rounded"
+        title="ضبط الصورة الشخصية"
+        onCancel={() => setCropFile(null)}
+        onConfirm={handleCroppedImageConfirm}
+      />
       <div className="container-custom">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           <div className="lg:col-span-1">

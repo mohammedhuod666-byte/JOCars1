@@ -10,6 +10,7 @@ import {
   MapPin, Phone, Clock, DollarSign, AlertCircle,
   Camera, Image as ImageIcon,
 } from 'lucide-react';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 
 const SERVICE_OPTIONS = [
   { name: 'ميكانيك', category: 'mechanical' },
@@ -89,6 +90,7 @@ export default function CreateWorkshopPage() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<{ file: File; type: 'logo' | 'cover' } | null>(null);
 
   useEffect(() => {
     if (_hydrated && !isAuthenticated) {
@@ -113,26 +115,38 @@ export default function CreateWorkshopPage() {
 
   const handleLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setErrors((prev) => [...prev, { field: 'logo', message: 'حجم الصورة يجب أن يكون أقل من 5 ميغابايت' }]);
       return;
     }
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
+    setCropTarget({ file, type: 'logo' });
     clearError('logo');
   };
 
   const handleCover = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
       setErrors((prev) => [...prev, { field: 'coverImage', message: 'حجم الصورة يجب أن يكون أقل من 10 ميغابايت' }]);
       return;
     }
-    setCoverFile(file);
-    setCoverPreview(URL.createObjectURL(file));
+    setCropTarget({ file, type: 'cover' });
     clearError('coverImage');
+  };
+
+  const handleCropConfirm = (croppedFile: File) => {
+    if (!cropTarget) return;
+    if (cropTarget.type === 'logo') {
+      setLogoFile(croppedFile);
+      setLogoPreview(URL.createObjectURL(croppedFile));
+    } else {
+      setCoverFile(croppedFile);
+      setCoverPreview(URL.createObjectURL(croppedFile));
+    }
+    setCropTarget(null);
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -287,6 +301,14 @@ export default function CreateWorkshopPage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#1a1a2e' }}>
+      <ImageCropModal
+        file={cropTarget?.file || null}
+        aspect={cropTarget?.type === 'cover' ? 16 / 9 : 1}
+        shape={cropTarget?.type === 'cover' ? 'rect' : 'rounded'}
+        title={cropTarget?.type === 'cover' ? 'ضبط صورة غلاف الورشة' : 'ضبط شعار الورشة'}
+        onCancel={() => setCropTarget(null)}
+        onConfirm={handleCropConfirm}
+      />
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Header */}
         <div className="mb-8">
