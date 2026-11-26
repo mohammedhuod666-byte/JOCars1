@@ -6,7 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {
   Search, Car, Wrench, Cpu, MessageCircle, ArrowLeft, MapPin, Gauge, Fuel,
-  ShieldCheck, Star, ChevronRight, Plus, Sparkles
+  ShieldCheck, Star, ChevronRight, Plus, Sparkles, Crown
 } from 'lucide-react';
 import type { Car as CarType } from '@/types';
 
@@ -114,17 +114,11 @@ export function HeroSection() {
       });
     }).catch(() => {});
 
-    // Dynamically fetch top featured car (prioritize user-marked featured: true)
-    fetch('/api/cars?featured=true&limit=1')
+    // Fetch Admin-designated Hero Spotlight car
+    fetch('/api/hero-car')
       .then((res) => res.json())
-      .then(async (data) => {
-        let car = data.data?.[0];
-        if (!car) {
-          // If none explicitly marked featured, display the latest approved car
-          const fallback = await fetch('/api/cars?limit=1').then((r) => r.json()).catch(() => ({}));
-          car = fallback.data?.[0];
-        }
-        setFeaturedCar(car || null);
+      .then((data) => {
+        setFeaturedCar(data?.data?.car || null);
         setCarLoading(false);
       })
       .catch(() => setCarLoading(false));
@@ -335,11 +329,30 @@ export function HeroSection() {
 
                   return (
                     <Link
-                      href={`/cars/${featuredCar.id}`}
-                      className="block relative rounded-2xl sm:rounded-3xl border border-white/[0.12] bg-[#111520]/95 backdrop-blur-2xl shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)] p-2.5 sm:p-4 overflow-hidden group hover:border-amber-400/50 transition-all duration-300 max-w-full"
+                      href={`/cars/${featuredCar.slug || featuredCar.id}`}
+                      className="group block relative rounded-2xl sm:rounded-3xl border border-amber-400/25 hover:border-amber-400/60 bg-gradient-to-b from-[#161b28]/95 via-[#111520]/98 to-[#0b0e16] backdrop-blur-2xl p-3 sm:p-4 shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_40px_rgba(245,158,11,0.08)] hover:shadow-[0_28px_70px_rgba(0,0,0,0.9),0_0_50px_rgba(245,158,11,0.16)] transition-all duration-300 max-w-full overflow-hidden"
                     >
-                      {/* Image Container with realistic proportions for phones & iPads */}
-                      <div className="relative aspect-[16/10] sm:aspect-[16/9] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-900 border border-white/[0.08]">
+                      {/* Top Spotlight Header Strip (Mobile-First) */}
+                      <div className="flex items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-white/[0.06] px-1">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/35">
+                          <Crown className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="text-[11px] font-black text-amber-300">
+                            {featuredCar.featured ? 'إعلان المقدمة VIP' : 'سيارة مختارة'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                          <span className="px-2 py-0.5 rounded-lg bg-white/[0.06] border border-white/[0.08] text-slate-200 tabular-nums">
+                            {featuredCar.year}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            <span>{inspectionLabel}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Image Container */}
+                      <div className="relative aspect-[16/10] w-full rounded-xl sm:rounded-2xl overflow-hidden bg-slate-900 border border-white/[0.08]">
                         <Image
                           src={carImage}
                           alt={carName}
@@ -348,53 +361,42 @@ export function HeroSection() {
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 40vw"
                           className="object-cover object-center group-hover:scale-105 transition-transform duration-700"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0d1017] via-transparent to-black/30" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0e16]/85 via-transparent to-black/15" />
 
-                        {/* Top Badges */}
-                        <div className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#090b10]/90 border border-amber-400/50 backdrop-blur-md shadow-lg">
-                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                          <span className="text-[11px] font-black text-amber-300">
-                            {featuredCar.featured ? 'إعلان مميز VIP' : 'سيارة مختارة'}
-                          </span>
-                        </div>
-
-                        {/* Condition / Inspection Tag */}
-                        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#090b10]/85 border border-white/20 text-slate-200 backdrop-blur-md text-xs font-bold">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                          <span>{inspectionLabel}</span>
+                        {/* Bottom Image Overlay: Customs Status */}
+                        <div className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#090b10]/85 border border-emerald-400/30 text-emerald-300 backdrop-blur-md text-[11px] font-bold shadow">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>{customsLabel}</span>
                         </div>
                       </div>
 
-                      {/* Car Information */}
-                      <div className="pt-3.5 sm:pt-4 px-1 space-y-3">
-                        <div className="flex items-start justify-between gap-2">
+                      {/* Car Information & Price (Mobile-Safe Stack/Wrap) */}
+                      <div className="pt-3.5 px-1 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             {carSub && (
                               <p className="text-[11px] sm:text-xs text-slate-400 font-semibold truncate">
                                 {carSub}
                               </p>
                             )}
-                            <h3 className="text-base sm:text-lg font-black text-white mt-0.5 group-hover:text-amber-400 transition-colors truncate">
+                            <h3 className="text-base sm:text-xl font-black text-white mt-0.5 group-hover:text-amber-300 transition-colors leading-snug">
                               {carName}
                             </h3>
                           </div>
-                          <div className="text-left shrink-0">
-                            <p className="text-lg sm:text-xl font-black text-amber-400 tabular-nums">
-                              {carPrice} <span className="text-xs font-bold text-slate-300">د.أ</span>
-                            </p>
-                            <p className="text-[10px] sm:text-[11px] text-emerald-400 font-bold">
-                              {customsLabel}
+                          <div className="px-3 py-1.5 rounded-xl bg-amber-400/10 border border-amber-400/25 text-left shrink-0">
+                            <p className="text-lg sm:text-xl font-black text-amber-400 tabular-nums leading-none">
+                              {carPrice} <span className="text-xs font-bold text-amber-200">د.أ</span>
                             </p>
                           </div>
                         </div>
 
                         {/* Specs Grid */}
-                        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2 border-t border-white/[0.06] text-[11px] sm:text-xs font-semibold text-slate-300">
-                          <div className="flex items-center gap-1.5 p-2 rounded-xl bg-white/[0.03]">
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2.5 border-t border-white/[0.06] text-[11px] sm:text-xs font-semibold text-slate-200">
+                          <div className="flex items-center justify-center sm:justify-start gap-1.5 p-2 rounded-xl bg-white/[0.04] border border-white/[0.05]">
                             <Gauge className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span className="tabular-nums truncate">{carKm}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 p-2 rounded-xl bg-white/[0.03]">
+                          <div className="flex items-center justify-center sm:justify-start gap-1.5 p-2 rounded-xl bg-white/[0.04] border border-white/[0.05]">
                             <Fuel className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span className="truncate">
                               {featuredCar.fuelType === 'PLUGIN_HYBRID'
@@ -410,17 +412,17 @@ export function HeroSection() {
                                 : featuredCar.fuelType || 'بنزين'}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5 p-2 rounded-xl bg-white/[0.03]">
+                          <div className="flex items-center justify-center sm:justify-start gap-1.5 p-2 rounded-xl bg-white/[0.04] border border-white/[0.05]">
                             <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span className="truncate">{carCity}</span>
                           </div>
                         </div>
 
                         {/* Action Bar */}
-                        <div className="pt-1">
-                          <div className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.06] group-hover:bg-amber-400 group-hover:text-slate-950 font-bold text-xs text-slate-200 border border-white/[0.08] group-hover:border-amber-400 transition-all duration-200">
+                        <div className="pt-0.5">
+                          <div className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400/15 to-amber-500/10 group-hover:from-amber-400 group-hover:to-amber-500 text-amber-200 group-hover:text-slate-950 font-black text-xs sm:text-sm border border-amber-400/35 group-hover:border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.1)] group-hover:shadow-[0_0_25px_rgba(245,158,11,0.35)] transition-all duration-200">
                             <span>معاينة تفاصيل السيارة</span>
-                            <ChevronRight className="w-4 h-4 rotate-180" />
+                            <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
                           </div>
                         </div>
                       </div>

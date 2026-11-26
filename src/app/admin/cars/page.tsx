@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Car, CheckCircle, XCircle, Eye, Star, Sparkles, Trash2, Tag, Search, Clock, Filter, ShieldCheck } from 'lucide-react';
+import { Car, CheckCircle, XCircle, Eye, Star, Sparkles, Trash2, Tag, Search, Clock, Filter, ShieldCheck, Crown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Car as CarType } from '@/types';
 
@@ -23,6 +23,28 @@ export default function AdminCarsPage() {
   const [availableTags, setAvailableTags] = useState<{ id: string; nameAr: string; slug: string; color: string }[]>([]);
   const [tagModal, setTagModal] = useState<{ carId: string; open: boolean }>({ carId: '', open: false });
   const [carTagsMap, setCarTagsMap] = useState<Record<string, string[]>>({});
+  const [heroCarId, setHeroCarId] = useState<string | null>(null);
+
+  const toggleHeroSpotlight = async (carId: string) => {
+    const isAlready = heroCarId === carId;
+    try {
+      const token = useAuth.getState().token;
+      const res = await fetch('/api/hero-car', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ carId: isAlready ? null : carId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHeroCarId(data.data?.heroCarId || null);
+        toast.success(isAlready ? 'تم إلغاء تثبيت السيارة من واجهة الموقع' : 'تم تثبيت السيارة في مقدمة الموقع بنجاح');
+      } else {
+        toast.error(data.error || 'فشل تحديث إعلان المقدمة');
+      }
+    } catch {
+      toast.error('فشل تحديث إعلان المقدمة');
+    }
+  };
 
   const loadCars = (q: string, status?: string) => {
     setLoading(true);
@@ -63,6 +85,9 @@ export default function AdminCarsPage() {
     if (!isAuthenticated || user?.role !== 'ADMIN') { router.push('/'); return; }
     loadCars(search, statusFilter);
     loadCounts();
+    fetch('/api/hero-car').then(r => r.json()).then(d => {
+      if (d.success) setHeroCarId(d.data?.heroCarId || null);
+    }).catch(() => {});
   }, [_hydrated, isAuthenticated, user, router]);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -335,6 +360,16 @@ export default function AdminCarsPage() {
                         <Button variant="ghost" size="sm" onClick={() => router.push(`/cars/${car.slug || car.id}`)}>
                           <Eye className="w-4 h-4" />
                         </Button>
+                        {car.status === 'APPROVED' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleHeroSpotlight(car.id)}
+                            title={heroCarId === car.id ? 'مثبتة في مقدمة الموقع (اضغط للإلغاء)' : 'تعيين في مقدمة الموقع الرئيسية'}
+                          >
+                            <Crown className={`w-4 h-4 ${heroCarId === car.id ? 'text-amber-400 fill-amber-400' : 'text-slate-400 hover:text-amber-300'}`} />
+                          </Button>
+                        )}
                         {car.status === 'APPROVED' && (
                           car.featured ? (
                             <Button variant="ghost" size="sm" onClick={() => removeFeatured(car.id)}>
