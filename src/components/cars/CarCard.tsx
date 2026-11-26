@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   MapPin, Calendar, Eye, Shield, Gauge, ChevronLeft,
@@ -22,6 +22,7 @@ interface CarCardProps {
 }
 
 export function CarCard({ car, index = 0, isOwnerView = false }: CarCardProps) {
+  const router = useRouter();
   const { ref, isInView } = useInScrollView(0.1);
   const [imgLoaded, setImgLoaded] = useState(false);
   const { addCar, removeCar, isInCompare } = useCompareStore();
@@ -64,14 +65,41 @@ export function CarCard({ car, index = 0, isOwnerView = false }: CarCardProps) {
     else addCar(car);
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Only handle primary (left) clicks
+    if (e.button !== 0) return;
+    // Ignore clicks on interactive children (buttons, links, inputs)
+    const target = e.target as HTMLElement;
+    const interactive = target.closest('button, a, input, select, textarea, [aria-pressed]');
+    if (interactive && interactive !== e.currentTarget) return;
+    router.push(`/cars/${car.id}`);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Only Enter key activates (Space scrolls the page, don't intercept)
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      router.push(`/cars/${car.id}`);
+    }
+  };
+
   return (
-    <div ref={ref} style={scrollStyle(isInView, { delay: Math.min(index * 0.04, 0.3) })}>
-      <Link
-        href={`/cars/${car.id}`}
+    <div
+      ref={ref}
+      style={{
+        ...scrollStyle(isInView, { delay: Math.min(index * 0.04, 0.3) }),
+        boxShadow: '0 12px 32px -14px rgba(0,0,0,0.7)',
+      }}
+      onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="button"
+      aria-label={`عرض تفاصيل ${brandName} ${modelName} ${car.year}`}
+      className="group flex flex-col overflow-hidden rounded-3xl bg-surface-900 border border-gold-100/20 transition-all duration-200 hover:border-gold-100/60 hover:-translate-y-1.5 cursor-pointer"
+    >
+      <div
         onMouseEnter={() => warmCarDetailCache(car.id)}
         onFocus={() => warmCarDetailCache(car.id)}
-        className="group flex flex-col overflow-hidden rounded-3xl bg-surface-900 border border-gold-100/20 transition-all duration-200 hover:border-gold-100/60 hover:-translate-y-1.5"
-        style={{ boxShadow: '0 12px 32px -14px rgba(0,0,0,0.7)' }}
       >
         {/* Image — full bleed */}
         <div className="relative overflow-hidden bg-surface-950 aspect-[16/10]">
@@ -229,7 +257,7 @@ export function CarCard({ car, index = 0, isOwnerView = false }: CarCardProps) {
             </button>
           </div>
         </div>
-      </Link>
+      </div>
     </div>
   );
 }
