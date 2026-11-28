@@ -70,28 +70,31 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       const role = accountType === 'USER' ? 'USER' : accountType;
+      const cleanName = form.name.trim();
+      const cleanEmail = form.email.trim().toLowerCase();
+      const cleanPhone = form.phone.trim();
       const payload = isTrader
         ? {
-            name: form.name,
-            email: form.email,
+            name: cleanName,
+            email: cleanEmail,
             password: form.password,
-            phone: form.phone,
+            phone: cleanPhone,
             role,
-            dealerName: form.dealerName,
+            dealerName: form.dealerName.trim(),
             dealerDescription: form.dealerDescription || undefined,
             dealerAddress: form.dealerAddress || undefined,
             commercialReg: form.commercialReg || undefined,
           }
         : isDealerLike
         ? {
-            name: form.name,
-            email: form.email,
+            name: cleanName,
+            email: cleanEmail,
             password: form.password,
-            phone: form.phone,
+            phone: cleanPhone,
             role,
-            dealerName: form.dealerName,
+            dealerName: form.dealerName.trim(),
           }
-        : { name: form.name, email: form.email, password: form.password, phone: form.phone, role };
+        : { name: cleanName, email: cleanEmail, password: form.password, phone: cleanPhone, role };
 
       const res = await fetch('/api/auth/register', {
         method: 'POST',
@@ -100,6 +103,9 @@ export default function RegisterPage() {
       });
       const data = await res.json();
       if (data.success) {
+        try {
+          sessionStorage.setItem('jocars_just_registered', '1');
+        } catch {}
         login(data.data.user, data.data.token);
         toast.success(isTrader ? 'تم استلام طلبك — سيتم مراجعته خلال 24 ساعة' : 'تم إنشاء الحساب بنجاح');
         if (data.data.recoveryKey) {

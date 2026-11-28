@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Compass, Play, Pause, ChevronLeft, ChevronRight, X, CheckCircle2,
   Circle, Car, Wrench, Calculator, PlusCircle, Sparkles, Heart,
@@ -139,6 +140,9 @@ const HIDDEN_ROUTES = ['/admin', '/auth', '/login', '/messages'];
 export function SiteOnboarding() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user } = useAuth();
+
+  const storageKey = user?.id ? `${STORAGE_KEY}_${user.id}` : `${STORAGE_KEY}_guest`;
 
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<OnboardingState>(DEFAULT_STATE);
@@ -157,26 +161,41 @@ export function SiteOnboarding() {
     setState((prev) => {
       const next = updater(prev);
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(storageKey, JSON.stringify(next));
       } catch {}
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
-  // Load persisted onboarding state on mount
+  // Load persisted onboarding state & trigger on '/' for new accounts or first-time visitors
   useEffect(() => {
     setMounted(true);
+    let currentState = DEFAULT_STATE;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        setState({ ...DEFAULT_STATE, ...parsed });
-      } else if (pathname === '/') {
-        const t = setTimeout(() => setWelcomeOpen(true), 1200);
+        currentState = { ...DEFAULT_STATE, ...JSON.parse(raw) };
+      }
+      setState(currentState);
+    } catch {
+      setState(DEFAULT_STATE);
+    }
+
+    if (pathname === '/') {
+      let justRegistered = false;
+      try {
+        justRegistered = sessionStorage.getItem('jocars_just_registered') === '1';
+        if (justRegistered) {
+          sessionStorage.removeItem('jocars_just_registered');
+        }
+      } catch {}
+
+      if (justRegistered || !currentState.welcomed) {
+        const t = setTimeout(() => setWelcomeOpen(true), 700);
         return () => clearTimeout(t);
       }
-    } catch {}
-  }, []);
+    }
+  }, [pathname, storageKey]);
 
   // Mark task helper
   const completeTask = useCallback((taskId: string) => {
