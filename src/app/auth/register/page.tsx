@@ -105,6 +105,9 @@ export default function RegisterPage() {
       if (data.success) {
         try {
           sessionStorage.setItem('jocars_just_registered', '1');
+          if (data.data?.user?.id) {
+            localStorage.setItem(`jocars_onboard_enabled_${data.data.user.id}`, '1');
+          }
         } catch {}
         login(data.data.user, data.data.token);
         toast.success(isTrader ? 'تم استلام طلبك — سيتم مراجعته خلال 24 ساعة' : 'تم إنشاء الحساب بنجاح');

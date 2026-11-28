@@ -79,6 +79,7 @@ export function SiteOnboarding() {
   const pageGuide: PageGuideConfig | null = getPageGuideConfig(pathname);
 
   const [mounted, setMounted] = useState(false);
+  const [onboardingEnabled, setOnboardingEnabled] = useState(false);
   const [state, setState] = useState<OnboardingState>(DEFAULT_STATE);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [pageDiscoveryOpen, setPageDiscoveryOpen] = useState(false);
@@ -108,14 +109,28 @@ export function SiteOnboarding() {
     });
   }, [saveState]);
 
-  // Load state and trigger Home Welcome OR Per-Page Discovery prompt on first visit
+  // Load state and trigger ONLY for newly registered accounts (never on logout or guest browsing)
   useEffect(() => {
     setMounted(true);
     setTourActive(false);
     setPageDiscoveryOpen(false);
     setChecklistExpanded(false);
+    setWelcomeOpen(false);
 
     if (HIDDEN_ROUTES.some((r) => pathname.startsWith(r))) return;
+
+    if (!user?.id) {
+      setOnboardingEnabled(false);
+      return;
+    }
+
+    let isEnabledForUser = false;
+    try {
+      isEnabledForUser = localStorage.getItem(`jocars_onboard_enabled_${user.id}`) === '1';
+    } catch {}
+
+    setOnboardingEnabled(isEnabledForUser);
+    if (!isEnabledForUser) return;
 
     let currentState = DEFAULT_STATE;
     try {
@@ -127,6 +142,8 @@ export function SiteOnboarding() {
     } catch {
       setState(DEFAULT_STATE);
     }
+
+    if (currentState.widgetHidden) return;
 
     // Mark 'visit' tasks for this page automatically
     if (pageGuide) {
@@ -157,7 +174,7 @@ export function SiteOnboarding() {
       const t = setTimeout(() => setPageDiscoveryOpen(true), 800);
       return () => clearTimeout(t);
     }
-  }, [pathname, storageKey]);
+  }, [pathname, storageKey, user?.id]);
 
   // Auto-detect scroll_mid, input, and click tasks for the current page
   useEffect(() => {
@@ -334,7 +351,7 @@ export function SiteOnboarding() {
     router.push(href);
   };
 
-  if (!mounted) return null;
+  if (!mounted || !onboardingEnabled) return null;
   if (HIDDEN_ROUTES.some((r) => pathname.startsWith(r))) return null;
 
   const activePageGuide = pageGuide || HOME_GUIDE;
