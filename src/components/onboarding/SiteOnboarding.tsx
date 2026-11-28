@@ -490,7 +490,7 @@ export function SiteOnboarding() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               className={`fixed z-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[400px] rounded-2xl sm:rounded-3xl bg-[#14181f] border border-[#ffc640]/40 p-4 sm:p-5 shadow-2xl space-y-3.5 ${
-                tooltipOnTop ? 'top-20 sm:top-24' : 'bottom-24 sm:bottom-8'
+                tooltipOnTop ? 'top-20 sm:top-24' : 'bottom-28 sm:bottom-8'
               }`}
             >
               {/* Auto-pilot Progress Bar */}
@@ -576,7 +576,7 @@ export function SiteOnboarding() {
                 initial={{ opacity: 0, y: 12, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 12, scale: 0.96 }}
-                className="w-80 sm:w-88 rounded-2xl sm:rounded-3xl bg-[#14181f]/95 backdrop-blur-xl border border-white/15 p-4 space-y-3.5 shadow-2xl"
+                className="w-80 sm:w-88 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/15 p-4 space-y-3.5 shadow-2xl"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
