@@ -183,7 +183,7 @@ export const PAGE_GUIDES: Record<string, PageGuideConfig> = {
   },
   workshops: {
     id: 'workshops',
-    title: 'دليل الورش والصيانة',
+    title: 'الورش والصيانة',
     welcomeTitle: 'مرحباً بك في دليل الورش',
     welcomeDesc: 'ابحث عن أقرب ورشة معتمدة، قدّر تكلفة الصيانة قبل الذهاب، أو اطلب ونش طوارئ 24/7.',
     pageTip: 'اضغط على "حاسبة التكاليف" لمعرفة متوسط أسعار الصيانة في الأردن، أو اختر التخصص من الشريط العلوي.',

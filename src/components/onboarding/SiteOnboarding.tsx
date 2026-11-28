@@ -269,6 +269,15 @@ export function SiteOnboarding() {
     else saveState((prev) => ({ ...prev, welcomed: true }));
   }, [pageGuide, markPageSeen, saveState]);
 
+  useEffect(() => {
+    if (!tourActive) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') finishTour();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [tourActive, finishTour]);
+
   // Auto-Pilot Timer
   useEffect(() => {
     if (!tourActive || !autoPlay) {
@@ -492,7 +501,7 @@ export function SiteOnboarding() {
       {/* 3. Auto-Pilot Guided Tour Spotlight Overlay */}
       <AnimatePresence>
         {tourActive && currentStep && (
-          <div className="fixed inset-0 z-[130] pointer-events-auto">
+          <div className="fixed inset-0 z-[200] pointer-events-auto">
             {!targetRect && <div className="absolute inset-0 bg-[#080a0f]/80 backdrop-blur-xs" />}
 
             {targetRect && (
@@ -593,7 +602,7 @@ export function SiteOnboarding() {
 
       {/* 4. Floating Per-Page Guide & Checklist Widget */}
       {!tourActive && !pageDiscoveryOpen && !state.widgetHidden && (
-        <div className="fixed bottom-24 left-3 sm:bottom-5 sm:left-5 z-40 max-w-[calc(100vw-1.5rem)]">
+        <div className="fixed bottom-28 left-3 lg:bottom-5 lg:left-5 z-[60] max-w-[calc(100vw-1.5rem)]">
           <AnimatePresence mode="wait">
             {checklistExpanded ? (
               <motion.div
