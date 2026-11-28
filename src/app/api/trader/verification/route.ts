@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 
 // GET /api/trader/verification → my latest verification request (if any)

@@ -97,7 +97,7 @@ async function mintDocumentUrls(raw: string | null): Promise<{
     return empty;
   }
 
-  const { signedDocumentUrl } = await import('@/lib/car-documents');
+  const { signedDocumentUrl } = await import('@/lib/cars/car-documents');
   let expired = 0;
 
   /**

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { runIntelligenceValuation } from '@/ai/valuation/intelligence-engine';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {

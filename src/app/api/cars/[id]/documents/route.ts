@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { errorResponse, notFoundResponse, successResponse, unauthorizedResponse } from '@/lib/api';
-import { signedDocumentUrl } from '@/lib/car-documents';
+import { signedDocumentUrl } from '@/lib/cars/car-documents';
 import { readFile } from 'fs/promises';
 import path from 'path';
 

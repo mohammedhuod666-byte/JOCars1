@@ -5,7 +5,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from '@/lib/api';
 import { runValuation } from '@/ai/valuation/engine';
 import { createAuditLog } from '@/lib/audit';
-import { sanitizeFeatures } from '@/lib/car-features';
+import { sanitizeFeatures } from '@/lib/cars/car-features';
 
 const schema = z.object({
   carIds: z.array(z.string().min(1)).min(1).max(5),

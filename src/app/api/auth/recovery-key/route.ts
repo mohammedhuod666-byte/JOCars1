@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest, verifyPassword } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { generateRecoveryKey, hashRecoveryKeyArgon2id } from '@/lib/recovery-key';
+import { generateRecoveryKey, hashRecoveryKeyArgon2id } from '@/lib/security/recovery-key';
 import { createAuditLog } from '@/lib/audit';
 
 // GET /api/auth/recovery-key → check if user has an Argon2id recovery key set

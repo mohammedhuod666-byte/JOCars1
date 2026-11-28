@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { smartSearch } from '@/ai/smart-search';
 import prisma from '@/lib/prisma';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {

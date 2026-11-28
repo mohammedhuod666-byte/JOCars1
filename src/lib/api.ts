@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { authenticateRequest } from './auth';
 
 // Helper: ensures every JSON response ships with a charset so Arabic
 // (and other UTF-8 strings) renders correctly across all clients.
@@ -54,4 +55,36 @@ export function parseSearchParams(searchParams: URLSearchParams) {
     }
   }
   return params;
+}
+
+/**
+ * Extracts the real client IP behind Cloudflare / reverse proxies.
+ */
+export function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    request.headers.get('x-real-ip') ||
+    request.headers.get('cf-connecting-ip') ||
+    'unknown'
+  );
+}
+
+/**
+ * Authenticates the current request and returns either `{ user }` or a 401 `error` response.
+ */
+export async function requireAuth(request: NextRequest) {
+  const user = await authenticateRequest(request);
+  if (!user) return { user: null as never, error: unauthorizedResponse() };
+  return { user, error: null };
+}
+
+/**
+ * Enforces `ADMIN` role on API routes, returning either `{ user }` or a 401 `error` response.
+ */
+export async function requireAdmin(request: NextRequest) {
+  const user = await authenticateRequest(request);
+  if (!user || user.role !== 'ADMIN') {
+    return { user: null as never, error: unauthorizedResponse() };
+  }
+  return { user, error: null };
 }

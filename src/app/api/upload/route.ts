@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { authenticateRequest } from '@/lib/auth';
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
-import { compressToWebP } from '@/lib/image-compress';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { compressToWebP } from '@/lib/media/image-compress';
 
 const ALLOWED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // Preferred: Cloudinary (persistent across deploys, CDN-served)
     if (isCloudinaryConfigured()) {
-      const { uploadImage } = await import('@/lib/cloudinary');
+      const { uploadImage } = await import('@/lib/media/cloudinary');
       const dataUri = `data:${finalMime};base64,${finalBuffer.toString('base64')}`;
       const folder = user.role === 'DEALER' ? 'jo-cars/dealers' : 'jo-cars/users';
       const result = await uploadImage(dataUri, { folder });

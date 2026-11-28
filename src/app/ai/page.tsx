@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { MAX_SINGLE_FILE_BYTES, formatMB } from '@/lib/upload-limits';
+import { MAX_SINGLE_FILE_BYTES, formatMB } from '@/lib/media/upload-limits';
 import { motion } from 'framer-motion';
 import {
   Bot, Send, Sparkles, Car, ShoppingBag, Search, TrendingUp, Fuel, DollarSign, BarChart3,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { setOtp, normalizeJoPhone, generateSecureOtp } from '@/lib/otp-store';
+import { checkRateLimitAsync, getClientIp } from '@/lib/security/rate-limit';
+import { setOtp, normalizeJoPhone, generateSecureOtp } from '@/lib/security/otp-store';
 import { sendWhatsApp, isWhatsAppConfigured } from '@/lib/whatsapp';
 
 // POST /api/auth/login-otp { phone } → send login code via WhatsApp

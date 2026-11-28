@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { recalculateAllFairPrices } from '@/lib/fair-price';
+import { recalculateAllFairPrices } from '@/lib/cars/fair-price';
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);

@@ -1,20 +1,17 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, signToken, setAuthCookie } from '@/lib/auth';
-import { generateRecoveryKey, hashRecoveryKeyArgon2id } from '@/lib/recovery-key';
+import { generateRecoveryKey, hashRecoveryKeyArgon2id } from '@/lib/security/recovery-key';
 import { registerSchema } from '@/lib/validations';
-import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
+import { successResponse, errorResponse, validationErrorResponse, getClientIp } from '@/lib/api';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
-import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/rate-limit';
-import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
+import { checkRateLimitAsync, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/security/ip-blacklist';
 import { createAuditLog } from '@/lib/audit';
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-      || request.headers.get('x-real-ip')
-      || request.headers.get('cf-connecting-ip')
-      || 'unknown';
+    const ip = getClientIp(request);
 
     if (isIPBlocked(ip)) {
       return errorResponse('تم حظر عنوان IP الخاص بك مؤقتاً', 403);

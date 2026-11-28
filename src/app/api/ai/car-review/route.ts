@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateReview } from '@/ai/review-generator';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 
 export async function POST(request: Request) {
   try {

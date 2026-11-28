@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { prepareDocument } from '@/lib/doc-upload';
-import { cloudinary } from '@/lib/cloudinary';
-import { signUploadRef, isUploadRefKind, type UploadRefKind } from '@/lib/upload-token';
-import { MAX_SINGLE_FILE_BYTES, formatMB, singleFileTooLargeMessage } from '@/lib/upload-limits';
+import { prepareDocument } from '@/lib/media/doc-upload';
+import { cloudinary } from '@/lib/media/cloudinary';
+import { signUploadRef, isUploadRefKind, type UploadRefKind } from '@/lib/media/upload-token';
+import { MAX_SINGLE_FILE_BYTES, formatMB, singleFileTooLargeMessage } from '@/lib/media/upload-limits';
 
 /**
  * POST /api/upload/stage

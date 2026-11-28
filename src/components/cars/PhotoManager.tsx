@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Image as ImageIcon, Sparkles, Star, Trash2, Upload, X } from 'lucide-react';
-import { analysePhotos, summarisePhotoHints, type PhotoAnalysis } from '@/lib/photo-quality';
+import { analysePhotos, summarisePhotoHints, type PhotoAnalysis } from '@/lib/media/photo-quality';
 
 /**
  * Photo manager for the listing wizard.

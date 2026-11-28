@@ -1,4 +1,4 @@
-import { cloudinary } from './cloudinary';
+import { cloudinary } from '../media/cloudinary';
 
 /**
  * Official documents (license / inspection) are uploaded as Cloudinary

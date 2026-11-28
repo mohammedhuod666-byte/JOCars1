@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse, validationErrorResponse } from '@/lib/api';
-import { sanitizePlainText } from '@/lib/sanitize';
+import { sanitizePlainText } from '@/lib/security/sanitize';
 import { sendPushToUser } from '@/lib/push';
 
 const carUpdateSchema = z.object({

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { analyzeCarPrice, type CarData } from '@/ai/price-analysis';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { errorResponse } from '@/lib/api';
 
 export async function POST(request: NextRequest) {

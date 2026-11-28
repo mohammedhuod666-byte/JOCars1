@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
-import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { setOtp, normalizeJoPhone, generateSecureOtp } from '@/lib/otp-store';
-import { getOtp, deleteOtp } from '@/lib/otp-store';
+import { checkRateLimitAsync, getClientIp } from '@/lib/security/rate-limit';
+import { setOtp, normalizeJoPhone, generateSecureOtp } from '@/lib/security/otp-store';
+import { getOtp, deleteOtp } from '@/lib/security/otp-store';
 import { sendWhatsApp } from '@/lib/whatsapp';
 
 // Backwards compatibility: older code imported otpStore from here.

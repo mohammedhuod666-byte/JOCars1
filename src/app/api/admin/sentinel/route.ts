@@ -2,9 +2,9 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { getSentinelMode, invalidateSentinelModeCache } from '@/lib/sentinel';
+import { getSentinelMode, invalidateSentinelModeCache } from '@/lib/security/sentinel';
 import { createAuditLog } from '@/lib/audit';
-import { blockIP } from '@/lib/ip-blacklist';
+import { blockIP } from '@/lib/security/ip-blacklist';
 
 // Protection monitor dashboard data: recent signals, 24h stats, mode, and pending threat reviews.
 export async function GET(request: NextRequest) {

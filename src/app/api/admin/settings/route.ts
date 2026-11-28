@@ -72,7 +72,7 @@ export async function PUT(request: NextRequest) {
           // Preferred: Cloudinary — local disk writes vanish on serverless hosts.
           const hasCloudinary = !!(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
           if (hasCloudinary) {
-            const { uploadImage } = await import('@/lib/cloudinary');
+            const { uploadImage } = await import('@/lib/media/cloudinary');
             const mime = value.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
             const result = await uploadImage(`data:${mime};base64,${Buffer.from(bytes).toString('base64')}`, {
               folder: 'jo-cars/settings',

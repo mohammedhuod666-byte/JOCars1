@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { authenticateRequest } from '@/lib/auth';
 import { chatCompletion, type ChatMessage } from '@/ai/nvidia-client';
 import { getSystemPrompt, BRAND_PRICE_RANGES } from '@/ai/site-knowledge';

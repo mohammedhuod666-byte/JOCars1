@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { sanitizePlainText, sanitizeHtml } from '@/lib/sanitize';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { sanitizePlainText, sanitizeHtml } from '@/lib/security/sanitize';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

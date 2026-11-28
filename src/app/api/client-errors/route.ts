@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 
 // Lightweight client-error telemetry (no external dependency).
 // Captures browser crashes to the server log so production errors surface

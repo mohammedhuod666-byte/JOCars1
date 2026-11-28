@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { successResponse, errorResponse } from '@/lib/api';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

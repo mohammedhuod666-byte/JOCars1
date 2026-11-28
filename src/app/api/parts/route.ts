@@ -4,8 +4,8 @@ import { authenticateRequest } from '@/lib/auth';
 import { generateSlug } from '@/lib/utils';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
-import { sanitizePlainText, sanitizeHtml } from '@/lib/sanitize';
-import { validateUploadedImage } from '@/lib/image-validate';
+import { sanitizePlainText, sanitizeHtml } from '@/lib/security/sanitize';
+import { validateUploadedImage } from '@/lib/media/image-validate';
 
 const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
 
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
         // Local disk writes silently vanish on serverless hosts (Vercel).
         const hasCloudinary = !!(process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
         if (hasCloudinary) {
-          const { uploadImage } = await import('@/lib/cloudinary');
+          const { uploadImage } = await import('@/lib/media/cloudinary');
           const mime = file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`;
           const result = await uploadImage(`data:${mime};base64,${buffer.toString('base64')}`, {
             folder: 'jo-cars/parts',

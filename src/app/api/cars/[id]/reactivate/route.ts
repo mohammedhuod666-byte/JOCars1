@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
-import { checkPriceAlerts } from '@/lib/check-price-alerts';
-import { calculateFairPrice } from '@/lib/fair-price';
+import { checkPriceAlerts } from '@/lib/cars/check-price-alerts';
+import { calculateFairPrice } from '@/lib/cars/fair-price';
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

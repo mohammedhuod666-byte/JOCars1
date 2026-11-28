@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
-import { cloudinary } from '@/lib/cloudinary';
-import { validateUploadedVideo, detectVideoContainer } from '@/lib/video-validate';
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { cloudinary } from '@/lib/media/cloudinary';
+import { validateUploadedVideo, detectVideoContainer } from '@/lib/media/video-validate';
 
 /**
  * POST /api/upload/video

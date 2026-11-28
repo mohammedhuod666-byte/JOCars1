@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { fitGalleryToBudget } from '@/lib/image-compress-client';
-import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge, galleryBudget } from '@/lib/upload-limits';
+import { fitGalleryToBudget } from '@/lib/media/image-compress-client';
+import { MAX_PUBLISH_BODY_BYTES, formatMB, isPlatformTooLarge, galleryBudget } from '@/lib/media/upload-limits';
 import { LocationSelector, ProvinceItem, CityItem } from '@/components/cars/LocationSelector';
 
 // Comprehensive Auto Parts Taxonomy matching major international & Jordanian spare parts platforms

@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { successResponse, errorResponse } from '@/lib/api';
-import { isCronAuthorized } from '@/lib/cron-auth';
-import { isWeeklyJob, describeSchedule } from '@/lib/cron-guard';
+import { isCronAuthorized } from '@/lib/security/cron-auth';
+import { isWeeklyJob, describeSchedule } from '@/lib/security/cron-guard';
 import { sendWhatsAppToAdmins, isWhatsAppConfigured } from '@/lib/whatsapp';
 
 /**

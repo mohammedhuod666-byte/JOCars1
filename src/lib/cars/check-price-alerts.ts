@@ -1,4 +1,4 @@
-import prisma from './prisma';
+import prisma from '../prisma';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

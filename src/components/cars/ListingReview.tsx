@@ -6,7 +6,7 @@ import {
   Gauge, Image as ImageIcon, MapPin, Palette, Phone, Settings, ShieldCheck, Sparkles, Star, Zap,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
-import type { ScoreItem } from '@/lib/listing-score';
+import type { ScoreItem } from '@/lib/cars/listing-score';
 
 /**
  * Step 5 — pre-publish review.

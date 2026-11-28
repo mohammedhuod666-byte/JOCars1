@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api';
-import { isCronAuthorized } from '@/lib/cron-auth';
+import { isCronAuthorized } from '@/lib/security/cron-auth';
 import { runBackup } from '@/lib/backup';
 import { notifyAdmins } from '@/lib/admin-notify';
 

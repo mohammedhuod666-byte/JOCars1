@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { sanitizeFeatures } from '@/lib/car-features';
+import { sanitizeFeatures } from '@/lib/cars/car-features';
 import { normalizeTargetCondition, sanitizeTrim, drivetrainFromTrim, extractArabicVehicleOptions } from './spec-extract';
 import type { VehicleSpec } from './types';
 

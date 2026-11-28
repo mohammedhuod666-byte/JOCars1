@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-import { sanitizePlainText } from '@/lib/sanitize';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
+import { sanitizePlainText } from '@/lib/security/sanitize';
 
 export async function POST(request: Request) {
   try {

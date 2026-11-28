@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { signToken, setAuthCookie } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimitAsync } from '@/lib/rate-limit';
-import { getOtp, deleteOtp, MAX_OTP_ATTEMPTS, normalizeJoPhone } from '@/lib/otp-store';
+import { checkRateLimitAsync } from '@/lib/security/rate-limit';
+import { getOtp, deleteOtp, MAX_OTP_ATTEMPTS, normalizeJoPhone } from '@/lib/security/otp-store';
 import { createAuditLog } from '@/lib/audit';
 
 // POST /api/auth/verify-login-otp { phone, code } → login without password

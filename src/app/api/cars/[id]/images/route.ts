@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma, { invalidateCache } from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
-import { checkImageOrder, orderErrorMessage } from '@/lib/image-order';
+import { checkImageOrder, orderErrorMessage } from '@/lib/media/image-order';
 import { successResponse, errorResponse, notFoundResponse, unauthorizedResponse } from '@/lib/api';
 
 /**

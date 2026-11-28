@@ -3,8 +3,8 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse, notFoundResponse } from '@/lib/api';
 import { createAuditLog } from '@/lib/audit';
-import { checkPriceAlerts } from '@/lib/check-price-alerts';
-import { calculateFairPrice } from '@/lib/fair-price';
+import { checkPriceAlerts } from '@/lib/cars/check-price-alerts';
+import { calculateFairPrice } from '@/lib/cars/fair-price';
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,7 +55,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         // a market value without blocking the response (spec §13 revalue).
         try {
           const { runValuation } = await import('@/ai/valuation/engine');
-          const { sanitizeFeatures } = await import('@/lib/car-features');
+          const { sanitizeFeatures } = await import('@/lib/cars/car-features');
           runValuation(
             {
               brand: oldCar.brand?.nameAr || '', brandEn: oldCar.brand?.nameEn || null,

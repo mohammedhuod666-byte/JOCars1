@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { recordSignal, enforceProbeBan, handleBreachAttempt, type SignalType } from '@/lib/sentinel';
-import { SIGNAL_WEIGHTS } from '@/lib/sentinel';
+import { recordSignal, enforceProbeBan, handleBreachAttempt, type SignalType } from '@/lib/security/sentinel';
+import { SIGNAL_WEIGHTS } from '@/lib/security/sentinel';
 
 // Ingestion for the edge middleware (proxy.ts), which cannot touch the DB.
 // Guarded by a shared secret — never call from browsers.

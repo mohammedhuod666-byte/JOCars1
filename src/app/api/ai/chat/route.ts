@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { authenticateRequest } from '@/lib/auth';
 import { errorResponse } from '@/lib/api';
 import { chatCompletion, generateArabicFallbackResponse, type ChatMessage, type AIModelId, DEFAULT_MODEL } from '@/ai/nvidia-client';

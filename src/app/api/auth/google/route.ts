@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { hashPassword, signToken, setAuthCookie } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { checkRateLimitAsync, getClientIp } from '@/lib/security/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 import { randomBytes } from 'crypto';
 

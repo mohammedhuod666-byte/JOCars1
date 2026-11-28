@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkRateLimitAsync } from '@/lib/rate-limit';
-import { sanitizePlainText } from '@/lib/sanitize';
+import { checkRateLimitAsync } from '@/lib/security/rate-limit';
+import { sanitizePlainText } from '@/lib/security/sanitize';
 import { sendWhatsApp } from '@/lib/whatsapp';
 import { notifyAdmins } from '@/lib/admin-notify';
 import { createAuditLog } from '@/lib/audit';
@@ -10,7 +10,7 @@ import {
   generateRecoveryKey,
   hashRecoveryKeyArgon2id,
   verifyRecoveryKeyArgon2id,
-} from '@/lib/recovery-key';
+} from '@/lib/security/recovery-key';
 
 const PASSWORD_REGEX =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;

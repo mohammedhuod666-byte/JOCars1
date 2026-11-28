@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { authenticateRequest } from '@/lib/auth';
-import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
+import { successResponse, errorResponse, requireAdmin } from '@/lib/api';
 import { createAuditLog } from '@/lib/audit';
 
 export async function GET(request: NextRequest) {
-  const user = await authenticateRequest(request);
-  if (!user || user.role !== 'ADMIN') return unauthorizedResponse();
+  const { error } = await requireAdmin(request);
+  if (error) return error;
 
   try {
     const status = request.nextUrl.searchParams.get('status');
@@ -37,8 +36,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await authenticateRequest(request);
-  if (!user || user.role !== 'ADMIN') return unauthorizedResponse();
+  const { user, error } = await requireAdmin(request);
+  if (error) return error;
 
   try {
     const body = await request.json();

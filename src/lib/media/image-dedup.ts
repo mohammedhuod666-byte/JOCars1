@@ -1,4 +1,4 @@
-import prisma from './prisma';
+import prisma from '../prisma';
 import sharp from 'sharp';
 
 interface DuplicateCheck {

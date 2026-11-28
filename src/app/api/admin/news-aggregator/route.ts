@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { isCronAuthorized } from '@/lib/cron-auth';
+import { isCronAuthorized } from '@/lib/security/cron-auth';
 import { chatCompletion } from '@/ai/nvidia-client';
 import { getExpressiveNewsImage } from '@/lib/news-image';
 

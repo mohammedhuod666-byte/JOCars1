@@ -5,7 +5,7 @@ import { reportSchema } from '@/lib/validations';
 import { successResponse, errorResponse, unauthorizedResponse, validationErrorResponse } from '@/lib/api';
 import { notifyAdmins, getAdminNotifyLink } from '@/lib/admin-notify';
 import { sendWhatsAppToAdmins, buildAdminMessage } from '@/lib/whatsapp';
-import { recordSignal } from '@/lib/sentinel';
+import { recordSignal } from '@/lib/security/sentinel';
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);

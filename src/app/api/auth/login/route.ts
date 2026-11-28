@@ -3,10 +3,10 @@ import prisma from '@/lib/prisma';
 import { verifyPassword, signToken, setAuthCookie, detectBcryptCost, hashPassword, TARGET_BCRYPT_COST } from '@/lib/auth';
 import { loginSchema } from '@/lib/validations';
 import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api';
-import { checkRateLimitAsync, RATE_LIMITS, resetRateLimit } from '@/lib/rate-limit';
-import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/ip-blacklist';
+import { checkRateLimitAsync, RATE_LIMITS, resetRateLimit } from '@/lib/security/rate-limit';
+import { isIPBlocked, blockIP, trackSuspiciousActivity } from '@/lib/security/ip-blacklist';
 import { createAuditLog } from '@/lib/audit';
-import { recordSignal } from '@/lib/sentinel';
+import { recordSignal } from '@/lib/security/sentinel';
 
 export async function POST(request: NextRequest) {
   try {

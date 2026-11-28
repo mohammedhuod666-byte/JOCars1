@@ -16,7 +16,7 @@ import {
   Info, RefreshCw, Layers, FileCheck2, RotateCcw, CalendarCheck
 } from 'lucide-react';
 import { MapPicker } from '@/components/cars/MapPicker';
-import { compressImagesClient, compressDocsClient, fitGalleryToBudget } from '@/lib/image-compress-client';
+import { compressImagesClient, compressDocsClient, fitGalleryToBudget } from '@/lib/media/image-compress-client';
 import { AIPriceEstimator } from '@/components/cars/AIPriceEstimator';
 import { SearchableBrandModelSelect } from '@/components/cars/SearchableBrandModelSelect';
 import { LocationSelector, ProvinceItem } from '@/components/cars/LocationSelector';
@@ -164,19 +164,19 @@ const TRADE_OPTIONS = [
   { value: 'INSTALLMENTS', label: 'إمكانية الأقساط بدفعة أولى ' },
 ];
 
-import { CAR_FEATURES, CAR_FEATURES_AR } from '@/lib/car-features';
+import { CAR_FEATURES, CAR_FEATURES_AR } from '@/lib/cars/car-features';
 import ListingReview from '@/components/cars/ListingReview';
 import OptionGroup, { DeclarationNote } from '@/components/cars/OptionGroup';
 import PhotoManager, { moveItem } from '@/components/cars/PhotoManager';
-import type { CompletenessResult } from '@/lib/listing-score';
-import { scoreListing } from '@/lib/listing-score';
-import { saveAddCarDraft, loadAddCarDraft, clearAddCarDraft, draftAgeLabel } from '@/lib/add-car-draft';
-import type { DocKind } from '@/lib/doc-upload';
-import { directUploadAvailable, uploadVideoDirect, SAFE_INLINE_MAX_BYTES } from '@/lib/video-upload';
+import type { CompletenessResult } from '@/lib/cars/listing-score';
+import { scoreListing } from '@/lib/cars/listing-score';
+import { saveAddCarDraft, loadAddCarDraft, clearAddCarDraft, draftAgeLabel } from '@/lib/cars/add-car-draft';
+import type { DocKind } from '@/lib/media/doc-upload';
+import { directUploadAvailable, uploadVideoDirect, SAFE_INLINE_MAX_BYTES } from '@/lib/media/video-upload';
 import {
   MAX_PUBLISH_BODY_BYTES, MAX_SINGLE_FILE_BYTES, formatMB,
   isPlatformTooLarge, tooLargeMessage, singleFileTooLargeMessage, galleryBudget,
-} from '@/lib/upload-limits';
+} from '@/lib/media/upload-limits';
 
 /**
  * Maps every server-validated field (carSchema in src/lib/validations.ts +

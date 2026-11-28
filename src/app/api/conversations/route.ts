@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { sendWhatsApp, buildCarMessage } from '@/lib/whatsapp';
-import { trackMessageSent } from '@/lib/sentinel';
+import { trackMessageSent } from '@/lib/security/sentinel';
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);

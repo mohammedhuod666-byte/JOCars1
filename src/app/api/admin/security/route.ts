@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest, requireRole } from '@/lib/auth';
 import { successResponse, unauthorizedResponse } from '@/lib/api';
 import { getSecurityStats } from '@/lib/api-logger';
-import { getBlockedIPs } from '@/lib/ip-blacklist';
+import { getBlockedIPs } from '@/lib/security/ip-blacklist';
 
 export async function GET(request: NextRequest) {
   const user = await authenticateRequest(request);

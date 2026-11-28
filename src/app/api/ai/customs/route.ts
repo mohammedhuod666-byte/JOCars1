@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { chatCompletionJSON, type ChatMessage } from '@/ai/nvidia-client';
 import { successResponse, errorResponse } from '@/lib/api';
-import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/security/rate-limit';
 import { authenticateRequest } from '@/lib/auth';
 
 interface CustomsResult {

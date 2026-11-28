@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { checkRateLimitAsync, getClientIp } from '@/lib/rate-limit';
-import { getOtp, deleteOtp, incrementOtpAttempts, normalizeJoPhone } from '@/lib/otp-store';
+import { checkRateLimitAsync, getClientIp } from '@/lib/security/rate-limit';
+import { getOtp, deleteOtp, incrementOtpAttempts, normalizeJoPhone } from '@/lib/security/otp-store';
 
 const MAX_OTP_ATTEMPTS = 5;
 

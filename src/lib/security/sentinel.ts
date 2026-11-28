@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { sendWhatsAppToAdmins, isWhatsAppConfigured } from '@/lib/whatsapp';
-import { blockIP } from '@/lib/ip-blacklist';
+import { blockIP } from '@/lib/security/ip-blacklist';
 
 // ── Sentinel: automatic protection monitor ──
 // Weighted signals per user over a rolling 24h window:

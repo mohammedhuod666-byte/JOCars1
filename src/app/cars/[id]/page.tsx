@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { formatPrice, formatDistance, getFuelTypeLabel, getTransmissionLabel, getDrivetrainLabel, formatDate } from '@/lib/utils';
 import { CarDriveLoader } from '@/components/cars/CarDriveLoader';
-import { getCachedCarDetail, setCachedCarDetail } from '@/lib/car-detail-cache';
+import { getCachedCarDetail, setCachedCarDetail } from '@/lib/cars/car-detail-cache';
 import { CustomsCalculator } from '@/components/cars/CustomsCalculator';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompareStore } from '@/store';
@@ -26,12 +26,12 @@ import { PriceFairnessIndicator } from '@/components/cars/PriceFairnessIndicator
 import type { Car } from '@/types';
 import { fetchWithRetry } from '@/lib/fetch-retry';
 import toast from 'react-hot-toast';
-import { sanitizePlainText } from '@/lib/sanitize';
+import { sanitizePlainText } from '@/lib/security/sanitize';
 import JordanianInspectionReport from '@/components/cars/JordanianInspectionReport';
 import CarDocumentsSection from '@/components/cars/CarDocumentsSection';
 import { ValuationReport } from '@/components/cars/ValuationReport';
 import { HoldButton } from '@/components/ui/HoldButton';
-import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/car-features';
+import { CAR_FEATURES_AR, sanitizeFeatures } from '@/lib/cars/car-features';
 
 const CarComments = lazy(() => import('@/components/cars/CarComments').then(m => ({ default: m.CarComments })));
 

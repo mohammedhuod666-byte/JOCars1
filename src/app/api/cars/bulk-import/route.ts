@@ -2,10 +2,10 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createAuditLog } from '@/lib/audit';
 import { generateSlug } from '@/lib/utils';
-import { generateRefCode } from '@/lib/generate-refcode';
+import { generateRefCode } from '@/lib/cars/generate-refcode';
 
 interface BulkRow {
   brand?: string; model?: string; year?: number | string; price?: number | string;

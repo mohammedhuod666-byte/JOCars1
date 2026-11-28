@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api';
-import { isCronAuthorized } from '@/lib/cron-auth';
-import { recalculateAllFairPrices } from '@/lib/fair-price';
+import { isCronAuthorized } from '@/lib/security/cron-auth';
+import { recalculateAllFairPrices } from '@/lib/cars/fair-price';
 
 /**
  * Nightly fair-price recalculation — called by server.js every 24 hours.

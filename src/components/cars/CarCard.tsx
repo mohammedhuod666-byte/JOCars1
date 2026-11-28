@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import { useInScrollView, scrollStyle } from '@/hooks/useInScrollView';
 import { useCompareStore } from '@/store';
-import { warmCarDetailCache } from '@/lib/car-detail-cache';
+import { warmCarDetailCache } from '@/lib/cars/car-detail-cache';
 import type { Car } from '@/types';
-import { cloudinaryThumb } from '@/lib/img-url';
+import { cloudinaryThumb } from '@/lib/media/img-url';
 import { formatPrice, formatDistance, getTransmissionLabel, getFuelTypeLabel, getConditionLabel } from '@/lib/utils';
 
 interface CarCardProps {

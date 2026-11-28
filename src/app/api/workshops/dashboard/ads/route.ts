@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const imageUrls: string[] = [];
-    const { uploadImage } = await import('@/lib/cloudinary');
+    const { uploadImage } = await import('@/lib/media/cloudinary');
     for (const file of imageFiles) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);

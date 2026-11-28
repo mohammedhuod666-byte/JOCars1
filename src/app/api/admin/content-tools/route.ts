@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { authenticateRequest } from '@/lib/auth';
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/api';
 import { descriptionGenerator } from '@/ai/description-generator';
-import { findDuplicateImages } from '@/lib/image-dedup';
+import { findDuplicateImages } from '@/lib/media/image-dedup';
 
 export async function POST(request: NextRequest) {
   const user = await authenticateRequest(request);
