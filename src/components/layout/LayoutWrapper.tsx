@@ -5,6 +5,7 @@ import { Header } from './Header';
 import { Footer } from './Footer';
 import { MobileBottomNav } from './MobileBottomNav';
 import { UserMenuSheet } from './UserMenuSheet';
+import { SiteOnboarding } from '@/components/onboarding/SiteOnboarding';
 
 const FULLSCREEN_ROUTES = ['/messages'];
 
@@ -37,6 +38,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
       <Footer />
       <MobileBottomNav />
       <UserMenuSheet />
+      <SiteOnboarding />
     </>
   );
 }

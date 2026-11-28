@@ -11,15 +11,15 @@ import { PriceRanges } from '@/components/home/PriceRanges';
 export default function HomePage() {
   return (
     <main className="bg-[#080a0f] text-slate-100 min-h-screen selection:bg-amber-400 selection:text-slate-950">
-      <HeroSection />
-      <StoriesStrip />
-      <ServicesGrid />
-      <EmergencyBanner />
-      <FeaturedCars />
+      <div data-tour="hero"><HeroSection /></div>
+      <div data-tour="stories"><StoriesStrip /></div>
+      <div data-tour="services"><ServicesGrid /></div>
+      <div data-tour="emergency"><EmergencyBanner /></div>
+      <div data-tour="featured"><FeaturedCars /></div>
       <LatestCars />
       <BrandsSection />
       <CitiesSection />
-      <PriceRanges />
+      <div data-tour="priceranges"><PriceRanges /></div>
     </main>
   );
 }
