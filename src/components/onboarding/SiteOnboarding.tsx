@@ -5,73 +5,19 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  getPageGuideConfig,
+  HOME_GUIDE,
+  TOTAL_DISCOVERABLE_PAGES,
+  type PageGuideConfig,
+} from './onboardingConfig';
+import {
   Compass, Play, Pause, ChevronLeft, ChevronRight, X, CheckCircle2,
-  Circle, Car, Wrench, Calculator, PlusCircle, Sparkles, Heart,
-  ChevronDown, ChevronUp, RotateCcw, EyeOff, Lightbulb, Target
+  Circle, Car, Wrench, Calculator, PlusCircle, Sparkles,
+  ChevronDown, ChevronUp, RotateCcw, EyeOff, Lightbulb, Target, Award
 } from 'lucide-react';
 
-const STORAGE_KEY = 'jocars_onboarding_v1';
+const STORAGE_KEY = 'jocars_onboarding_v2';
 const AUTO_ADVANCE_MS = 5000;
-
-interface TourStep {
-  selector: string;
-  title: string;
-  description: string;
-  badge: string;
-}
-
-const TOUR_STEPS: TourStep[] = [
-  {
-    selector: '[data-tour="hero"]',
-    badge: 'الخطوة 1 من 6',
-    title: 'البحث الذكي الموحد',
-    description: 'من هنا تبحث مباشرة عن أي سيارة أو ورشة صيانة أو قطعة غيار، أو تختار من الاقتراحات الجاهزة بنقرة واحدة.',
-  },
-  {
-    selector: '[data-tour="stories"]',
-    badge: 'الخطوة 2 من 6',
-    title: 'قصص المعارض والعروض',
-    description: 'تصفح أحدث السيارات والعروض الحصرية اليومية من المعارض والتجار الموثقين في الأردن.',
-  },
-  {
-    selector: '[data-tour="services"]',
-    badge: 'الخطوة 3 من 6',
-    title: 'مركز خدمات JO Cars',
-    description: 'بوابتك السريعة لكل أقسام الموقع: سوق السيارات، الورش، قطع الغيار، المنتدى، المزادات، وحاسبة الجمرك.',
-  },
-  {
-    selector: '[data-tour="emergency"]',
-    badge: 'الخطوة 4 من 6',
-    title: 'طوارئ الطريق والونش 24/7',
-    description: 'تعطلت سيارتك فجأة؟ اضغط هنا للوصول السريع إلى أقرب ونش سحب أو ورشة صيانة متنقلة لموقعك.',
-  },
-  {
-    selector: '[data-tour="featured"]',
-    badge: 'الخطوة 5 من 6',
-    title: 'السيارات المميزة والتقييم العادل',
-    description: 'كل إعلان يعرض السعر ومؤشر عدالة السعر وحالة الفحص لتقارن وتختار بثقة دون مبالغة في الأسعار.',
-  },
-  {
-    selector: '[data-tour="priceranges"]',
-    badge: 'الخطوة 6 من 6',
-    title: 'اختر حسب ميزانيتك',
-    description: 'حدد الفئة السعرية المناسبة لميزانيتك ليعرض لك الموقع السيارات المطابقة فوراً دون عناء البحث.',
-  },
-];
-
-interface ChecklistTask {
-  id: string;
-  title: string;
-  href: string;
-}
-
-const CHECKLIST_TASKS: ChecklistTask[] = [
-  { id: 'browse_cars', title: 'تصفح سوق السيارات والبحث الذكي', href: '/cars' },
-  { id: 'view_car', title: 'افتح إعلاناً واطلع على التقييم العادل', href: '/cars' },
-  { id: 'save_fav', title: 'احفظ سيارة في المفضلة للمقارنة', href: '/cars' },
-  { id: 'visit_workshops', title: 'تعرّف على دليل الورش وحاسبة التكاليف', href: '/workshops' },
-  { id: 'try_customs', title: 'جرّب حاسبة الجمرك أو المساعد الذكي', href: '/customs-calculator' },
-];
 
 const INTENT_PATHS = [
   {
@@ -108,31 +54,18 @@ const INTENT_PATHS = [
   },
 ];
 
-function getPageTip(pathname: string): string {
-  if (pathname === '/') return 'ابدأ بالبحث في الأعلى أو اختر الخدمة التي تحتاجها من مركز الخدمات.';
-  if (pathname === '/cars') return 'استخدم الفلاتر لتحديد الموديل والميزانية، واضغط على أي سيارة لرؤية تقييم السعر العادل.';
-  if (pathname.startsWith('/cars/') && pathname !== '/cars/add' && pathname !== '/cars/compare') {
-    return 'هنا تجد التقييم العادل للسعر، تقرير الفحص، وحاسبة الجمرك، ويمكنك التفاوض مع البائع مباشرة.';
-  }
-  if (pathname.startsWith('/workshops')) return 'يمكنك البحث حسب التخصص أو المحافظة، أو فتح حاسبة تكاليف الصيانة لمعرفة الأسعار التقريبية.';
-  if (pathname.startsWith('/customs-calculator')) return 'أدخل سنة الصنع وسعة المحرك لتحصل على تقدير فوري للرسوم الجمركية في الأردن.';
-  if (pathname.startsWith('/parts')) return 'ابحث باسم القطعة أو رقمها الأصلي وتواصل مباشرة مع المحلات الموثوقة.';
-  if (pathname.startsWith('/tickets')) return 'تواجه أي مشكلة؟ افتح تذكرة دعم وتابع الرد الفوري من الإدارة.';
-  return 'استخدم القائمة العلوية للوصول السريع إلى السيارات، الورش، قطع الغيار، وحاسبة الجمرك.';
-}
-
 interface OnboardingState {
   welcomed: boolean;
-  tourDone: boolean;
-  checklistDismissed: boolean;
+  seenPages: string[];
   completedTasks: string[];
+  widgetHidden: boolean;
 }
 
 const DEFAULT_STATE: OnboardingState = {
   welcomed: false,
-  tourDone: false,
-  checklistDismissed: false,
+  seenPages: [],
   completedTasks: [],
+  widgetHidden: false,
 };
 
 const HIDDEN_ROUTES = ['/admin', '/auth', '/login', '/messages'];
@@ -143,17 +76,18 @@ export function SiteOnboarding() {
   const { user } = useAuth();
 
   const storageKey = user?.id ? `${STORAGE_KEY}_${user.id}` : `${STORAGE_KEY}_guest`;
+  const pageGuide: PageGuideConfig | null = getPageGuideConfig(pathname);
 
   const [mounted, setMounted] = useState(false);
   const [state, setState] = useState<OnboardingState>(DEFAULT_STATE);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [pageDiscoveryOpen, setPageDiscoveryOpen] = useState(false);
   const [tourActive, setTourActive] = useState(false);
   const [tourIndex, setTourIndex] = useState(0);
   const [autoPlay, setAutoPlay] = useState(true);
   const [progress, setProgress] = useState(0);
   const [targetRect, setTargetRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [checklistExpanded, setChecklistExpanded] = useState(false);
-  const [justCompletedAll, setJustCompletedAll] = useState(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -167,9 +101,22 @@ export function SiteOnboarding() {
     });
   }, [storageKey]);
 
-  // Load persisted onboarding state & trigger on '/' for new accounts or first-time visitors
+  const completeTask = useCallback((taskId: string) => {
+    saveState((prev) => {
+      if (prev.completedTasks.includes(taskId)) return prev;
+      return { ...prev, completedTasks: [...prev.completedTasks, taskId] };
+    });
+  }, [saveState]);
+
+  // Load state and trigger Home Welcome OR Per-Page Discovery prompt on first visit
   useEffect(() => {
     setMounted(true);
+    setTourActive(false);
+    setPageDiscoveryOpen(false);
+    setChecklistExpanded(false);
+
+    if (HIDDEN_ROUTES.some((r) => pathname.startsWith(r))) return;
+
     let currentState = DEFAULT_STATE;
     try {
       const raw = localStorage.getItem(storageKey);
@@ -181,75 +128,93 @@ export function SiteOnboarding() {
       setState(DEFAULT_STATE);
     }
 
+    // Mark 'visit' tasks for this page automatically
+    if (pageGuide) {
+      const visitTasks = pageGuide.tasks.filter((t) => t.matchEvent === 'visit');
+      if (visitTasks.length > 0) {
+        setState((prev) => {
+          const toAdd = visitTasks.map((t) => t.id).filter((id) => !prev.completedTasks.includes(id));
+          if (toAdd.length === 0) return prev;
+          const next = { ...prev, completedTasks: [...prev.completedTasks, ...toAdd] };
+          try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
+    }
+
     if (pathname === '/') {
       let justRegistered = false;
       try {
         justRegistered = sessionStorage.getItem('jocars_just_registered') === '1';
-        if (justRegistered) {
-          sessionStorage.removeItem('jocars_just_registered');
-        }
+        if (justRegistered) sessionStorage.removeItem('jocars_just_registered');
       } catch {}
 
       if (justRegistered || !currentState.welcomed) {
         const t = setTimeout(() => setWelcomeOpen(true), 700);
         return () => clearTimeout(t);
       }
+    } else if (pageGuide && !currentState.seenPages.includes(pageGuide.id)) {
+      const t = setTimeout(() => setPageDiscoveryOpen(true), 800);
+      return () => clearTimeout(t);
     }
   }, [pathname, storageKey]);
 
-  // Mark task helper
-  const completeTask = useCallback((taskId: string) => {
-    saveState((prev) => {
-      if (prev.completedTasks.includes(taskId)) return prev;
-      const nextTasks = [...prev.completedTasks, taskId];
-      if (nextTasks.length === CHECKLIST_TASKS.length) {
-        setJustCompletedAll(true);
-        setTimeout(() => {
-          saveState((s) => ({ ...s, checklistDismissed: true }));
-          setJustCompletedAll(false);
-        }, 4500);
-      }
-      return { ...prev, completedTasks: nextTasks };
-    });
-  }, [saveState]);
-
-  // Auto-track user progress across routes
+  // Auto-detect scroll_mid, input, and click tasks for the current page
   useEffect(() => {
-    if (!mounted) return;
-    if (pathname === '/cars' || pathname.startsWith('/cars?')) {
-      completeTask('browse_cars');
-    } else if (pathname.startsWith('/cars/') && !['/cars/add', '/cars/compare'].includes(pathname)) {
-      completeTask('view_car');
-    } else if (pathname === '/favorites') {
-      completeTask('save_fav');
-    } else if (pathname.startsWith('/workshops')) {
-      completeTask('visit_workshops');
-    } else if (pathname.startsWith('/customs-calculator') || pathname.startsWith('/ai')) {
-      completeTask('try_customs');
-    }
-  }, [pathname, mounted, completeTask]);
+    if (!mounted || !pageGuide) return;
 
-  // Listen for favorite button clicks globally to auto-check "save_fav"
-  useEffect(() => {
-    if (!mounted) return;
-    const handleGlobalClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const btn = target.closest('button');
-      if (!btn) return;
-      const title = (btn.getAttribute('title') || '') + ' ' + (btn.textContent || '');
-      if (title.includes('المفضلة') || title.includes('حفظ')) {
-        completeTask('save_fav');
+    const scrollTasks = pageGuide.tasks.filter((t) => t.matchEvent === 'scroll_mid');
+    const inputTasks = pageGuide.tasks.filter((t) => t.matchEvent === 'input');
+    const clickTasks = pageGuide.tasks.filter((t) => t.matchText && t.matchText.length > 0);
+
+    const onScroll = () => {
+      if (scrollTasks.length === 0) return;
+      if (window.scrollY > 260) {
+        scrollTasks.forEach((t) => completeTask(t.id));
       }
     };
-    document.addEventListener('click', handleGlobalClick, true);
-    return () => document.removeEventListener('click', handleGlobalClick, true);
-  }, [mounted, completeTask]);
+
+    const onInput = (e: Event) => {
+      if (inputTasks.length === 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA')) {
+        inputTasks.forEach((t) => completeTask(t.id));
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (clickTasks.length === 0) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const el = target.closest('button, a');
+      if (!el) return;
+      const txt = (el.textContent || '') + ' ' + (el.getAttribute('title') || '');
+      clickTasks.forEach((t) => {
+        if (t.matchText?.some((kw) => txt.includes(kw))) {
+          completeTask(t.id);
+        }
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('input', onInput, true);
+    document.addEventListener('change', onInput, true);
+    document.addEventListener('click', onClick, true);
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('input', onInput, true);
+      document.removeEventListener('change', onInput, true);
+      document.removeEventListener('click', onClick, true);
+    };
+  }, [mounted, pageGuide, completeTask]);
+
+  const activeSteps = (pageGuide || HOME_GUIDE).tourSteps;
 
   // Update spotlight rectangle for current tour step
   const updateTargetRect = useCallback(() => {
     if (!tourActive) return;
-    const step = TOUR_STEPS[tourIndex];
+    const step = activeSteps[tourIndex];
     if (!step) return;
     const el = document.querySelector(step.selector) as HTMLElement | null;
     if (!el) {
@@ -257,18 +222,21 @@ export function SiteOnboarding() {
       return;
     }
     const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) {
+      setTargetRect(null);
+      return;
+    }
     setTargetRect({
       top: Math.max(8, r.top - 6),
       left: Math.max(8, r.left - 6),
       width: Math.min(window.innerWidth - 16, r.width + 12),
       height: Math.min(window.innerHeight - 16, r.height + 12),
     });
-  }, [tourActive, tourIndex]);
+  }, [tourActive, tourIndex, activeSteps]);
 
-  // Scroll smoothly to current tour target
   useEffect(() => {
     if (!tourActive) return;
-    const step = TOUR_STEPS[tourIndex];
+    const step = activeSteps[tourIndex];
     if (!step) return;
     const el = document.querySelector(step.selector) as HTMLElement | null;
     if (el) {
@@ -284,13 +252,22 @@ export function SiteOnboarding() {
     } else {
       setTargetRect(null);
     }
-  }, [tourActive, tourIndex, updateTargetRect]);
+  }, [tourActive, tourIndex, activeSteps, updateTargetRect]);
+
+  const markPageSeen = useCallback((pageId: string) => {
+    saveState((prev) => ({
+      ...prev,
+      welcomed: true,
+      seenPages: prev.seenPages.includes(pageId) ? prev.seenPages : [...prev.seenPages, pageId],
+    }));
+  }, [saveState]);
 
   const finishTour = useCallback(() => {
     setTourActive(false);
     setProgress(0);
-    saveState((prev) => ({ ...prev, welcomed: true, tourDone: true }));
-  }, [saveState]);
+    if (pageGuide) markPageSeen(pageGuide.id);
+    else saveState((prev) => ({ ...prev, welcomed: true }));
+  }, [pageGuide, markPageSeen, saveState]);
 
   // Auto-Pilot Timer
   useEffect(() => {
@@ -305,7 +282,7 @@ export function SiteOnboarding() {
       const pct = Math.min(100, (elapsed / AUTO_ADVANCE_MS) * 100);
       setProgress(pct);
       if (elapsed >= AUTO_ADVANCE_MS) {
-        if (tourIndex < TOUR_STEPS.length - 1) {
+        if (tourIndex < activeSteps.length - 1) {
           setTourIndex((i) => i + 1);
         } else {
           finishTour();
@@ -315,49 +292,47 @@ export function SiteOnboarding() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [tourActive, autoPlay, tourIndex, finishTour]);
+  }, [tourActive, autoPlay, tourIndex, activeSteps.length, finishTour]);
 
-  const startAutoTour = () => {
+  const startCurrentPageTour = () => {
     setWelcomeOpen(false);
-    saveState((prev) => ({ ...prev, welcomed: true }));
-    if (pathname !== '/') {
-      router.push('/');
-      setTimeout(() => {
-        setTourIndex(0);
-        setAutoPlay(true);
-        setTourActive(true);
-      }, 650);
-    } else {
-      setTourIndex(0);
-      setAutoPlay(true);
-      setTourActive(true);
-    }
+    setPageDiscoveryOpen(false);
+    setChecklistExpanded(false);
+    if (pageGuide) markPageSeen(pageGuide.id);
+    setTourIndex(0);
+    setAutoPlay(true);
+    setTourActive(true);
   };
 
   const skipWelcome = () => {
     setWelcomeOpen(false);
-    saveState((prev) => ({ ...prev, welcomed: true }));
+    markPageSeen('home');
+  };
+
+  const dismissPageDiscovery = () => {
+    setPageDiscoveryOpen(false);
+    if (pageGuide) markPageSeen(pageGuide.id);
   };
 
   const chooseIntent = (href: string) => {
     setWelcomeOpen(false);
-    saveState((prev) => ({ ...prev, welcomed: true }));
+    markPageSeen('home');
     router.push(href);
   };
 
   if (!mounted) return null;
   if (HIDDEN_ROUTES.some((r) => pathname.startsWith(r))) return null;
 
-  const completedCount = state.completedTasks.length;
-  const totalTasks = CHECKLIST_TASKS.length;
-  const currentStep = TOUR_STEPS[tourIndex];
-
-  // Position tooltip smartly inside viewport
+  const activePageGuide = pageGuide || HOME_GUIDE;
+  const pageTasks = activePageGuide.tasks;
+  const pageDoneCount = pageTasks.filter((t) => state.completedTasks.includes(t.id)).length;
+  const currentStep = activeSteps[tourIndex];
   const tooltipOnTop = targetRect ? targetRect.top > window.innerHeight * 0.52 : false;
+  const pagesMastered = state.seenPages.length;
 
   return (
     <>
-      {/* 1. First-Visit Welcome & Smart Intent Modal */}
+      {/* 1. Home Welcome & Smart Intent Modal */}
       <AnimatePresence>
         {welcomeOpen && (
           <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -382,7 +357,7 @@ export function SiteOnboarding() {
                   <div>
                     <h2 className="text-lg sm:text-xl font-black text-white">أهلاً بك في JO Cars</h2>
                     <p className="text-xs sm:text-sm text-slate-400">
-                      دعنا نعرّفك على الموقع في 30 ثانية أو اختر وجهتك مباشرة
+                      تعرّف على الموقع في 30 ثانية أو اختر وجهتك مباشرة
                     </p>
                   </div>
                 </div>
@@ -395,10 +370,9 @@ export function SiteOnboarding() {
                 </button>
               </div>
 
-              {/* Auto-Pilot Tour CTA */}
               <button
                 type="button"
-                onClick={startAutoTour}
+                onClick={startCurrentPageTour}
                 className="w-full p-4 rounded-2xl bg-gradient-to-r from-[#ffc640] to-amber-500 hover:from-[#ffd266] hover:to-amber-400 text-[#0e1013] flex items-center justify-between gap-3 shadow-lg shadow-[#ffc640]/20 transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-3 text-right">
@@ -408,18 +382,17 @@ export function SiteOnboarding() {
                   <div>
                     <div className="font-black text-sm sm:text-base">ابدأ الجولة التفاعلية التلقائية (30 ثانية)</div>
                     <div className="text-[11px] sm:text-xs font-bold opacity-80">
-                      يتحرك الموقع تلقائياً ويشرح لك أهم الأقسام والأدوات خطوة بخطوة
+                      يتحرك الموقع تلقائياً ويشرح لك كل قسم، وعند دخولك أي صفحة أخرى سيشرحها لك أيضاً
                     </div>
                   </div>
                 </div>
                 <Play className="w-5 h-5 shrink-0 group-hover:scale-110 transition-transform" />
               </button>
 
-              {/* Smart Intent Selector */}
               <div className="space-y-2.5">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
                   <Target className="w-3.5 h-3.5 text-[#ffc640]" />
-                  <span>أو اختر ما تريد فعله الآن مباشرة:</span>
+                  <span>أو اختر هدفك للانتقال المباشر:</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {INTENT_PATHS.map((item) => {
@@ -447,7 +420,7 @@ export function SiteOnboarding() {
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-500">يمكنك إعادة الجولة في أي وقت من زر الدليل</span>
+                <span className="text-[11px] text-slate-500">يتم شرح كل صفحة تلقائياً عند زيارتها لأول مرة</span>
                 <button
                   type="button"
                   onClick={skipWelcome}
@@ -461,14 +434,67 @@ export function SiteOnboarding() {
         )}
       </AnimatePresence>
 
-      {/* 2. Auto-Pilot Guided Tour Spotlight Overlay */}
+      {/* 2. Per-Page First-Time Discovery Prompt */}
+      <AnimatePresence>
+        {pageDiscoveryOpen && pageGuide && !tourActive && !welcomeOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.97 }}
+            className="fixed bottom-24 left-3 right-3 sm:left-5 sm:right-auto sm:w-[390px] z-[110] rounded-2xl sm:rounded-3xl bg-[#14181f] border border-[#ffc640]/40 p-4 sm:p-5 shadow-2xl space-y-3.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#ffc640]/15 border border-[#ffc640]/30 flex items-center justify-center text-[#ffc640] shrink-0">
+                  <Compass className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black text-[#ffc640] uppercase">دليل استكشاف الصفحة</span>
+                  <h3 className="text-sm sm:text-base font-black text-white">{pageGuide.welcomeTitle}</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissPageDiscovery}
+                className="p-1.5 rounded-lg bg-white/[0.05] text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">{pageGuide.welcomeDesc}</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={startCurrentPageTour}
+                className="h-10 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>جولة هذه الصفحة</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  dismissPageDiscovery();
+                  setChecklistExpanded(true);
+                }}
+                className="h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>مهام الصفحة ({pageTasks.length})</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Auto-Pilot Guided Tour Spotlight Overlay */}
       <AnimatePresence>
         {tourActive && currentStep && (
           <div className="fixed inset-0 z-[130] pointer-events-auto">
-            {/* Dimmed backdrop if targetRect not found */}
             {!targetRect && <div className="absolute inset-0 bg-[#080a0f]/80 backdrop-blur-xs" />}
 
-            {/* Spotlight Cutout Ring */}
             {targetRect && (
               <motion.div
                 layout
@@ -484,16 +510,14 @@ export function SiteOnboarding() {
               />
             )}
 
-            {/* Floating Tour Control Card */}
             <motion.div
-              key={tourIndex}
+              key={`${activePageGuide.id}-${tourIndex}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               className={`fixed z-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[400px] rounded-2xl sm:rounded-3xl bg-[#14181f] border border-[#ffc640]/40 p-4 sm:p-5 shadow-2xl space-y-3.5 ${
                 tooltipOnTop ? 'top-20 sm:top-24' : 'bottom-28 sm:bottom-8'
               }`}
             >
-              {/* Auto-pilot Progress Bar */}
               <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
                 <div
                   className="h-full bg-[#ffc640] transition-all duration-100"
@@ -502,14 +526,15 @@ export function SiteOnboarding() {
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <span className="px-2.5 py-0.5 rounded-lg bg-[#ffc640]/15 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black">
-                  {currentStep.badge}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2.5 py-0.5 rounded-lg bg-[#ffc640]/15 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black">
+                    {activePageGuide.title} · {currentStep.badge}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setAutoPlay((p) => !p)}
-                    title={autoPlay ? 'إيقاف التشغيل التلقائي' : 'متابعة التشغيل التلقائي'}
                     className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                   >
                     {autoPlay ? <Pause className="w-3 h-3 text-[#ffc640]" /> : <Play className="w-3 h-3 text-emerald-400" />}
@@ -541,7 +566,7 @@ export function SiteOnboarding() {
                   <span>السابق</span>
                 </button>
 
-                {tourIndex < TOUR_STEPS.length - 1 ? (
+                {tourIndex < activeSteps.length - 1 ? (
                   <button
                     type="button"
                     onClick={() => setTourIndex((i) => i + 1)}
@@ -566,8 +591,8 @@ export function SiteOnboarding() {
         )}
       </AnimatePresence>
 
-      {/* 3. Interactive Onboarding Checklist & Page Guide Widget */}
-      {!tourActive && !state.checklistDismissed && (
+      {/* 4. Floating Per-Page Guide & Checklist Widget */}
+      {!tourActive && !pageDiscoveryOpen && !state.widgetHidden && (
         <div className="fixed bottom-24 left-3 sm:bottom-5 sm:left-5 z-40 max-w-[calc(100vw-1.5rem)]">
           <AnimatePresence mode="wait">
             {checklistExpanded ? (
@@ -576,25 +601,25 @@ export function SiteOnboarding() {
                 initial={{ opacity: 0, y: 12, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 12, scale: 0.96 }}
-                className="w-80 sm:w-88 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/15 p-4 space-y-3.5 shadow-2xl"
+                className="w-80 sm:w-96 rounded-2xl sm:rounded-3xl bg-[#14181f] border border-white/15 p-4 space-y-3.5 shadow-2xl"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-[#ffc640]/15 border border-[#ffc640]/30 flex items-center justify-center text-[#ffc640]">
                       <Compass className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-xs sm:text-sm font-black text-white">دليل التعوّد السريع</h4>
+                      <h4 className="text-xs sm:text-sm font-black text-white">دليل: {activePageGuide.title}</h4>
                       <p className="text-[11px] text-slate-400">
-                        أنجزت {completedCount} من {totalTasks} خطوات
+                        مهام الصفحة: {pageDoneCount}/{pageTasks.length} · استكشفت {pagesMastered}/{TOTAL_DISCOVERABLE_PAGES} صفحة
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => saveState((s) => ({ ...s, checklistDismissed: true }))}
-                      title="إخفاء القائمة نهائياً"
+                      onClick={() => saveState((s) => ({ ...s, widgetHidden: true }))}
+                      title="إخفاء الدليل نهائياً"
                       className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-white/[0.05] cursor-pointer"
                     >
                       <EyeOff className="w-3.5 h-3.5" />
@@ -610,87 +635,79 @@ export function SiteOnboarding() {
                   </div>
                 </div>
 
-                {/* Progress Bar */}
+                {/* Page Tasks Progress */}
                 <div className="h-1.5 w-full rounded-full bg-white/[0.07] overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-[#ffc640] to-emerald-400 transition-all duration-500"
-                    style={{ width: `${Math.round((completedCount / totalTasks) * 100)}%` }}
+                    style={{ width: `${pageTasks.length ? Math.round((pageDoneCount / pageTasks.length) * 100) : 100}%` }}
                   />
                 </div>
 
-                {justCompletedAll ? (
-                  <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-center space-y-1">
-                    <CheckCircle2 className="w-7 h-7 text-emerald-400 mx-auto" />
-                    <p className="text-xs font-black text-white">ممتاز! أصبحت الآن خبيراً في JO Cars</p>
-                    <p className="text-[11px] text-emerald-300">ستختفي هذه القائمة تلقائياً الآن.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Contextual Current Page Tip */}
-                    <div className="p-2.5 rounded-xl bg-[#0e1013] border border-white/[0.06] flex items-start gap-2">
-                      <Lightbulb className="w-4 h-4 text-[#ffc640] shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-slate-300 leading-relaxed">{getPageTip(pathname)}</p>
-                    </div>
+                {/* Current Page Tip */}
+                <div className="p-2.5 rounded-xl bg-[#0e1013] border border-white/[0.06] flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-[#ffc640] shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-slate-300 leading-relaxed">{activePageGuide.pageTip}</p>
+                </div>
 
-                    {/* Checklist Tasks */}
-                    <div className="space-y-1.5">
-                      {CHECKLIST_TASKS.map((task) => {
-                        const done = state.completedTasks.includes(task.id);
-                        return (
-                          <button
-                            key={task.id}
-                            type="button"
-                            onClick={() => {
-                              setChecklistExpanded(false);
-                              router.push(task.href);
-                            }}
-                            className={`w-full p-2.5 rounded-xl border text-right flex items-center gap-2.5 transition-all cursor-pointer ${
-                              done
-                                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
-                                : 'bg-[#0e1013] border-white/[0.06] hover:border-[#ffc640]/35 text-slate-200'
-                            }`}
-                          >
-                            {done ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                            ) : (
-                              <Circle className="w-4 h-4 text-slate-500 shrink-0" />
-                            )}
-                            <span className={`text-xs font-bold flex-1 ${done ? 'line-through opacity-75' : ''}`}>
-                              {task.title}
-                            </span>
-                            {!done && <ChevronLeft className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
+                {/* Page-Specific Interactive Checklist */}
+                <div className="space-y-1.5">
+                  {pageTasks.map((task) => {
+                    const done = state.completedTasks.includes(task.id);
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={() => completeTask(task.id)}
+                        className={`w-full p-2.5 rounded-xl border text-right flex items-center gap-2.5 transition-all cursor-pointer ${
+                          done
+                            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                            : 'bg-[#0e1013] border-white/[0.06] hover:border-[#ffc640]/35 text-slate-200'
+                        }`}
+                      >
+                        {done ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-500 shrink-0" />
+                        )}
+                        <span className={`text-xs font-bold flex-1 ${done ? 'line-through opacity-75' : ''}`}>
+                          {task.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                    {/* Replay Auto-Pilot Tour & Intent Picker */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setChecklistExpanded(false);
-                          startAutoTour();
-                        }}
-                        className="h-9 rounded-xl bg-[#ffc640]/15 hover:bg-[#ffc640]/25 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>الجولة التلقائية</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setChecklistExpanded(false);
-                          setWelcomeOpen(true);
-                        }}
-                        className="h-9 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Target className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>اختر هدفك</span>
-                      </button>
-                    </div>
-                  </>
-                )}
+                {/* Replay Page Tour & Goal Picker */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={startCurrentPageTour}
+                    className="h-9 rounded-xl bg-[#ffc640]/15 hover:bg-[#ffc640]/25 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>جولة هذه الصفحة</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChecklistExpanded(false);
+                      setWelcomeOpen(true);
+                    }}
+                    className="h-9 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Target className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>اختر هدفك</span>
+                  </button>
+                </div>
+
+                {/* Site Mastery Footer */}
+                <div className="flex items-center justify-between pt-1 border-t border-white/[0.06] text-[10px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Award className="w-3.5 h-3.5 text-[#ffc640]" />
+                    <span>إتقان الموقع: {Math.round((pagesMastered / TOTAL_DISCOVERABLE_PAGES) * 100)}%</span>
+                  </span>
+                  <span>{pageDoneCount === pageTasks.length ? 'اكتملت مهام هذه الصفحة' : 'نفّذ المهام لتعلّم الصفحة'}</span>
+                </div>
               </motion.div>
             ) : (
               <motion.button
@@ -700,12 +717,12 @@ export function SiteOnboarding() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 onClick={() => setChecklistExpanded(true)}
-                className="h-11 px-3.5 rounded-2xl bg-[#14181f]/95 backdrop-blur-xl border border-[#ffc640]/35 hover:border-[#ffc640] text-white shadow-xl flex items-center gap-2 cursor-pointer group"
+                className="h-11 px-3.5 rounded-2xl bg-[#14181f] border border-[#ffc640]/40 hover:border-[#ffc640] text-white shadow-xl flex items-center gap-2 cursor-pointer group"
               >
                 <Compass className="w-4 h-4 text-[#ffc640] group-hover:rotate-45 transition-transform" />
-                <span className="text-xs font-black">دليل الموقع</span>
+                <span className="text-xs font-black">دليل {activePageGuide.title}</span>
                 <span className="px-1.5 py-0.5 rounded-md bg-[#ffc640] text-[#0e1013] text-[10px] font-black">
-                  {completedCount}/{totalTasks}
+                  {pageDoneCount}/{pageTasks.length}
                 </span>
                 <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
               </motion.button>
