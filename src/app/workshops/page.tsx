@@ -311,7 +311,7 @@ export default function WorkshopsPage() {
               <select
                 value={sortBy}
                 onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
-                className="h-11 sm:h-12 px-3 sm:px-4 py-0 leading-normal rounded-2xl border border-white/[0.08] bg-[#14181f] text-slate-200 text-xs sm:text-sm outline-none focus:border-[#ffc640] cursor-pointer font-bold"
+                className="py-2.5 sm:py-3 px-3 sm:px-4 rounded-2xl border border-white/[0.08] bg-[#14181f] text-slate-200 text-xs sm:text-sm outline-none focus:border-[#ffc640] cursor-pointer font-bold"
               >
                 {SORT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>

@@ -463,7 +463,7 @@ export default function CarDetailPage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0e1013] text-slate-100 pb-36 md:pb-20 overflow-x-hidden">
+    <div className="min-h-screen bg-[#0e1013] text-slate-100 pb-36 md:pb-20 overflow-x-clip">
       {/* SEO: structured data */}
       <script
         type="application/ld+json"
