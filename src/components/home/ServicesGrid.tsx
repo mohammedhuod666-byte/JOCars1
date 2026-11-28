@@ -116,7 +116,7 @@ export function ServicesGrid() {
   ];
 
   return (
-    <section className="py-20 sm:py-28 bg-[#090b10] border-t border-white/[0.06] relative overflow-hidden">
+    <section className="hidden md:block py-20 sm:py-28 bg-[#090b10] border-t border-white/[0.06] relative overflow-hidden">
       {/* Background Accent Gradients */}
       <div className="absolute top-1/2 left-0 w-96 h-96 bg-amber-500/5 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-96 h-96 bg-sky-500/5 rounded-full blur-[140px] pointer-events-none" />
