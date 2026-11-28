@@ -281,10 +281,10 @@ export default function ForumPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث في أقسام المنتدى أو استفسارات المحركات والهايبرد..."
-            className="w-full rounded-2xl border border-slate-800 bg-slate-900 text-white px-4 py-4 pr-12 text-sm outline-none focus:border-emerald-500 transition-all placeholder:text-slate-500"
+            placeholder="ابحث في أقسام المنتدى أو استفسارات المحركات..."
+            className="w-full rounded-2xl border border-slate-800 bg-slate-900 text-white pr-4 pl-12 py-3.5 text-sm outline-none focus:border-emerald-500 transition-all placeholder:text-slate-500"
           />
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" />
         </div>
 
         {/* Categories List Cards */}
@@ -320,12 +320,12 @@ export default function ForumPage() {
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-3 sm:gap-4 min-w-0">
                         <div
-                          className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-emerald-500/10"
+                          className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-emerald-500/10"
                           style={{ backgroundColor: cat.color || '#10b981' }}
                         >
-                          {ICON_MAP[cat.icon] || <MessageCircle className="w-6 h-6" />}
+                          {ICON_MAP[cat.icon] || <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />}
                         </div>
 
                         <div className="space-y-1 min-w-0">

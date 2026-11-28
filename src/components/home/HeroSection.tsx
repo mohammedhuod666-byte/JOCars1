@@ -179,10 +179,10 @@ export function HeroSection() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-transparent rounded-full blur-[120px] pointer-events-none" />
 
       <div className="container-custom relative z-10">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-12 items-center">
 
           {/* Left Column (Copy + Search Dock) */}
-          <div className="lg:col-span-7 space-y-6 sm:space-y-8 text-right">
+          <div className="min-w-0 w-full lg:col-span-7 space-y-5 sm:space-y-8 text-right">
             
             {/* Top Pill Badge */}
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent border border-amber-400/30 text-amber-300 text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.1)]">
@@ -265,7 +265,7 @@ export function HeroSection() {
                         key={chip.label}
                         type="button"
                         onClick={() => goSection(tab.section, chip.query)}
-                        className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-slate-300 font-medium hover:text-amber-300 hover:border-amber-400/40 hover:bg-amber-400/10 transition-all cursor-pointer text-[10px] sm:text-[11px]"
+                        className="px-2.5 py-1.5 min-h-[30px] rounded-lg bg-white/[0.04] border border-white/[0.06] text-slate-300 font-medium hover:text-amber-300 hover:border-amber-400/40 hover:bg-amber-400/10 transition-all cursor-pointer text-[11px]"
                       >
                         {chip.label}
                       </button>
@@ -284,7 +284,7 @@ export function HeroSection() {
 
             {/* Platform Stats */}
             {stats && (
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-w-lg pt-1">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full max-w-lg pt-1">
                 {[
                   { value: fmt(stats.cars), label: 'سيارة معروضة', sub: 'تحديث يومي' },
                   { value: fmt(stats.cities), label: 'محافظة وموقع', sub: 'تغطية المملكة' },
@@ -292,13 +292,13 @@ export function HeroSection() {
                 ].map((s, idx) => (
                   <div
                     key={idx}
-                    className="p-3 sm:p-3.5 rounded-2xl bg-[#121622]/80 border border-white/[0.08] backdrop-blur-md hover:border-amber-400/30 transition-colors text-right"
+                    className="min-w-0 p-2.5 sm:p-3.5 rounded-2xl bg-[#121622]/80 border border-white/[0.08] backdrop-blur-md hover:border-amber-400/30 transition-colors text-right"
                   >
-                    <p className="text-lg sm:text-2xl font-black text-white tabular-nums tracking-tight">
+                    <p className="text-base sm:text-2xl font-black text-white tabular-nums tracking-tight truncate">
                       {s.value}
                     </p>
-                    <p className="text-[11px] sm:text-xs font-bold text-slate-200 mt-0.5">{s.label}</p>
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium">{s.sub}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-200 mt-0.5 truncate">{s.label}</p>
+                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate">{s.sub}</p>
                   </div>
                 ))}
               </div>
@@ -306,7 +306,7 @@ export function HeroSection() {
           </div>
 
           {/* Right Column: Dynamic Featured Car Showcase */}
-          <div className="lg:col-span-5 relative w-full">
+          <div className="min-w-0 lg:col-span-5 relative w-full">
             <div className="relative mx-auto w-full max-w-md lg:max-w-none">
 
               {carLoading ? (

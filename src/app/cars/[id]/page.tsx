@@ -820,7 +820,7 @@ export default function CarDetailPage() {
             </div>
 
             {/* Sticky Section Jump Bar */}
-            <div className="sticky top-[68px] z-30 -mx-1 px-1 py-2 bg-[#0e1013]/90 backdrop-blur-xl">
+            <div className="sticky top-[88px] sm:top-[96px] z-30 -mx-1 px-1 py-2 bg-[#0e1013]/95 backdrop-blur-xl">
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
                 {QUICK_NAV_SECTIONS.map((sec) => {
                   const Icon = sec.icon;
@@ -1000,7 +1000,7 @@ export default function CarDetailPage() {
       </div>
 
       {/* Floating Mobile Contact Bar */}
-      <div className="fixed bottom-[78px] left-3 right-3 z-40 p-2 rounded-2xl bg-[#14181f]/95 backdrop-blur-2xl border border-white/15 md:hidden shadow-2xl">
+      <div className="fixed bottom-[94px] left-3 right-3 z-40 p-2 rounded-2xl bg-[#14181f]/95 backdrop-blur-2xl border border-white/15 md:hidden shadow-2xl">
         {isOwner ? (
           <div className="flex items-center gap-2">
             <Link

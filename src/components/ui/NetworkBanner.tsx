@@ -45,11 +45,11 @@ export function NetworkBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -60, opacity: 0 }}
           transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-          className="fixed top-0 left-0 right-0 z-[9999] bg-amber-500 text-white px-4 py-3 flex items-center gap-3 shadow-lg"
+          className="fixed bottom-24 left-3 right-3 sm:left-auto sm:right-5 sm:w-auto z-[90] bg-amber-500/95 backdrop-blur-md text-slate-950 font-bold px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-lg pointer-events-none"
           dir="rtl"
         >
-          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-          <p className="text-sm">الشبكة بطيئة — قد يستغرق تحميل الصفحة وقتاً أطول</p>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <p className="text-xs">الشبكة بطيئة — قد يستغرق التحميل وقتاً أطول</p>
         </motion.div>
       )}
     </AnimatePresence>

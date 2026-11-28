@@ -212,7 +212,7 @@ export default function TicketsPage() {
               className="w-full h-11 pr-10 pl-4 rounded-xl bg-[#11141b] border border-white/[0.08] text-white text-sm placeholder-gray-500 outline-none focus:border-[#ffc640]/60"
             />
           </div>
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+          <div className="flex flex-wrap gap-1.5">
             {[
               { id: 'ALL', label: 'الكل' },
               { id: 'OPEN', label: 'مفتوحة' },
@@ -224,7 +224,7 @@ export default function TicketsPage() {
                 key={s.id}
                 type="button"
                 onClick={() => setFilter(s.id)}
-                className={`px-3.5 h-11 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
+                className={`px-3 h-9 sm:h-11 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                   filter === s.id
                     ? 'bg-[#ffc640] text-[#080a0a] border-[#ffc640]'
                     : 'bg-[#11141b] text-gray-400 border-white/[0.08] hover:text-white'
