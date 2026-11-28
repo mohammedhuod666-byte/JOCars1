@@ -263,7 +263,12 @@ export function SiteOnboarding() {
   }, [saveState]);
 
   const finishTour = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setTourActive(false);
+    setTargetRect(null);
     setProgress(0);
     if (pageGuide) markPageSeen(pageGuide.id);
     else saveState((prev) => ({ ...prev, welcomed: true }));
@@ -344,11 +349,14 @@ export function SiteOnboarding() {
       {/* 1. Home Welcome & Smart Intent Modal */}
       <AnimatePresence>
         {welcomeOpen && (
-          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+          <motion.div
+            key="welcome-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          >
+            <div
               onClick={skipWelcome}
               className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
@@ -439,7 +447,7 @@ export function SiteOnboarding() {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -498,107 +506,102 @@ export function SiteOnboarding() {
         )}
       </AnimatePresence>
 
-      {/* 3. Auto-Pilot Guided Tour Spotlight Overlay */}
-      <AnimatePresence>
-        {tourActive && currentStep && (
-          <div className="fixed inset-0 z-[200] pointer-events-auto">
-            {!targetRect && <div className="absolute inset-0 bg-[#080a0f]/80 backdrop-blur-xs" />}
+      {/* 3. Auto-Pilot Guided Tour Spotlight Overlay (unmounts immediately without AnimatePresence hang) */}
+      {tourActive && currentStep && (
+        <div className="fixed inset-0 z-[200] pointer-events-auto">
+          <div className="absolute inset-0" onClick={finishTour} />
+          {!targetRect && <div className="absolute inset-0 bg-[#080a0f]/80" onClick={finishTour} />}
 
-            {targetRect && (
-              <motion.div
-                layout
-                transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-                style={{
-                  top: targetRect.top,
-                  left: targetRect.left,
-                  width: targetRect.width,
-                  height: targetRect.height,
-                  boxShadow: '0 0 0 9999px rgba(8, 10, 15, 0.80)',
-                }}
-                className="fixed rounded-2xl sm:rounded-3xl border-2 border-[#ffc640] pointer-events-none z-10"
+          {targetRect && (
+            <div
+              style={{
+                top: targetRect.top,
+                left: targetRect.left,
+                width: targetRect.width,
+                height: targetRect.height,
+                boxShadow: '0 0 0 9999px rgba(8, 10, 15, 0.80)',
+              }}
+              className="fixed rounded-2xl sm:rounded-3xl border-2 border-[#ffc640] pointer-events-none z-10 transition-all duration-300"
+            />
+          )}
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`fixed z-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[400px] rounded-2xl sm:rounded-3xl bg-[#14181f] border border-[#ffc640]/40 p-4 sm:p-5 shadow-2xl space-y-3.5 ${
+              tooltipOnTop ? 'top-20 sm:top-24' : 'bottom-28 sm:bottom-8'
+            }`}
+          >
+            <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-[#ffc640] transition-all duration-100"
+                style={{ width: autoPlay ? `${progress}%` : '100%' }}
               />
-            )}
+            </div>
 
-            <motion.div
-              key={`${activePageGuide.id}-${tourIndex}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`fixed z-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[400px] rounded-2xl sm:rounded-3xl bg-[#14181f] border border-[#ffc640]/40 p-4 sm:p-5 shadow-2xl space-y-3.5 ${
-                tooltipOnTop ? 'top-20 sm:top-24' : 'bottom-28 sm:bottom-8'
-              }`}
-            >
-              <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-                <div
-                  className="h-full bg-[#ffc640] transition-all duration-100"
-                  style={{ width: autoPlay ? `${progress}%` : '100%' }}
-                />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 rounded-lg bg-[#ffc640]/15 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black">
+                  {activePageGuide.title} · {currentStep.badge}
+                </span>
               </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2.5 py-0.5 rounded-lg bg-[#ffc640]/15 border border-[#ffc640]/30 text-[#ffc640] text-[11px] font-black">
-                    {activePageGuide.title} · {currentStep.badge}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setAutoPlay((p) => !p)}
-                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    {autoPlay ? <Pause className="w-3 h-3 text-[#ffc640]" /> : <Play className="w-3 h-3 text-emerald-400" />}
-                    <span>{autoPlay ? 'إيقاف مؤقت' : 'تلقائي'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={finishTour}
-                    className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-400 hover:text-white cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <h3 className="text-base sm:text-lg font-black text-white">{currentStep.title}</h3>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{currentStep.description}</p>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 pt-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  disabled={tourIndex === 0}
-                  onClick={() => { setAutoPlay(false); setTourIndex((i) => Math.max(0, i - 1)); }}
-                  className="h-9 px-3 rounded-xl bg-white/[0.05] border border-white/10 text-slate-300 hover:text-white disabled:opacity-35 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  onClick={() => setAutoPlay((p) => !p)}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                 >
-                  <ChevronRight className="w-4 h-4" />
-                  <span>السابق</span>
+                  {autoPlay ? <Pause className="w-3 h-3 text-[#ffc640]" /> : <Play className="w-3 h-3 text-emerald-400" />}
+                  <span>{autoPlay ? 'إيقاف مؤقت' : 'تلقائي'}</span>
                 </button>
-
-                {tourIndex < activeSteps.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setTourIndex((i) => i + 1)}
-                    className="h-9 px-4 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] text-xs font-black flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>التالي</span>
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={finishTour}
-                    className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>إنهاء الجولة</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={finishTour}
+                  className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            </motion.div>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-base sm:text-lg font-black text-white">{currentStep.title}</h3>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{currentStep.description}</p>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                disabled={tourIndex === 0}
+                onClick={() => { setAutoPlay(false); setTourIndex((i) => Math.max(0, i - 1)); }}
+                className="h-9 px-3 rounded-xl bg-white/[0.05] border border-white/10 text-slate-300 hover:text-white disabled:opacity-35 text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+                <span>السابق</span>
+              </button>
+
+              {tourIndex < activeSteps.length - 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setTourIndex((i) => i + 1)}
+                  className="h-9 px-4 rounded-xl bg-[#ffc640] hover:bg-[#ffd266] text-[#0e1013] text-xs font-black flex items-center gap-1 cursor-pointer"
+                >
+                  <span>التالي</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={finishTour}
+                  className="h-9 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black flex items-center gap-1 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>إنهاء الجولة</span>
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
 
       {/* 4. Floating Per-Page Guide & Checklist Widget */}
       {!tourActive && !pageDiscoveryOpen && !state.widgetHidden && (
